@@ -4,6 +4,7 @@ import Combine
 
 struct ContentView: View {
     @EnvironmentObject private var state: AudioState
+    @EnvironmentObject private var profileStore: ProfileStore
     @State private var tick = 0
 
     private let counterTimer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
@@ -16,6 +17,8 @@ struct ContentView: View {
             tapSection
             Divider()
             engineSection
+            Divider()
+            profilesSection
             Divider()
             diagnosticsSection
             Divider()
@@ -45,6 +48,26 @@ struct ContentView: View {
         labeled("Running", value: state.audio.isRunning ? "yes" : "no")
         labeled("Output format", value: state.audio.outputFormatDescription)
         labeled("Last error", value: state.audio.lastError ?? "—")
+    }
+
+    @ViewBuilder private var profilesSection: some View {
+        Text("Profiles").font(.subheadline).foregroundStyle(.secondary)
+        labeled("Loaded count", value: "\(profileStore.profiles.count)")
+        ForEach(profileStore.profiles) { profile in
+            HStack {
+                Image(systemName: profile.symbol).frame(width: 18)
+                Text(profile.name).monospaced()
+                Spacer()
+                Text(profile.id.uuidString.prefix(8))
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        Text("Storage: \(profileStore.storageDirectory.path)")
+            .font(.caption2.monospaced())
+            .foregroundStyle(.secondary)
+            .lineLimit(2)
+            .truncationMode(.middle)
     }
 
     @ViewBuilder private var diagnosticsSection: some View {
@@ -111,5 +134,7 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView().environmentObject(AudioState())
+    ContentView()
+        .environmentObject(AudioState())
+        .environmentObject(ProfileStore())
 }
