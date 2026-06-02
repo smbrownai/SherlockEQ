@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 import Combine
 import CoreAudio
 import OSLog
@@ -19,6 +20,10 @@ final class AudioState: ObservableObject {
 
     @Published var testCurveEnabled: Bool = false {
         didSet { audio.setTestCurveEnabled(testCurveEnabled) }
+    }
+
+    @Published var testToneEnabled: Bool = false {
+        didSet { audio.setTestTone(testToneEnabled) }
     }
 
     private var tapObserver: AnyCancellable?

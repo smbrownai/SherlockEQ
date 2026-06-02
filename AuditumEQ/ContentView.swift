@@ -1,8 +1,12 @@
 import SwiftUI
 import AVFoundation
+import Combine
 
 struct ContentView: View {
     @EnvironmentObject private var state: AudioState
+    @State private var tick = 0
+
+    private let counterTimer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -13,6 +17,8 @@ struct ContentView: View {
             Divider()
             engineSection
             Divider()
+            diagnosticsSection
+            Divider()
             controlsSection
 
             if let message = errorMessage {
@@ -22,7 +28,8 @@ struct ContentView: View {
             }
         }
         .padding(22)
-        .frame(minWidth: 520, minHeight: 380)
+        .frame(minWidth: 560, minHeight: 460)
+        .onReceive(counterTimer) { _ in tick &+= 1 }
     }
 
     @ViewBuilder private var tapSection: some View {
@@ -36,7 +43,21 @@ struct ContentView: View {
     @ViewBuilder private var engineSection: some View {
         Text("AVAudioEngine").font(.subheadline).foregroundStyle(.secondary)
         labeled("Running", value: state.audio.isRunning ? "yes" : "no")
+        labeled("Output format", value: state.audio.outputFormatDescription)
         labeled("Last error", value: state.audio.lastError ?? "—")
+    }
+
+    @ViewBuilder private var diagnosticsSection: some View {
+        Text("Diagnostics (refresh 10 Hz, tick \(tick))").font(.subheadline).foregroundStyle(.secondary)
+        labeled("Tap frames in", value: "\(state.tap.tapFramesIn.read())")
+        labeled("L source frames out", value: "\(state.tap.leftSourceFramesOut.read())")
+        labeled("R source frames out", value: "\(state.tap.rightSourceFramesOut.read())")
+        labeled("Ring input peak (×1000)", value: "\(state.tap.ringInputPeakMilli.read())")
+        labeled("Source output peak (×1000)", value: "\(state.tap.sourceOutputPeakMilli.read())")
+        labeled("IOProc ABL buffers", value: "\(state.tap.ioProcBufferCount.read())")
+        labeled("IOProc 1st mNumberChannels", value: "\(state.tap.ioProcFirstChannels.read())")
+        labeled("IOProc 1st mDataByteSize", value: "\(state.tap.ioProcFirstByteSize.read())")
+        labeled("Excluded process obj ID", value: "\(state.tap.excludedProcessObjectID.read())")
     }
 
     @ViewBuilder private var controlsSection: some View {
@@ -55,6 +76,12 @@ struct ContentView: View {
         Toggle("Test curve — L: +6 dB @ 3 kHz, R: flat", isOn: Binding(
             get: { state.testCurveEnabled },
             set: { state.testCurveEnabled = $0 }
+        ))
+        .toggleStyle(.switch)
+
+        Toggle("Test tone — 440 Hz sine through mainMixer (bypasses tap)", isOn: Binding(
+            get: { state.testToneEnabled },
+            set: { state.testToneEnabled = $0 }
         ))
         .toggleStyle(.switch)
     }

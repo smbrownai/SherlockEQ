@@ -22,6 +22,11 @@ final class AuditumEQAudioEngine: ObservableObject {
     private var leftSource: AVAudioSourceNode?
     private var rightSource: AVAudioSourceNode?
 
+    private var tonePlayer: AVAudioPlayerNode?
+    private var toneBuffer: AVAudioPCMBuffer?
+    @Published private(set) var toneEnabled: Bool = false
+    @Published private(set) var outputFormatDescription: String = "—"
+
     /// Wires up the graph with the L/R source nodes from the tap.
     /// Tears down any prior graph first; safe to call on device change.
     func attach(
@@ -79,11 +84,23 @@ final class AuditumEQAudioEngine: ObservableObject {
             try engine.start()
             isRunning = true
             lastError = nil
-            log.info("AVAudioEngine started")
+            let f = engine.outputNode.inputFormat(forBus: 0)
+            outputFormatDescription = "\(Int(f.sampleRate)) Hz · \(f.channelCount) ch · \(Self.formatLabel(f.commonFormat))"
+            log.info("AVAudioEngine started — output expects \(self.outputFormatDescription)")
         } catch {
             isRunning = false
             lastError = "AVAudioEngine.start: \(error.localizedDescription)"
             log.error("AVAudioEngine.start failed: \(error.localizedDescription)")
+        }
+    }
+
+    private static func formatLabel(_ f: AVAudioCommonFormat) -> String {
+        switch f {
+        case .pcmFormatFloat32: return "f32"
+        case .pcmFormatFloat64: return "f64"
+        case .pcmFormatInt16: return "i16"
+        case .pcmFormatInt32: return "i32"
+        default: return "other"
         }
     }
 
@@ -127,6 +144,51 @@ final class AuditumEQAudioEngine: ObservableObject {
             band.bandwidth = 0.5    // octaves
             band.gain = 6.0
             band.bypass = false
+        }
+    }
+
+    /// Diagnostic: route a 440 Hz sine through mainMixer directly, bypassing the
+    /// tap → source → EQ chain. If audible → engine→output path is alive (so the
+    /// silence is from the upstream chain producing zeros). If silent → output
+    /// itself is broken or being muted by the system.
+    func setTestTone(_ on: Bool) {
+        if on {
+            guard tonePlayer == nil else { return }
+            let mixerFormat = engine.mainMixerNode.outputFormat(forBus: 0)
+            let sr = mixerFormat.sampleRate > 0 ? mixerFormat.sampleRate : 48000
+            guard let format = AVAudioFormat(standardFormatWithSampleRate: sr, channels: 2) else { return }
+            let frames: AVAudioFrameCount = AVAudioFrameCount(sr)
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames) else { return }
+            buffer.frameLength = frames
+
+            let freq: Float = 440
+            let twoPi: Float = 2 * .pi
+            let sampleRate = Float(sr)
+            for ch in 0..<Int(format.channelCount) {
+                guard let p = buffer.floatChannelData?[ch] else { continue }
+                for i in 0..<Int(frames) {
+                    p[i] = sin(twoPi * freq * Float(i) / sampleRate) * 0.15
+                }
+            }
+
+            let player = AVAudioPlayerNode()
+            engine.attach(player)
+            engine.connect(player, to: engine.mainMixerNode, format: format)
+            player.scheduleBuffer(buffer, at: nil, options: .loops)
+            player.play()
+            tonePlayer = player
+            toneBuffer = buffer
+            toneEnabled = true
+            log.info("Test tone enabled @ \(Int(sr)) Hz")
+        } else {
+            if let player = tonePlayer {
+                player.stop()
+                engine.detach(player)
+            }
+            tonePlayer = nil
+            toneBuffer = nil
+            toneEnabled = false
+            log.info("Test tone disabled")
         }
     }
 

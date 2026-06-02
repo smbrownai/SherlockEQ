@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import Combine
 import CoreAudio
+import CoreGraphics
 import OSLog
 
 @available(macOS 14.2, *)
@@ -35,6 +36,22 @@ final class CATapEngine: ObservableObject {
 
     var onOutputDeviceChanged: ((AudioDeviceID) -> Void)?
 
+    /// Diagnostic counters. Sampled from the UI; updated from realtime threads.
+    let tapFramesIn = AudioCounter()
+    let leftSourceFramesOut = AudioCounter()
+    let rightSourceFramesOut = AudioCounter()
+    /// Most recent peak (max abs sample) seen by the IOProc — milli-unit scale
+    /// (samples are in -1…+1 float range; we store as Int milli-units 0…1000).
+    let ringInputPeakMilli = AudioCounter()
+    /// Most recent peak written out from the source nodes (post-ring read).
+    let sourceOutputPeakMilli = AudioCounter()
+    /// ABL layout the IOProc sees (snapshotted each call so it stays current).
+    let ioProcBufferCount = AudioCounter()
+    let ioProcFirstChannels = AudioCounter()
+    let ioProcFirstByteSize = AudioCounter()
+    /// Process object ID we excluded from the global tap (our own).
+    let excludedProcessObjectID = AudioCounter()
+
     private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "CATapEngine")
 
     private var tapID: AudioObjectID = kAudioObjectUnknown
@@ -59,13 +76,34 @@ final class CATapEngine: ObservableObject {
 
     func requestPermissionAndStart() async {
         state = .awaitingPermission
-        let granted = await AVCaptureDevice.requestAccess(for: .audio)
-        permissionGranted = granted
-        guard granted else {
+
+        // 1. Microphone (covers the audio-input entitlement).
+        let micGranted = await AVCaptureDevice.requestAccess(for: .audio)
+        permissionGranted = micGranted
+        guard micGranted else {
             state = .permissionDenied
-            log.error("Audio capture permission denied")
+            log.error("Microphone permission denied")
             return
         }
+
+        // 2. Screen & System Audio Recording — required for CATap to deliver
+        //    audio from other processes on macOS 14.4+. The OS silently zeroes
+        //    tap data without it, which is exactly what we just spent hours
+        //    diagnosing. Request triggers the system dialog the first time;
+        //    after that the user must grant in System Settings manually.
+        if !CGPreflightScreenCaptureAccess() {
+            log.info("Screen capture access not granted — requesting...")
+            _ = CGRequestScreenCaptureAccess()   // shows dialog OR no-ops if previously denied
+            if !CGPreflightScreenCaptureAccess() {
+                state = .failed("""
+                    Screen & System Audio Recording permission is required. \
+                    Open System Settings → Privacy & Security → Screen & System Audio \
+                    Recording, enable AuditumEQ, then quit and relaunch the app.
+                    """)
+                return
+            }
+        }
+
         await start()
     }
 
@@ -97,15 +135,24 @@ final class CATapEngine: ObservableObject {
 
         let outputDeviceUID = try Self.deviceUID(outputDeviceID)
 
-        // Exclude our own process so AVAudioEngine's playback isn't recaptured.
-        // Without this we'd build a feedback loop the moment we route audio to output.
-        let ownProcessObjectID = try Self.processObjectIDForCurrentPID()
+        // DIAGNOSTIC: temporarily exclude nothing — tap *every* process including
+        // our own. This is unsafe for routing (potential feedback) but it isolates
+        // whether the PID-exclusion is what's causing the tap to deliver silence.
+        // Keep the test tone OFF while this is empty.
+        let ownProcessObjectID = (try? Self.processObjectIDForCurrentPID()) ?? 0
+        excludedProcessObjectID.set(Int64(ownProcessObjectID))
+
+        // Global tap, excluding our own process to prevent the
+        // AVAudioEngine output → tap → output feedback loop.
         let tapDescription = CATapDescription(
-            stereoGlobalTapButExcludeProcesses: [NSNumber(value: ownProcessObjectID)]
+            stereoGlobalTapButExcludeProcesses: [ownProcessObjectID]
         )
-        tapDescription.muteBehavior = .muted   // silence the original path; we re-emit via AVAudioEngine
         tapDescription.name = "AuditumEQ-Tap"
-        tapDescription.isPrivate = true
+        tapDescription.isPrivate = false
+        // Mute the original output path while the tap is being read so the user
+        // hears only the AVAudioEngine-processed version, not original + ours.
+        // If our engine ever stalls, the original path comes back automatically.
+        tapDescription.muteBehavior = CATapMuteBehavior.mutedWhenTapped
 
         var newTapID: AUAudioObjectID = kAudioObjectUnknown
         let tapStatus = AudioHardwareCreateProcessTap(tapDescription, &newTapID)
@@ -117,6 +164,9 @@ final class CATapEngine: ObservableObject {
         let aggUID = "com.shawnbrown.AuditumEQ.aggregate.\(UUID().uuidString)"
         let tapUIDString = try Self.tapUIDString(tapID)
 
+        // Aggregate with the real output device as the main subdevice (for clock),
+        // and the tap attached via the tap list. The IOProc reads the tap's audio
+        // from the aggregate's input scope.
         let aggDescription: [String: Any] = [
             kAudioAggregateDeviceNameKey as String: "AuditumEQ Aggregate",
             kAudioAggregateDeviceUIDKey as String: aggUID,
@@ -164,22 +214,52 @@ final class CATapEngine: ObservableObject {
         )!
         sourceFormat = stereoFormat
 
+        let leftCounter = leftSourceFramesOut
+        let rightCounter = rightSourceFramesOut
+        let outPeak = sourceOutputPeakMilli
+
         leftSourceNode = AVAudioSourceNode(format: stereoFormat) { [weak leftRing] _, _, frameCount, audioBufferList -> OSStatus in
-            Self.fillFromMonoRing(
+            let status = Self.fillFromMonoRing(
                 ring: leftRing,
                 channelIndex: 0,
                 abl: audioBufferList,
                 frameCount: frameCount
             )
+            leftCounter.add(Int(frameCount))
+            Self.recordPeak(abl: audioBufferList, frameCount: frameCount, into: outPeak)
+            return status
         }
         rightSourceNode = AVAudioSourceNode(format: stereoFormat) { [weak rightRing] _, _, frameCount, audioBufferList -> OSStatus in
-            Self.fillFromMonoRing(
+            let status = Self.fillFromMonoRing(
                 ring: rightRing,
                 channelIndex: 1,
                 abl: audioBufferList,
                 frameCount: frameCount
             )
+            rightCounter.add(Int(frameCount))
+            Self.recordPeak(abl: audioBufferList, frameCount: frameCount, into: outPeak)
+            return status
         }
+    }
+
+    /// Render-thread helper: scan the just-filled abl and store the max abs sample
+    /// as a rolling peak (in milli-units, 0…1000).
+    private static func recordPeak(
+        abl: UnsafeMutablePointer<AudioBufferList>,
+        frameCount: AVAudioFrameCount,
+        into counter: AudioCounter
+    ) {
+        let buffers = UnsafeMutableAudioBufferListPointer(abl)
+        var peak: Float = 0
+        for buf in buffers {
+            guard let ptr = buf.mData?.assumingMemoryBound(to: Float.self) else { continue }
+            let n = Int(buf.mDataByteSize) / MemoryLayout<Float>.size
+            for i in 0..<n {
+                let a = abs(ptr[i])
+                if a > peak { peak = a }
+            }
+        }
+        counter.set(Int64(peak * 1000))
     }
 
     /// Render-thread helper: read mono samples from `ring` into one channel of the
@@ -218,7 +298,13 @@ final class CATapEngine: ObservableObject {
         var procID: AudioDeviceIOProcID?
         let leftRef = Unmanaged.passUnretained(leftRing)
         let rightRef = Unmanaged.passUnretained(rightRing)
+        let counterRef = Unmanaged.passUnretained(tapFramesIn)
         let channelCount = tapChannelCount
+
+        let peakRef = Unmanaged.passUnretained(ringInputPeakMilli)
+        let layoutCountRef = Unmanaged.passUnretained(ioProcBufferCount)
+        let layoutChannelsRef = Unmanaged.passUnretained(ioProcFirstChannels)
+        let layoutBytesRef = Unmanaged.passUnretained(ioProcFirstByteSize)
 
         let ioStatus = AudioDeviceCreateIOProcIDWithBlock(
             &procID,
@@ -226,22 +312,57 @@ final class CATapEngine: ObservableObject {
             nil
         ) { _, inInputData, _, _, _ in
             let abl = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: inInputData))
-            guard let first = abl.first, let basePtr = first.mData else { return }
-            let bytesPerFrame = MemoryLayout<Float>.size * channelCount
-            let frames = Int(first.mDataByteSize) / max(1, bytesPerFrame)
-            if frames <= 0 { return }
+            layoutCountRef.takeUnretainedValue().set(Int64(abl.count))
+            guard let first = abl.first else { return }
+            layoutChannelsRef.takeUnretainedValue().set(Int64(first.mNumberChannels))
+            layoutBytesRef.takeUnretainedValue().set(Int64(first.mDataByteSize))
 
-            // Tap formats from a stereoGlobalTap are interleaved stereo Float32.
-            let src = basePtr.assumingMemoryBound(to: Float.self)
-            leftRef.takeUnretainedValue().writeChannel(
-                from: src, frameCount: frames, channelIndex: 0, channelCount: channelCount
-            )
-            rightRef.takeUnretainedValue().writeChannel(
-                from: src,
-                frameCount: frames,
-                channelIndex: channelCount > 1 ? 1 : 0,
-                channelCount: channelCount
-            )
+            let isInterleaved = abl.count == 1 && first.mNumberChannels >= 2
+            let leftBuf = leftRef.takeUnretainedValue()
+            let rightBuf = rightRef.takeUnretainedValue()
+            let peakBuf = peakRef.takeUnretainedValue()
+
+            var peak: Float = 0
+
+            if isInterleaved {
+                guard let basePtr = first.mData else { return }
+                let chCount = Int(first.mNumberChannels)
+                let frames = Int(first.mDataByteSize) / (MemoryLayout<Float>.size * chCount)
+                if frames <= 0 { return }
+                let src = basePtr.assumingMemoryBound(to: Float.self)
+                for i in 0..<(frames * chCount) {
+                    let a = abs(src[i])
+                    if a > peak { peak = a }
+                }
+                leftBuf.writeChannel(from: src, frameCount: frames, channelIndex: 0, channelCount: chCount)
+                rightBuf.writeChannel(
+                    from: src, frameCount: frames,
+                    channelIndex: chCount > 1 ? 1 : 0, channelCount: chCount
+                )
+                counterRef.takeUnretainedValue().add(frames)
+            } else {
+                guard let lPtr = abl[0].mData?.assumingMemoryBound(to: Float.self) else { return }
+                let frames = Int(abl[0].mDataByteSize) / MemoryLayout<Float>.size
+                if frames <= 0 { return }
+                for i in 0..<frames {
+                    let a = abs(lPtr[i])
+                    if a > peak { peak = a }
+                }
+                leftBuf.write(from: lPtr, frameCount: frames)
+                if abl.count > 1, let rPtr = abl[1].mData?.assumingMemoryBound(to: Float.self) {
+                    for i in 0..<frames {
+                        let a = abs(rPtr[i])
+                        if a > peak { peak = a }
+                    }
+                    rightBuf.write(from: rPtr, frameCount: frames)
+                } else {
+                    rightBuf.write(from: lPtr, frameCount: frames)
+                }
+                _ = channelCount
+                counterRef.takeUnretainedValue().add(frames)
+            }
+
+            peakBuf.set(Int64(peak * 1000))
         }
         guard ioStatus == noErr, let procID else {
             throw TapError.ioProcCreationFailed(ioStatus)
