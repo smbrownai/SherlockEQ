@@ -1,31 +1,19 @@
 import SwiftUI
 import AVFoundation
-import Combine
 
 struct ContentView: View {
-    @StateObject private var tap = CATapEngineHolder()
+    @EnvironmentObject private var state: AudioState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("AuditumEQ — CATapEngine smoke test")
+        VStack(alignment: .leading, spacing: 18) {
+            Text("AuditumEQ — Session 2 (audio routing)")
                 .font(.headline)
 
-            labeled("State", value: stateLabel)
-            labeled("Permission", value: (tap.engine?.permissionGranted ?? false) ? "granted" : "not granted")
-            labeled("Output device ID", value: "\(tap.engine?.currentOutputDeviceID ?? 0)")
-            labeled("Tap format", value: tap.engine?.tapFormat.map { "\(Int($0.sampleRate)) Hz · \($0.channelCount) ch" } ?? "—")
-
-            HStack {
-                Button("Request permission & start") {
-                    Task { await tap.engine?.requestPermissionAndStart() }
-                }
-                .disabled(tap.engine == nil)
-
-                Button("Stop") {
-                    tap.engine?.stop()
-                }
-                .disabled(tap.engine == nil)
-            }
+            tapSection
+            Divider()
+            engineSection
+            Divider()
+            controlsSection
 
             if let message = errorMessage {
                 Text(message)
@@ -33,20 +21,53 @@ struct ContentView: View {
                     .foregroundStyle(.red)
             }
         }
-        .padding(20)
-        .frame(minWidth: 460, minHeight: 240)
+        .padding(22)
+        .frame(minWidth: 520, minHeight: 380)
+    }
+
+    @ViewBuilder private var tapSection: some View {
+        Text("Tap").font(.subheadline).foregroundStyle(.secondary)
+        labeled("State", value: tapStateLabel)
+        labeled("Permission", value: state.tap.permissionGranted ? "granted" : "not granted")
+        labeled("Output device ID", value: "\(state.tap.currentOutputDeviceID)")
+        labeled("Tap format", value: state.tap.tapFormat.map { "\(Int($0.sampleRate)) Hz · \($0.channelCount) ch" } ?? "—")
+    }
+
+    @ViewBuilder private var engineSection: some View {
+        Text("AVAudioEngine").font(.subheadline).foregroundStyle(.secondary)
+        labeled("Running", value: state.audio.isRunning ? "yes" : "no")
+        labeled("Last error", value: state.audio.lastError ?? "—")
+    }
+
+    @ViewBuilder private var controlsSection: some View {
+        HStack(spacing: 12) {
+            Button("Start") { Task { await state.startAll() } }
+                .keyboardShortcut(.defaultAction)
+            Button("Stop") { state.stopAll() }
+        }
+
+        Toggle("Reference Mode (bypass EQ)", isOn: Binding(
+            get: { state.referenceMode },
+            set: { state.referenceMode = $0 }
+        ))
+        .toggleStyle(.switch)
+
+        Toggle("Test curve — L: +6 dB @ 3 kHz, R: flat", isOn: Binding(
+            get: { state.testCurveEnabled },
+            set: { state.testCurveEnabled = $0 }
+        ))
+        .toggleStyle(.switch)
     }
 
     private func labeled(_ label: String, value: String) -> some View {
         HStack {
-            Text(label).foregroundStyle(.secondary).frame(width: 140, alignment: .leading)
+            Text(label).foregroundStyle(.secondary).frame(width: 150, alignment: .leading)
             Text(value).monospaced()
         }
     }
 
-    private var stateLabel: String {
-        guard let s = tap.engine?.state else { return "unavailable on this macOS version" }
-        switch s {
+    private var tapStateLabel: String {
+        switch state.tap.state {
         case .idle: return "idle"
         case .awaitingPermission: return "awaiting permission"
         case .permissionDenied: return "permission denied — grant in System Settings"
@@ -57,27 +78,11 @@ struct ContentView: View {
     }
 
     private var errorMessage: String? {
-        guard let s = tap.engine?.state, case .failed(let m) = s else { return nil }
-        return m
-    }
-}
-
-@MainActor
-private final class CATapEngineHolder: ObservableObject {
-    @Published var engine: CATapEngine?
-    private var bag = Set<AnyCancellable>()
-
-    init() {
-        if #available(macOS 14.2, *) {
-            let e = CATapEngine()
-            self.engine = e
-            e.objectWillChange.sink { [weak self] _ in
-                self?.objectWillChange.send()
-            }.store(in: &bag)
-        }
+        if case .failed(let m) = state.tap.state { return m }
+        return state.audio.lastError
     }
 }
 
 #Preview {
-    ContentView()
+    ContentView().environmentObject(AudioState())
 }

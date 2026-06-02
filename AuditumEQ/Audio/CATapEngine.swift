@@ -21,28 +21,33 @@ final class CATapEngine: ObservableObject {
     @Published private(set) var permissionGranted: Bool = false
     @Published private(set) var currentOutputDeviceID: AudioDeviceID = kAudioObjectUnknown
 
-    /// The source node downstream consumers (AVAudioEngine) attach to.
-    /// nil until the tap is running. Format matches the tap stream format.
-    private(set) var sourceNode: AVAudioSourceNode?
+    /// Mono source node for the left channel of the captured stream.
+    /// Emits **stereo** with L = tapped L, R = 0 — so a downstream EQ can process
+    /// it independently and the result re-mixes cleanly with the right chain.
+    private(set) var leftSourceNode: AVAudioSourceNode?
+    /// Mono source node for the right channel (stereo with L = 0, R = tapped R).
+    private(set) var rightSourceNode: AVAudioSourceNode?
+
+    /// Format both source nodes emit (stereo, tap sample rate).
+    private(set) var sourceFormat: AVAudioFormat?
+    /// Tap stream descriptor — sample rate, channel count of the raw tap.
     private(set) var tapFormat: AVAudioFormat?
 
-    /// Fires after the default output device changes and the tap has been rebuilt.
-    /// Consumers (AuditumEQAudioEngine, profile auto-switcher) listen and react.
     var onOutputDeviceChanged: ((AudioDeviceID) -> Void)?
 
-    private let log = Logger(subsystem: "org.smbrown.AuditumEQ", category: "CATapEngine")
+    private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "CATapEngine")
 
     private var tapID: AudioObjectID = kAudioObjectUnknown
     private var aggregateDeviceID: AudioDeviceID = kAudioObjectUnknown
     private var ioProcID: AudioDeviceIOProcID?
 
-    /// Lock-free ring buffer fed by the Core Audio IOProc and drained by the source node.
-    private var ringBuffer: TapRingBuffer?
+    private var leftRing: TapRingBuffer?
+    private var rightRing: TapRingBuffer?
+    private var tapChannelCount: Int = 2
 
     private var deviceListenerInstalled = false
 
     deinit {
-        // Synchronous teardown; safe to run off-main during deallocation.
         Self.tearDownSync(
             tapID: tapID,
             aggregateDeviceID: aggregateDeviceID,
@@ -92,10 +97,13 @@ final class CATapEngine: ObservableObject {
 
         let outputDeviceUID = try Self.deviceUID(outputDeviceID)
 
-        // Tap targets all processes (empty processes array + mono mixdown).
-        // Excluding nothing — everything routed to the output device is captured.
-        let tapDescription = CATapDescription(stereoMixdownOfProcesses: [])
-        tapDescription.muteBehavior = .unmuted
+        // Exclude our own process so AVAudioEngine's playback isn't recaptured.
+        // Without this we'd build a feedback loop the moment we route audio to output.
+        let ownProcessObjectID = try Self.processObjectIDForCurrentPID()
+        let tapDescription = CATapDescription(
+            stereoGlobalTapButExcludeProcesses: [NSNumber(value: ownProcessObjectID)]
+        )
+        tapDescription.muteBehavior = .muted   // silence the original path; we re-emit via AVAudioEngine
         tapDescription.name = "AuditumEQ-Tap"
         tapDescription.isPrivate = true
 
@@ -106,9 +114,7 @@ final class CATapEngine: ObservableObject {
         }
         tapID = newTapID
 
-        // Build a private aggregate device that owns this tap as a subdevice.
-        // Aggregating with the current output keeps the tap clocked to that device.
-        let aggUID = "org.smbrown.AuditumEQ.aggregate.\(UUID().uuidString)"
+        let aggUID = "com.shawnbrown.AuditumEQ.aggregate.\(UUID().uuidString)"
         let tapUIDString = try Self.tapUIDString(tapID)
 
         let aggDescription: [String: Any] = [
@@ -136,48 +142,106 @@ final class CATapEngine: ObservableObject {
         }
         aggregateDeviceID = newAggID
 
-        // Read the input stream format from the aggregate device (the tap shows up
-        // on its input scope). This is the format the source node will produce.
+        // Read the tap stream format off the aggregate's input scope.
         var asbd = try Self.inputStreamFormat(aggregateDeviceID)
         guard let format = AVAudioFormat(streamDescription: &asbd) else {
             throw TapError.formatUnsupported
         }
         tapFormat = format
+        tapChannelCount = Int(format.channelCount)
 
-        let buffer = TapRingBuffer(
-            channelCount: Int(format.channelCount),
-            capacityFrames: max(4096, Int(format.sampleRate) / 4) // ~250ms headroom
-        )
-        ringBuffer = buffer
+        // ~250ms headroom per channel ring.
+        let ringCapacity = max(4096, Int(format.sampleRate) / 4)
+        let leftRing = TapRingBuffer(capacityFrames: ringCapacity)
+        let rightRing = TapRingBuffer(capacityFrames: ringCapacity)
+        self.leftRing = leftRing
+        self.rightRing = rightRing
 
-        sourceNode = AVAudioSourceNode(format: format) { [weak buffer] _, _, frameCount, audioBufferList -> OSStatus in
-            // Realtime thread — no allocations, no Swift runtime allocations.
-            guard let buffer else {
-                return Self.fillSilence(audioBufferList, frameCount: frameCount)
-            }
-            let filled = buffer.read(into: audioBufferList, frameCount: Int(frameCount))
-            if filled < Int(frameCount) {
-                Self.fillSilence(audioBufferList, frameCount: frameCount, startingAtFrame: filled)
-            }
+        // Source nodes emit stereo Float32 non-interleaved.
+        let stereoFormat = AVAudioFormat(
+            standardFormatWithSampleRate: format.sampleRate,
+            channels: 2
+        )!
+        sourceFormat = stereoFormat
+
+        leftSourceNode = AVAudioSourceNode(format: stereoFormat) { [weak leftRing] _, _, frameCount, audioBufferList -> OSStatus in
+            Self.fillFromMonoRing(
+                ring: leftRing,
+                channelIndex: 0,
+                abl: audioBufferList,
+                frameCount: frameCount
+            )
+        }
+        rightSourceNode = AVAudioSourceNode(format: stereoFormat) { [weak rightRing] _, _, frameCount, audioBufferList -> OSStatus in
+            Self.fillFromMonoRing(
+                ring: rightRing,
+                channelIndex: 1,
+                abl: audioBufferList,
+                frameCount: frameCount
+            )
+        }
+    }
+
+    /// Render-thread helper: read mono samples from `ring` into one channel of the
+    /// stereo `abl`, zero the other channel. Pad short reads with silence.
+    private static func fillFromMonoRing(
+        ring: TapRingBuffer?,
+        channelIndex: Int,
+        abl: UnsafeMutablePointer<AudioBufferList>,
+        frameCount: AVAudioFrameCount
+    ) -> OSStatus {
+        let buffers = UnsafeMutableAudioBufferListPointer(abl)
+        guard buffers.count >= 2 else { return noErr }
+        let bytesPerFrame = MemoryLayout<Float>.size
+
+        let otherChannel = 1 - channelIndex
+        if let otherPtr = buffers[otherChannel].mData {
+            memset(otherPtr, 0, Int(buffers[otherChannel].mDataByteSize))
+        }
+
+        guard let activePtr = buffers[channelIndex].mData?.assumingMemoryBound(to: Float.self) else {
             return noErr
         }
+        let totalFrames = Int(frameCount)
+        let filled = ring?.read(into: activePtr, frameCount: totalFrames) ?? 0
+        if filled < totalFrames {
+            let tailBytes = (totalFrames - filled) * bytesPerFrame
+            memset(activePtr.advanced(by: filled), 0, tailBytes)
+        }
+        return noErr
     }
 
     // MARK: - IO
 
     private func startIO() throws {
-        guard let buffer = ringBuffer else { throw TapError.notConfigured }
+        guard let leftRing, let rightRing else { throw TapError.notConfigured }
         var procID: AudioDeviceIOProcID?
-        let bufferRef = Unmanaged.passUnretained(buffer)
+        let leftRef = Unmanaged.passUnretained(leftRing)
+        let rightRef = Unmanaged.passUnretained(rightRing)
+        let channelCount = tapChannelCount
 
         let ioStatus = AudioDeviceCreateIOProcIDWithBlock(
             &procID,
             aggregateDeviceID,
             nil
         ) { _, inInputData, _, _, _ in
-            // Realtime IOProc — copy interleaved/non-interleaved input into the ring.
             let abl = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: inInputData))
-            bufferRef.takeUnretainedValue().write(from: abl)
+            guard let first = abl.first, let basePtr = first.mData else { return }
+            let bytesPerFrame = MemoryLayout<Float>.size * channelCount
+            let frames = Int(first.mDataByteSize) / max(1, bytesPerFrame)
+            if frames <= 0 { return }
+
+            // Tap formats from a stereoGlobalTap are interleaved stereo Float32.
+            let src = basePtr.assumingMemoryBound(to: Float.self)
+            leftRef.takeUnretainedValue().writeChannel(
+                from: src, frameCount: frames, channelIndex: 0, channelCount: channelCount
+            )
+            rightRef.takeUnretainedValue().writeChannel(
+                from: src,
+                frameCount: frames,
+                channelIndex: channelCount > 1 ? 1 : 0,
+                channelCount: channelCount
+            )
         }
         guard ioStatus == noErr, let procID else {
             throw TapError.ioProcCreationFailed(ioStatus)
@@ -233,9 +297,6 @@ final class CATapEngine: ObservableObject {
                 mScope: kAudioObjectPropertyScopeGlobal,
                 mElement: kAudioObjectPropertyElementMain
             )
-            // We installed with a block — the matching remove API takes the same address;
-            // identity is implicit per listener block. macOS releases on object destruction
-            // if we miss it, but call it for cleanliness.
             _ = AudioObjectRemovePropertyListenerBlock(
                 AudioObjectID(kAudioObjectSystemObject),
                 &address,
@@ -243,9 +304,12 @@ final class CATapEngine: ObservableObject {
             ) { _, _ in }
             deviceListenerInstalled = false
         }
-        sourceNode = nil
+        leftSourceNode = nil
+        rightSourceNode = nil
         tapFormat = nil
-        ringBuffer = nil
+        sourceFormat = nil
+        leftRing = nil
+        rightRing = nil
     }
 
     private func tearDownTapAndAggregate() {
@@ -288,6 +352,7 @@ final class CATapEngine: ObservableObject {
         case tapUIDUnavailable(OSStatus)
         case formatUnavailable(OSStatus)
         case formatUnsupported
+        case processObjectLookupFailed(OSStatus)
         case notConfigured
 
         var description: String {
@@ -296,11 +361,12 @@ final class CATapEngine: ObservableObject {
             case .aggregateCreationFailed(let s): return "AudioHardwareCreateAggregateDevice failed (\(s))"
             case .ioProcCreationFailed(let s): return "AudioDeviceCreateIOProcIDWithBlock failed (\(s))"
             case .ioProcStartFailed(let s): return "AudioDeviceStart failed (\(s))"
-            case .defaultOutputUnavailable(let s): return "Default output device query failed (\(s))"
+            case .defaultOutputUnavailable(let s): return "Default output query failed (\(s))"
             case .deviceUIDUnavailable(let s): return "Device UID query failed (\(s))"
             case .tapUIDUnavailable(let s): return "Tap UID query failed (\(s))"
             case .formatUnavailable(let s): return "Stream format query failed (\(s))"
             case .formatUnsupported: return "Stream format could not be expressed as AVAudioFormat"
+            case .processObjectLookupFailed(let s): return "PID→AudioObjectID lookup failed (\(s))"
             case .notConfigured: return "Tap not configured"
             }
         }
@@ -369,23 +435,26 @@ extension CATapEngine {
         return asbd
     }
 
-    @discardableResult
-    static func fillSilence(
-        _ abl: UnsafeMutablePointer<AudioBufferList>,
-        frameCount: AVAudioFrameCount,
-        startingAtFrame startFrame: Int = 0
-    ) -> OSStatus {
-        let buffers = UnsafeMutableAudioBufferListPointer(abl)
-        for buffer in buffers {
-            guard let data = buffer.mData else { continue }
-            let bytesPerFrame = Int(buffer.mDataByteSize) / max(1, Int(frameCount))
-            let offset = startFrame * bytesPerFrame
-            let length = max(0, Int(buffer.mDataByteSize) - offset)
-            if length > 0 {
-                memset(data.advanced(by: offset), 0, length)
-            }
+    /// Translate our own PID into a Core Audio process-object ID so we can exclude
+    /// ourselves from the global tap (preventing AVAudioEngine output → tap → output feedback).
+    static func processObjectIDForCurrentPID() throws -> AudioObjectID {
+        var pid = pid_t(getpid())
+        var processObjectID = AudioObjectID(0)
+        var size = UInt32(MemoryLayout<AudioObjectID>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyTranslatePIDToProcessObject,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            UInt32(MemoryLayout<pid_t>.size), &pid,
+            &size, &processObjectID
+        )
+        guard status == noErr, processObjectID != 0 else {
+            throw TapError.processObjectLookupFailed(status)
         }
-        return noErr
+        return processObjectID
     }
 }
-

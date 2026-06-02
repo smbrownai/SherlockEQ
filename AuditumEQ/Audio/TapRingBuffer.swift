@@ -2,19 +2,15 @@ import Foundation
 import AVFoundation
 import os
 
-/// Single-producer / single-consumer ring buffer for Float32 audio samples.
+/// Single-producer / single-consumer ring buffer for one channel of Float32 audio.
 /// Producer: Core Audio IOProc. Consumer: AVAudioSourceNode render block.
 ///
-/// Synchronisation: a single `OSAllocatedUnfairLock` guards the read/write indices.
-/// The data regions themselves are disjoint by construction (producer writes only
-/// to the head segment, consumer reads only from the tail segment), so we hold the
-/// lock for index updates only — microsecond-scale contention.
-///
-/// This is sufficient for Session 1. A lock-free swap (swift-atomics or Swift 6
-/// `Synchronization.Atomic`) is a drop-in upgrade later.
+/// Sync: a single `OSAllocatedUnfairLock` guards the read/write indices.
+/// Data regions are disjoint by construction, so the lock is held only for index
+/// updates — microsecond contention window. This is fine for Session-stage work;
+/// a lock-free atomics swap is a drop-in later.
 final class TapRingBuffer {
 
-    let channelCount: Int
     let capacityFrames: Int
 
     private let storage: UnsafeMutableBufferPointer<Float>
@@ -22,65 +18,66 @@ final class TapRingBuffer {
 
     private struct Indices { var read: Int; var write: Int }
 
-    init(channelCount: Int, capacityFrames: Int) {
-        self.channelCount = max(1, channelCount)
+    init(capacityFrames: Int) {
         let cap = Self.nextPowerOfTwo(max(64, capacityFrames))
         self.capacityFrames = cap
-        let count = cap * self.channelCount
-        let raw = UnsafeMutableBufferPointer<Float>.allocate(capacity: count)
+        let raw = UnsafeMutableBufferPointer<Float>.allocate(capacity: cap)
         raw.initialize(repeating: 0)
         self.storage = raw
     }
 
     deinit { storage.deallocate() }
 
-    // MARK: - Producer (IOProc)
+    // MARK: - Producer
 
-    func write(from abl: UnsafeMutableAudioBufferListPointer) {
-        guard let first = abl.first else { return }
-        let frames = Int(first.mDataByteSize) / MemoryLayout<Float>.size / max(1, Int(first.mNumberChannels))
-        if frames <= 0 { return }
-
+    /// Writes `frameCount` mono samples from `src` into the ring.
+    /// Frames beyond available capacity are dropped (callers should over-provision).
+    func write(from src: UnsafePointer<Float>, frameCount: Int) {
         let (w, available) = indices.withLock { state -> (Int, Int) in
             (state.write, capacityFrames - (state.write &- state.read))
         }
-        let toWrite = min(frames, available)
+        let toWrite = min(frameCount, available)
         if toWrite <= 0 { return }
 
         let mask = capacityFrames - 1
         let storagePtr = storage.baseAddress!
-        let channels = channelCount
 
-        if abl.count == 1 && first.mNumberChannels == UInt32(channels), let firstPtr = first.mData {
-            // Interleaved source.
-            let src = firstPtr.assumingMemoryBound(to: Float.self)
-            for i in 0..<toWrite {
-                let dstOffset = ((w &+ i) & mask) * channels
-                let srcOffset = i * channels
-                for ch in 0..<channels {
-                    storagePtr[dstOffset + ch] = src[srcOffset + ch]
-                }
-            }
-        } else {
-            // Non-interleaved source: one mBuffer per channel.
-            for i in 0..<toWrite {
-                let dstOffset = ((w &+ i) & mask) * channels
-                for ch in 0..<min(channels, abl.count) {
-                    guard let chPtr = abl[ch].mData?.assumingMemoryBound(to: Float.self) else { continue }
-                    storagePtr[dstOffset + ch] = chPtr[i]
-                }
-            }
+        for i in 0..<toWrite {
+            storagePtr[(w &+ i) & mask] = src[i]
         }
 
         indices.withLock { state in state.write = state.write &+ toWrite }
     }
 
-    // MARK: - Consumer (AVAudioSourceNode render block)
+    /// Producer convenience: pull one channel from an interleaved stereo source.
+    /// `interleavedSrc` points at L0,R0,L1,R1,…; `channelIndex` is 0 (L) or 1 (R).
+    func writeChannel(
+        from interleavedSrc: UnsafePointer<Float>,
+        frameCount: Int,
+        channelIndex: Int,
+        channelCount: Int
+    ) {
+        let (w, available) = indices.withLock { state -> (Int, Int) in
+            (state.write, capacityFrames - (state.write &- state.read))
+        }
+        let toWrite = min(frameCount, available)
+        if toWrite <= 0 { return }
 
+        let mask = capacityFrames - 1
+        let storagePtr = storage.baseAddress!
+
+        for i in 0..<toWrite {
+            storagePtr[(w &+ i) & mask] = interleavedSrc[i * channelCount + channelIndex]
+        }
+
+        indices.withLock { state in state.write = state.write &+ toWrite }
+    }
+
+    // MARK: - Consumer
+
+    /// Reads up to `frameCount` mono samples into `dst`. Returns frames actually read.
     @discardableResult
-    func read(into abl: UnsafeMutablePointer<AudioBufferList>, frameCount: Int) -> Int {
-        let buffers = UnsafeMutableAudioBufferListPointer(abl)
-
+    func read(into dst: UnsafeMutablePointer<Float>, frameCount: Int) -> Int {
         let (r, available) = indices.withLock { state -> (Int, Int) in
             (state.read, state.write &- state.read)
         }
@@ -89,25 +86,9 @@ final class TapRingBuffer {
 
         let mask = capacityFrames - 1
         let storagePtr = storage.baseAddress!
-        let channels = channelCount
 
-        if buffers.count == 1 && buffers[0].mNumberChannels == UInt32(channels) {
-            guard let dst = buffers[0].mData?.assumingMemoryBound(to: Float.self) else { return 0 }
-            for i in 0..<toRead {
-                let srcOffset = ((r &+ i) & mask) * channels
-                let dstOffset = i * channels
-                for ch in 0..<channels {
-                    dst[dstOffset + ch] = storagePtr[srcOffset + ch]
-                }
-            }
-        } else {
-            for i in 0..<toRead {
-                let srcOffset = ((r &+ i) & mask) * channels
-                for ch in 0..<min(channels, buffers.count) {
-                    guard let chPtr = buffers[ch].mData?.assumingMemoryBound(to: Float.self) else { continue }
-                    chPtr[i] = storagePtr[srcOffset + ch]
-                }
-            }
+        for i in 0..<toRead {
+            dst[i] = storagePtr[(r &+ i) & mask]
         }
 
         indices.withLock { state in state.read = state.read &+ toRead }
