@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import Combine
 import CoreAudio
 import OSLog
 
@@ -137,8 +138,8 @@ final class CATapEngine: ObservableObject {
 
         // Read the input stream format from the aggregate device (the tap shows up
         // on its input scope). This is the format the source node will produce.
-        let asbd = try Self.inputStreamFormat(aggregateDeviceID)
-        guard let format = AVAudioFormat(streamDescription: &asbd.copy) else {
+        var asbd = try Self.inputStreamFormat(aggregateDeviceID)
+        guard let format = AVAudioFormat(streamDescription: &asbd) else {
             throw TapError.formatUnsupported
         }
         tapFormat = format
@@ -258,7 +259,7 @@ final class CATapEngine: ObservableObject {
         ioProcID = nil
     }
 
-    private static func tearDownSync(
+    nonisolated private static func tearDownSync(
         tapID: AudioObjectID,
         aggregateDeviceID: AudioDeviceID,
         ioProcID: AudioDeviceIOProcID?
@@ -388,12 +389,3 @@ extension CATapEngine {
     }
 }
 
-// MARK: - ASBD round-trip helper
-
-private extension AudioStreamBasicDescription {
-    var copy: AudioStreamBasicDescription {
-        var c = self
-        _ = withUnsafePointer(to: &c) { $0 }
-        return c
-    }
-}
