@@ -34,6 +34,11 @@ final class AuditumEQAudioEngine: ObservableObject {
 
     private var sampleRateBridge: AVAudioMixerNode?
     private var limiter: AVAudioUnitEffect?
+    /// 1-band-bypassed AVAudioUnitEQ used purely as a gain stage. Its
+    /// `globalGain` (-96…+24 dB range) gives reliable dB control where
+    /// `mainMixerNode.outputVolume` silently no-ops on this graph.
+    private var masterGainStage: AVAudioUnitEQ?
+    private var masterGainDB: Double = 0
 
     /// Wires up the graph with the L/R source nodes from the tap.
     /// Tears down any prior graph first; safe to call on device change.
@@ -97,6 +102,12 @@ final class AuditumEQAudioEngine: ObservableObject {
         engine.attach(lim)
         self.limiter = lim
 
+        let gainStage = AVAudioUnitEQ(numberOfBands: 1)
+        gainStage.bands[0].bypass = true
+        gainStage.globalGain = Float(masterGainDB)
+        engine.attach(gainStage)
+        self.masterGainStage = gainStage
+
         if outRate > 0 && Int(outRate.rounded()) != Int(sampleRate.rounded()),
            let outFormat = AVAudioFormat(standardFormatWithSampleRate: outRate, channels: 2) {
             let bridge = AVAudioMixerNode()
@@ -104,7 +115,8 @@ final class AuditumEQAudioEngine: ObservableObject {
             engine.connect(leq, to: bridge, format: tapFormat)
             engine.connect(req, to: bridge, format: tapFormat)
             engine.connect(bridge, to: lim, format: tapFormat)
-            engine.connect(lim, to: mixer, format: outFormat)
+            engine.connect(lim, to: gainStage, format: tapFormat)
+            engine.connect(gainStage, to: mixer, format: outFormat)
             self.sampleRateBridge = bridge
             sampleRateMismatchWarning = "Tap \(Int(sampleRate)) Hz ≠ output \(Int(outRate)) Hz — audio quality degraded until manual resampler lands."
             log.info("Graph attached — tap \(Int(sampleRate)) Hz, output \(Int(outRate)) Hz (SR-bridged, degraded)")
@@ -118,10 +130,11 @@ final class AuditumEQAudioEngine: ObservableObject {
             engine.connect(leq, to: sumMixer, format: tapFormat)
             engine.connect(req, to: sumMixer, format: tapFormat)
             engine.connect(sumMixer, to: lim, format: tapFormat)
-            engine.connect(lim, to: mixer, format: tapFormat)
+            engine.connect(lim, to: gainStage, format: tapFormat)
+            engine.connect(gainStage, to: mixer, format: tapFormat)
             self.sampleRateBridge = sumMixer
             sampleRateMismatchWarning = nil
-            log.info("Graph attached — \(Int(sampleRate)) Hz end-to-end (sum + limiter inline)")
+            log.info("Graph attached — \(Int(sampleRate)) Hz end-to-end (sum + limiter + gain stage inline)")
         }
 
         self.leftSource = leftSource
@@ -221,6 +234,7 @@ final class AuditumEQAudioEngine: ObservableObject {
         if let req = rightEQ { engine.detach(req); rightEQ = nil }
         if let b = sampleRateBridge { engine.detach(b); sampleRateBridge = nil }
         if let l = limiter { engine.detach(l); limiter = nil }
+        if let g = masterGainStage { engine.detach(g); masterGainStage = nil }
         if let t = toneSourceNode { engine.detach(t); toneSourceNode = nil }
     }
 
@@ -230,6 +244,16 @@ final class AuditumEQAudioEngine: ObservableObject {
         referenceMode = on
         leftEQ?.bypass = on
         rightEQ?.bypass = on
+    }
+
+    /// Master output gain applied post-limiter via a dedicated AVAudioUnitEQ
+    /// gain stage. Clamped to ≤ +12 dB so the limiter still has headroom; the
+    /// gain stage's globalGain spans -96…+24 dB, so -60 dB is effectively
+    /// inaudible without triggering any silent no-op behavior.
+    func setMasterGain(dB: Double) {
+        let clamped = max(-60, min(12, dB))
+        masterGainDB = clamped
+        masterGainStage?.globalGain = Float(clamped)
     }
 
     /// Hard-coded asymmetric test curve: L gets +6 dB at 3 kHz, R stays flat.

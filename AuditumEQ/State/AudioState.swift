@@ -37,6 +37,23 @@ final class AudioState: ObservableObject {
         didSet { audio.setTestTone(testToneEnabled) }
     }
 
+    /// Master output gain, post-limiter. Persists across launches via
+    /// UserDefaults; re-applied to the engine on every graph rebuild so a
+    /// teardown/reattach cycle doesn't drop the user's setting.
+    @Published var masterGainDB: Double = AudioState.loadMasterGainDB() {
+        didSet {
+            audio.setMasterGain(dB: masterGainDB)
+            UserDefaults.standard.set(masterGainDB, forKey: Self.masterGainKey)
+        }
+    }
+
+    private static let masterGainKey = "auditumeq.masterGainDB"
+
+    private static func loadMasterGainDB() -> Double {
+        let raw = UserDefaults.standard.object(forKey: masterGainKey) as? Double
+        return raw ?? 0
+    }
+
     /// ID of the currently-active hearing profile. The profile itself lives in
     /// `ProfileStore`; we hold only the ID so the store remains the source of
     /// truth and edits naturally flow through `ProfileStore.save(_:)`.
@@ -231,6 +248,7 @@ final class AudioState: ObservableObject {
             sampleRate: format.sampleRate
         )
         audio.start()
+        audio.setMasterGain(dB: masterGainDB)
         applyActiveProfile()
         installSpectrumTap()
         installPreSpectrumTap(tapSR: format.sampleRate)
