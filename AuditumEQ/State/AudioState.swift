@@ -13,6 +13,8 @@ final class AudioState: ObservableObject {
 
     @Published private(set) var tap: CATapEngine
     @Published private(set) var audio: AuditumEQAudioEngine
+    @Published private(set) var spectrum: SpectrumAnalyzer
+    @Published private(set) var safeListening: SafeListeningTracker
 
     @Published var referenceMode: Bool = false {
         didSet { audio.setReferenceMode(referenceMode) }
@@ -90,6 +92,8 @@ final class AudioState: ObservableObject {
 
     private var tapObserver: AnyCancellable?
     private var audioObserver: AnyCancellable?
+    private var spectrumObserver: AnyCancellable?
+    private var trackerObserver: AnyCancellable?
     private var profileSubscriptions: Set<AnyCancellable> = []
     private weak var connectedStore: ProfileStore?
     private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "AudioState")
@@ -97,21 +101,44 @@ final class AudioState: ObservableObject {
     init() {
         let tap = CATapEngine()
         let audio = AuditumEQAudioEngine()
+        let spectrum = SpectrumAnalyzer()
+        let tracker = SafeListeningTracker()
         self.tap = tap
         self.audio = audio
+        self.spectrum = spectrum
+        self.safeListening = tracker
 
         tap.onOutputDeviceChanged = { [weak self] _ in
             Task { @MainActor in self?.rebuildAudioGraph() }
         }
 
+        // Spectrum analyzer → dose tracker.
+        spectrum.onLevelUpdate = { [weak tracker] dba in
+            Task { @MainActor in tracker?.update(levelDBA: Double(dba)) }
+        }
+
         // Re-broadcast child object changes so SwiftUI views observing AudioState
-        // refresh when either engine's @Published state changes.
+        // refresh when any child's @Published state changes.
         tapObserver = tap.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
         audioObserver = audio.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
+        spectrumObserver = spectrum.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+        trackerObserver = tracker.objectWillChange.sink { [weak self] _ in
+            Task { @MainActor in self?.mirrorTrackerState() }
+        }
+    }
+
+    /// Mirror the tracker's published values onto the legacy AudioState
+    /// properties the popover already binds to (sessionDosePercent etc).
+    private func mirrorTrackerState() {
+        sessionDosePercent = safeListening.sessionDose
+        remainingMinutes = safeListening.remainingMinutes
+        currentLeveldBSPL = safeListening.currentLevelDBA
     }
 
     func startAll() async {
@@ -130,6 +157,7 @@ final class AudioState: ObservableObject {
 
     private func rebuildAudioGraph() {
         audio.stop()
+        spectrum.detached()
         guard let leftSource = tap.leftSourceNode,
               let rightSource = tap.rightSourceNode,
               let format = tap.sourceFormat else {
@@ -143,5 +171,15 @@ final class AudioState: ObservableObject {
         )
         audio.start()
         applyActiveProfile()
+        installSpectrumTap()
+    }
+
+    private func installSpectrumTap() {
+        // The analyzer wants to know the actual buffer SR (which may be the
+        // output rate, not the tap rate, when the SR-bridge mixer is in play).
+        spectrum.configureForSampleRate(audio.outputSampleRate ?? 48000)
+        audio.installSpectrumTap { [weak spectrum] buffer, _ in
+            spectrum?.ingest(buffer)
+        }
     }
 }

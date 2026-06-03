@@ -137,6 +137,7 @@ final class AuditumEQAudioEngine: ObservableObject {
     }
 
     func stop() {
+        removeSpectrumTap()
         if engine.isRunning { engine.stop() }
         isRunning = false
     }
@@ -144,6 +145,38 @@ final class AuditumEQAudioEngine: ObservableObject {
     func teardown() {
         stop()
         teardownGraph()
+    }
+
+    private var spectrumTapInstalled = false
+
+    /// The sample rate the engine's output is running at — what `mainMixerNode`
+    /// emits and therefore what the spectrum tap sees. nil if the engine isn't
+    /// running yet.
+    var outputSampleRate: Double? {
+        let rate = engine.mainMixerNode.outputFormat(forBus: 0).sampleRate
+        return rate > 0 ? rate : nil
+    }
+
+    /// Install a buffer tap on `mainMixerNode` so a downstream analyzer can
+    /// pull post-EQ PCM frames. The closure runs on the audio render thread;
+    /// keep work realtime-safe (memcpy at most).
+    func installSpectrumTap(
+        bufferSize: AVAudioFrameCount = 1024,
+        _ ingest: @escaping (AVAudioPCMBuffer, Double) -> Void
+    ) {
+        guard !spectrumTapInstalled else { return }
+        let format = engine.mainMixerNode.outputFormat(forBus: 0)
+        engine.mainMixerNode.installTap(onBus: 0, bufferSize: bufferSize, format: format) { buffer, _ in
+            ingest(buffer, format.sampleRate)
+        }
+        spectrumTapInstalled = true
+        log.info("Spectrum tap installed (\(Int(format.sampleRate)) Hz, buffer \(bufferSize))")
+    }
+
+    func removeSpectrumTap() {
+        guard spectrumTapInstalled else { return }
+        engine.mainMixerNode.removeTap(onBus: 0)
+        spectrumTapInstalled = false
     }
 
     private func teardownGraph() {

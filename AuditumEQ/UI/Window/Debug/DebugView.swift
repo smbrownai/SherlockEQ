@@ -51,6 +51,11 @@ struct DebugView: View {
         Text("AVAudioEngine").font(.subheadline).foregroundStyle(.secondary)
         labeled("Running", value: state.audio.isRunning ? "yes" : "no")
         labeled("Output format", value: state.audio.outputFormatDescription)
+        labeled("Spectrum tap", value: state.spectrum.isAttached ? "attached" : "—")
+        labeled("Level (dBFS)", value: String(format: "%.1f", state.spectrum.aWeightedDBFS))
+        labeled("Estimated dBA", value: String(format: "%.1f", state.spectrum.estimateDBA))
+        labeled("Session dose", value: String(format: "%.1f %%", state.safeListening.sessionDose * 100))
+        labeled("Remaining", value: state.safeListening.remainingMinutes.map { String(format: "%.1f min", $0) } ?? "—")
         labeled("Last error", value: state.audio.lastError ?? "—")
         if let warn = state.audio.sampleRateMismatchWarning {
             HStack(alignment: .top, spacing: 8) {
