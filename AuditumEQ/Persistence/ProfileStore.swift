@@ -82,6 +82,41 @@ final class ProfileStore: ObservableObject {
         log.info("Saved profile \(p.name, privacy: .public) (\(p.id.uuidString, privacy: .public))")
     }
 
+    /// Encode `profile` to a user-chosen location. Independent of the
+    /// internal profiles directory — used for sharing profiles between
+    /// machines or with other users.
+    func exportProfile(_ profile: HearingProfile, to url: URL) throws {
+        let data = try encoder.encode(profile)
+        try data.write(to: url, options: .atomic)
+        log.info("Exported \(profile.name, privacy: .public) to \(url.lastPathComponent, privacy: .public)")
+    }
+
+    /// Read a profile JSON from `url`, dedupe its ID and name against the
+    /// current store, force `isBuiltIn = false` (the imported copy is the
+    /// user's own), and persist it. Returns the saved profile so callers
+    /// can switch selection or activate it.
+    @discardableResult
+    func importProfile(from url: URL) throws -> HearingProfile {
+        let data = try Data(contentsOf: url)
+        var imported = try decoder.decode(HearingProfile.self, from: data)
+        if profiles.contains(where: { $0.id == imported.id }) {
+            imported.id = UUID()
+        }
+        imported.name = uniqueName(base: imported.name)
+        imported.isBuiltIn = false
+        try save(imported)
+        log.info("Imported \(imported.name, privacy: .public) from \(url.lastPathComponent, privacy: .public)")
+        return imported
+    }
+
+    private func uniqueName(base: String) -> String {
+        let existing = Set(profiles.map(\.name))
+        if !existing.contains(base) { return base }
+        var i = 2
+        while existing.contains("\(base) \(i)") { i += 1 }
+        return "\(base) \(i)"
+    }
+
     /// Remove the on-disk file and drop the profile from the in-memory array.
     func delete(_ profile: HearingProfile) throws {
         let url = directory.appendingPathComponent("\(profile.id.uuidString).json")

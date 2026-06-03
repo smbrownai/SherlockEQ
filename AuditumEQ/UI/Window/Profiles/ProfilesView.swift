@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 /// Profiles section of the main window. Master/detail layout via plain `HStack`
 /// — nesting `HSplitView` inside `NavigationSplitView` confuses the outer
@@ -60,6 +62,7 @@ struct ProfilesView: View {
                         Button("Make Active") { audioState.activeProfileID = profile.id }
                             .disabled(audioState.activeProfileID == profile.id)
                         Button("Duplicate") { duplicate(profile) }
+                        Button("Export…") { exportProfile(profile) }
                         Divider()
                         Button("Delete", role: .destructive) { profileToDelete = profile }
                             .disabled(profile.isBuiltIn || profileStore.profiles.count <= 1)
@@ -88,6 +91,18 @@ struct ProfilesView: View {
                 help: "Delete selected profile",
                 isEnabled: (selectedProfile.map { !$0.isBuiltIn } ?? false) && profileStore.profiles.count > 1,
                 action: deleteSelected
+            )
+            Divider().frame(height: 16)
+            toolbarButton(
+                systemName: "square.and.arrow.down",
+                help: "Import profile from JSON file…",
+                action: importProfiles
+            )
+            toolbarButton(
+                systemName: "square.and.arrow.up",
+                help: "Export selected profile to JSON file…",
+                isEnabled: selectedProfile != nil,
+                action: exportSelected
             )
             Spacer()
         }
@@ -197,5 +212,44 @@ struct ProfilesView: View {
         var i = 2
         while existing.contains("\(base) \(i)") { i += 1 }
         return "\(base) \(i)"
+    }
+
+    // MARK: - Import / Export
+
+    private func exportSelected() {
+        guard let p = selectedProfile else { return }
+        exportProfile(p)
+    }
+
+    private func exportProfile(_ profile: HearingProfile) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "\(profile.name).json"
+        panel.canCreateDirectories = true
+        panel.title = "Export \(profile.name)"
+        panel.prompt = "Export"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try profileStore.exportProfile(profile, to: url)
+        } catch { /* surfaced via ProfileStore.lastError */ }
+    }
+
+    private func importProfiles() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.title = "Import profiles"
+        panel.prompt = "Import"
+        guard panel.runModal() == .OK else { return }
+        var lastImported: HearingProfile?
+        for url in panel.urls {
+            if let imported = try? profileStore.importProfile(from: url) {
+                lastImported = imported
+            }
+        }
+        if let imported = lastImported {
+            selection = imported.id
+        }
     }
 }
