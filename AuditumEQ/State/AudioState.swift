@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import AVFoundation
 import Combine
 import CoreAudio
@@ -97,6 +98,9 @@ final class AudioState: ObservableObject {
     private var trackerObserver: AnyCancellable?
     private var profileSubscriptions: Set<AnyCancellable> = []
     private weak var connectedStore: ProfileStore?
+    private var sleepObserverToken: NSObjectProtocol?
+    private var wakeObserverToken: NSObjectProtocol?
+    private var wasRunningBeforeSleep = false
     private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "AudioState")
 
     init() {
@@ -133,6 +137,59 @@ final class AudioState: ObservableObject {
         }
         trackerObserver = tracker.objectWillChange.sink { [weak self] _ in
             Task { @MainActor in self?.mirrorTrackerState() }
+        }
+
+        installSleepWakeObservers()
+    }
+
+    deinit {
+        if let t = sleepObserverToken {
+            NSWorkspace.shared.notificationCenter.removeObserver(t)
+        }
+        if let t = wakeObserverToken {
+            NSWorkspace.shared.notificationCenter.removeObserver(t)
+        }
+    }
+
+    /// On sleep the CATap usually keeps its IOProc alive, but the AVAudioEngine
+    /// output unit can land in a broken state when the system wakes — silence,
+    /// stalled render thread, or a stuck spectrum tap. Tear the engine down on
+    /// `.willSleep` and rebuild on `.didWake` so output reattaches cleanly to
+    /// whatever device the user is on after wake.
+    private func installSleepWakeObservers() {
+        let center = NSWorkspace.shared.notificationCenter
+        sleepObserverToken = center.addObserver(
+            forName: NSWorkspace.willSleepNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.handleWillSleep() }
+        }
+        wakeObserverToken = center.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.handleDidWake() }
+        }
+    }
+
+    private func handleWillSleep() {
+        wasRunningBeforeSleep = audio.isRunning
+        if audio.isRunning {
+            log.info("System sleeping — stopping AVAudioEngine")
+            audio.stop()
+        }
+    }
+
+    private func handleDidWake() {
+        guard wasRunningBeforeSleep else { return }
+        wasRunningBeforeSleep = false
+        log.info("System woke — rebuilding audio graph")
+        if case .running = tap.state {
+            rebuildAudioGraph()
+        } else {
+            Task { await startAll() }
         }
     }
 

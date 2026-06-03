@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import AudioToolbox
 import Combine
 import OSLog
 
@@ -32,7 +33,7 @@ final class AuditumEQAudioEngine: ObservableObject {
     @Published private(set) var outputFormatDescription: String = "—"
 
     private var sampleRateBridge: AVAudioMixerNode?
-    private var limiter: AVAudioUnitDistortion?
+    private var limiter: AVAudioUnitEffect?
 
     /// Wires up the graph with the L/R source nodes from the tap.
     /// Tears down any prior graph first; safe to call on device change.
@@ -82,13 +83,17 @@ final class AuditumEQAudioEngine: ObservableObject {
         let outRate = engine.outputNode.outputFormat(forBus: 0).sampleRate
         let mixer = engine.mainMixerNode
 
-        // Output limiter — AVAudioUnitDistortion's soft-clip preset gives a
-        // gentle saturation curve that flattens peaks before mainMixer, so
-        // bands summing past 0 dBFS don't slam into hard clipping.
-        let lim = AVAudioUnitDistortion()
-        lim.loadFactoryPreset(.drumsLoFi)   // mild soft-curve baseline
-        lim.wetDryMix = 18                  // mostly dry, gentle limiting only at peaks
-        lim.preGain = -3                    // a touch of headroom before the curve
+        // Output limiter — Apple's AUPeakLimiter. Catches peaks past 0 dBFS
+        // without coloring program material, so band sums that overshoot get
+        // brick-walled cleanly instead of clipping into the output stage.
+        let limiterDesc = AudioComponentDescription(
+            componentType: kAudioUnitType_Effect,
+            componentSubType: kAudioUnitSubType_PeakLimiter,
+            componentManufacturer: kAudioUnitManufacturer_Apple,
+            componentFlags: 0,
+            componentFlagsMask: 0
+        )
+        let lim = AVAudioUnitEffect(audioComponentDescription: limiterDesc)
         engine.attach(lim)
         self.limiter = lim
 
@@ -104,10 +109,10 @@ final class AuditumEQAudioEngine: ObservableObject {
             sampleRateMismatchWarning = "Tap \(Int(sampleRate)) Hz ≠ output \(Int(outRate)) Hz — audio quality degraded until manual resampler lands."
             log.info("Graph attached — tap \(Int(sampleRate)) Hz, output \(Int(outRate)) Hz (SR-bridged, degraded)")
         } else {
-            // AVAudioUnitDistortion has a single input bus, so we can't
-            // connect leq and req directly to it — the second connection
-            // silently overrides the first and kills the L chain. Sum L+R
-            // through an explicit mixer first.
+            // AUPeakLimiter has a single input bus, so we can't connect leq
+            // and req directly to it — the second connection silently
+            // overrides the first and kills the L chain. Sum L+R through an
+            // explicit mixer first.
             let sumMixer = AVAudioMixerNode()
             engine.attach(sumMixer)
             engine.connect(leq, to: sumMixer, format: tapFormat)
