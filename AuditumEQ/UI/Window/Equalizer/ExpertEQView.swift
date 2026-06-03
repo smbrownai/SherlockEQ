@@ -16,6 +16,14 @@ struct ExpertEQView: View {
     /// Display preference for the Q/BW readout — Q value vs equivalent
     /// bandwidth in octaves. Storage is always Q internally.
     @State private var showQAsOctaves: Bool = false
+    /// When on, every band edit propagates to both ears in lockstep.
+    @State private var linkChannels: Bool = false
+
+    /// Standard 8 bands at audiogram frequencies — used by Quick start
+    /// to populate an empty profile with a useful working surface.
+    private static let quickStartFrequencies: [Double] = [
+        250, 500, 1000, 2000, 3000, 4000, 6000, 8000
+    ]
 
     var body: some View {
         if let profile = audioState.activeProfile(in: profileStore) {
@@ -154,6 +162,11 @@ struct ExpertEQView: View {
             .frame(width: 80)
             .help("Display the selected band's width as Q or as octave bandwidth")
 
+            Toggle("Link L+R", isOn: $linkChannels)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .help("When on, edits to a band on this ear also update the other ear")
+
             Button {
                 addBand()
             } label: {
@@ -221,6 +234,30 @@ struct ExpertEQView: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.secondary.opacity(0.08))
             )
+        } else if activeBands.isEmpty {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles").foregroundStyle(.tint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("This ear has no bands yet")
+                        .font(.callout.weight(.medium))
+                    Text("Quick start places 8 disabled parametric bands at the audiogram frequencies, ready for you to enable and tune.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button {
+                    quickStart()
+                } label: {
+                    Label("Quick start: 8 bands", systemImage: "wand.and.stars")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.accentColor.opacity(0.08))
+            )
         } else {
             HStack {
                 Image(systemName: "hand.point.up.left.fill").foregroundStyle(.secondary)
@@ -236,6 +273,23 @@ struct ExpertEQView: View {
                     .fill(Color.secondary.opacity(0.06))
             )
         }
+    }
+
+    /// Populate the active ear (and the other, when linked) with 8 disabled
+    /// parametric bands at the standard audiogram frequencies. Each band
+    /// starts at 0 dB / Q 1, ready to enable and tune.
+    private func quickStart() {
+        guard var profile = activeProfile else { return }
+        let seed = Self.quickStartFrequencies.map { freq in
+            EQBand(frequencyHz: freq, gaindB: 0, bandwidth: 1.0, filterType: .parametric, enabled: true)
+        }
+        if tab == .left { profile.leftEar.bands = seed }
+        else { profile.rightEar.bands = seed }
+        if linkChannels {
+            if tab == .left { profile.rightEar.bands = seed }
+            else { profile.leftEar.bands = seed }
+        }
+        try? profileStore.save(profile)
     }
 
     private func paramRow<V>(
@@ -286,9 +340,40 @@ struct ExpertEQView: View {
                 var updated = profile
                 if tab == .left { updated.leftEar.bands = newBands }
                 else { updated.rightEar.bands = newBands }
+                if linkChannels {
+                    // Mirror to the other ear, preserving each band's identity
+                    // by frequency match (so the canvas's selectedBandID still
+                    // works after the round-trip).
+                    let other = (tab == .left ? updated.rightEar.bands : updated.leftEar.bands)
+                    let mirrored = Self.mirrorBands(newBands, ontoExisting: other)
+                    if tab == .left { updated.rightEar.bands = mirrored }
+                    else { updated.leftEar.bands = mirrored }
+                }
                 try? profileStore.save(updated)
             }
         )
+    }
+
+    /// When linking ears, we propagate freq/gain/Q/type/enabled from the
+    /// edited side onto the other, but keep the other side's band IDs (and
+    /// any bands it has that the edited side doesn't, by index).
+    private static func mirrorBands(_ source: [EQBand], ontoExisting target: [EQBand]) -> [EQBand] {
+        var result = target
+        for (i, src) in source.enumerated() {
+            if i < result.count {
+                result[i].frequencyHz = src.frequencyHz
+                result[i].gaindB = src.gaindB
+                result[i].bandwidth = src.bandwidth
+                result[i].filterType = src.filterType
+                result[i].enabled = src.enabled
+            } else {
+                result.append(src)
+            }
+        }
+        if result.count > source.count {
+            result.removeLast(result.count - source.count)
+        }
+        return result
     }
 
     private func enabledBinding(for band: EQBand) -> Binding<Bool> {
@@ -304,6 +389,12 @@ struct ExpertEQView: View {
         guard let idx = bands.firstIndex(where: { $0.id == band.id }) else { return }
         mutate(&bands[idx])
         if tab == .left { profile.leftEar.bands = bands } else { profile.rightEar.bands = bands }
+        if linkChannels {
+            let other = (tab == .left ? profile.rightEar.bands : profile.leftEar.bands)
+            let mirrored = Self.mirrorBands(bands, ontoExisting: other)
+            if tab == .left { profile.rightEar.bands = mirrored }
+            else { profile.leftEar.bands = mirrored }
+        }
         try? profileStore.save(profile)
     }
 

@@ -123,10 +123,9 @@ struct AdvancedEQView: View {
             Text(formatGain(displayedGain(profile: profile, frequency: frequency)))
                 .font(.caption.monospaced().weight(.medium))
                 .foregroundStyle(.primary)
-                .frame(width: Self.columnWidth)
                 .lineLimit(1)
         }
-        .frame(width: Self.columnWidth)
+        .frame(maxWidth: .infinity)
     }
 
     private enum Channel { case left, right }
@@ -145,9 +144,9 @@ struct AdvancedEQView: View {
     // MARK: - Binding helpers
 
     private func displayedGain(profile: HearingProfile, frequency: Double) -> Double {
-        let left = EQBandLookup.gain(at: frequency, in: profile.leftEar.bands)
+        let left = EQBandLookup.gain(at: frequency, filterType: .parametric, in: profile.leftEar.bands)
         if linkChannels { return left }
-        let right = EQBandLookup.gain(at: frequency, in: profile.rightEar.bands)
+        let right = EQBandLookup.gain(at: frequency, filterType: .parametric, in: profile.rightEar.bands)
         return (left + right) / 2
     }
 
@@ -160,8 +159,8 @@ struct AdvancedEQView: View {
 
     private func gain(profile: HearingProfile, frequency: Double, channel: Channel) -> Double {
         switch channel {
-        case .left:  return EQBandLookup.gain(at: frequency, in: profile.leftEar.bands)
-        case .right: return EQBandLookup.gain(at: frequency, in: profile.rightEar.bands)
+        case .left:  return EQBandLookup.gain(at: frequency, filterType: .parametric, in: profile.leftEar.bands)
+        case .right: return EQBandLookup.gain(at: frequency, filterType: .parametric, in: profile.rightEar.bands)
         }
     }
 
@@ -169,20 +168,20 @@ struct AdvancedEQView: View {
         var updated = profile
         if linkChannels {
             var lb = updated.leftEar.bands
-            EQBandLookup.setGain(gain, at: frequency, bandwidth: Self.bandwidth, in: &lb)
+            EQBandLookup.setGain(gain, at: frequency, bandwidth: Self.bandwidth, filterType: .parametric, in: &lb)
             updated.leftEar.bands = lb
             var rb = updated.rightEar.bands
-            EQBandLookup.setGain(gain, at: frequency, bandwidth: Self.bandwidth, in: &rb)
+            EQBandLookup.setGain(gain, at: frequency, bandwidth: Self.bandwidth, filterType: .parametric, in: &rb)
             updated.rightEar.bands = rb
         } else {
             switch channel {
             case .left:
                 var lb = updated.leftEar.bands
-                EQBandLookup.setGain(gain, at: frequency, bandwidth: Self.bandwidth, in: &lb)
+                EQBandLookup.setGain(gain, at: frequency, bandwidth: Self.bandwidth, filterType: .parametric, in: &lb)
                 updated.leftEar.bands = lb
             case .right:
                 var rb = updated.rightEar.bands
-                EQBandLookup.setGain(gain, at: frequency, bandwidth: Self.bandwidth, in: &rb)
+                EQBandLookup.setGain(gain, at: frequency, bandwidth: Self.bandwidth, filterType: .parametric, in: &rb)
                 updated.rightEar.bands = rb
             }
         }
@@ -193,10 +192,10 @@ struct AdvancedEQView: View {
         var updated = profile
         for freq in Self.frequencies {
             var lb = updated.leftEar.bands
-            EQBandLookup.setGain(0, at: freq, bandwidth: Self.bandwidth, in: &lb)
+            EQBandLookup.setGain(0, at: freq, bandwidth: Self.bandwidth, filterType: .parametric, in: &lb)
             updated.leftEar.bands = lb
             var rb = updated.rightEar.bands
-            EQBandLookup.setGain(0, at: freq, bandwidth: Self.bandwidth, in: &rb)
+            EQBandLookup.setGain(0, at: freq, bandwidth: Self.bandwidth, filterType: .parametric, in: &rb)
             updated.rightEar.bands = rb
         }
         try? profileStore.save(updated)

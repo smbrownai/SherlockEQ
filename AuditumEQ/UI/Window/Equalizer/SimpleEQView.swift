@@ -13,14 +13,21 @@ struct SimpleEQView: View {
         let label: String
         let frequencyHz: Double
         let bandwidth: Double
+        let filterType: EQFilterType
         let icon: String
     }
 
+    /// Bass + Treble are shelves so adjusting them never stacks weirdly
+    /// with Advanced or Expert's parametric peaks at the same frequencies
+    /// — a shelf is a fundamentally different filter shape. Mids stays a
+    /// parametric peak (no equivalent shelf for the middle region).
     private static let simpleBands: [SimpleBand] = [
-        SimpleBand(label: "Bass",   frequencyHz: 100,  bandwidth: 1.8, icon: "speaker.wave.2.fill"),
-        SimpleBand(label: "Mids",   frequencyHz: 1000, bandwidth: 1.8, icon: "waveform"),
-        SimpleBand(label: "Treble", frequencyHz: 5000, bandwidth: 1.5, icon: "music.note"),
+        SimpleBand(label: "Bass",   frequencyHz: 250,  bandwidth: 0.707, filterType: .lowShelf,  icon: "speaker.wave.2.fill"),
+        SimpleBand(label: "Mids",   frequencyHz: 1000, bandwidth: 1.8,   filterType: .parametric, icon: "waveform"),
+        SimpleBand(label: "Treble", frequencyHz: 5000, bandwidth: 0.707, filterType: .highShelf, icon: "music.note"),
     ]
+
+    @State private var linkChannels: Bool = true
 
     var body: some View {
         if let profile = audioState.activeProfile(in: profileStore) {
@@ -37,19 +44,33 @@ struct SimpleEQView: View {
     @ViewBuilder private func content(_ profile: HearingProfile) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Three quick knobs per ear. For finer control switch to Advanced or Expert.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                topBar
                 previewCanvas(profile)
-                HStack(alignment: .top, spacing: 16) {
-                    bandColumn(for: profile, ear: .left, color: .blue)
-                    bandColumn(for: profile, ear: .right, color: .red)
+                if linkChannels {
+                    bandColumn(for: profile, ear: .left, color: .accentColor, title: "Both ears")
+                } else {
+                    HStack(alignment: .top, spacing: 16) {
+                        bandColumn(for: profile, ear: .left, color: .blue, title: "Left ear")
+                        bandColumn(for: profile, ear: .right, color: .red, title: "Right ear")
+                    }
                 }
                 resetButton(profile)
                 educationCard
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var topBar: some View {
+        HStack(spacing: 12) {
+            Text("Three quick knobs per ear")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Toggle("Link L + R", isOn: $linkChannels)
+                .toggleStyle(.switch)
+                .controlSize(.small)
         }
     }
 
@@ -75,11 +96,11 @@ struct SimpleEQView: View {
     private enum Ear { case left, right }
 
     @ViewBuilder
-    private func bandColumn(for profile: HearingProfile, ear: Ear, color: Color) -> some View {
+    private func bandColumn(for profile: HearingProfile, ear: Ear, color: Color, title: String) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 8) {
                 Circle().fill(color).frame(width: 10, height: 10)
-                Text(ear == .left ? "Left ear" : "Right ear")
+                Text(title)
                     .font(.headline)
             }
 
@@ -152,7 +173,7 @@ struct SimpleEQView: View {
         VStack(alignment: .leading, spacing: 6) {
             Label("How Simple works", systemImage: "info.circle")
                 .font(.subheadline.weight(.semibold))
-            Text("The three sliders adjust a single wide parametric band at 100 Hz / 1 kHz / 5 kHz. Moving a slider to 0 removes that band — moving it back creates it again. Switching to Advanced or Expert shows the same bands alongside any others you've added.")
+            Text("Bass and Treble are *shelf* filters — Bass lifts or cuts everything below ~250 Hz, Treble does the same above ~5 kHz. Mids is a wide peak at 1 kHz. Shelves don't stack badly with Advanced/Expert's per-band peaks, so you can roughly shape your sound here and then refine in the other tabs without doubling up.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -174,14 +195,23 @@ struct SimpleEQView: View {
 
     private func currentGain(profile: HearingProfile, ear: Ear, band: SimpleBand) -> Double {
         let bands = ear == .left ? profile.leftEar.bands : profile.rightEar.bands
-        return EQBandLookup.gain(at: band.frequencyHz, in: bands)
+        return EQBandLookup.gain(at: band.frequencyHz, filterType: band.filterType, in: bands)
     }
 
     private func setGain(_ gain: Double, profile: HearingProfile, ear: Ear, band: SimpleBand) {
         var updated = profile
-        var bands = ear == .left ? updated.leftEar.bands : updated.rightEar.bands
-        EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, in: &bands)
-        if ear == .left { updated.leftEar.bands = bands } else { updated.rightEar.bands = bands }
+        if linkChannels {
+            var lb = updated.leftEar.bands
+            EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &lb)
+            updated.leftEar.bands = lb
+            var rb = updated.rightEar.bands
+            EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &rb)
+            updated.rightEar.bands = rb
+        } else {
+            var bands = ear == .left ? updated.leftEar.bands : updated.rightEar.bands
+            EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &bands)
+            if ear == .left { updated.leftEar.bands = bands } else { updated.rightEar.bands = bands }
+        }
         try? profileStore.save(updated)
     }
 
@@ -189,11 +219,11 @@ struct SimpleEQView: View {
         var updated = profile
         for band in Self.simpleBands {
             var leftBands = updated.leftEar.bands
-            EQBandLookup.setGain(0, at: band.frequencyHz, bandwidth: band.bandwidth, in: &leftBands)
+            EQBandLookup.setGain(0, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &leftBands)
             updated.leftEar.bands = leftBands
 
             var rightBands = updated.rightEar.bands
-            EQBandLookup.setGain(0, at: band.frequencyHz, bandwidth: band.bandwidth, in: &rightBands)
+            EQBandLookup.setGain(0, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &rightBands)
             updated.rightEar.bands = rightBands
         }
         try? profileStore.save(updated)
