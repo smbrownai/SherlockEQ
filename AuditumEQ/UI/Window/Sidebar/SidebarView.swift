@@ -18,23 +18,22 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .safeAreaInset(edge: .bottom) { newProfileBar }
+        .safeAreaInset(edge: .bottom) { profileShortcut }
     }
 
-    @ViewBuilder private var newProfileBar: some View {
-        // Placeholder — full profile CRUD comes in Session 7. Button is shown
-        // disabled so the sidebar's visual structure already matches §8.3.
+    @ViewBuilder private var profileShortcut: some View {
+        // Quick jump to the Profiles section. Real CRUD lives in the section's
+        // toolbar; this is just navigation.
         VStack(spacing: 0) {
             Divider()
-            Button(action: {}) {
-                Label("New Profile", systemImage: "plus")
+            Button(action: { selection = .profiles }) {
+                Label("Manage Profiles", systemImage: "person.crop.circle.badge.plus")
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
-            .disabled(true)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .help("Profile creation lands in Session 7")
+            .help("Open the Profiles section")
         }
     }
 }

@@ -1,12 +1,197 @@
 import SwiftUI
 
+/// Profiles section of the main window. Master/detail layout via plain `HStack`
+/// — nesting `HSplitView` inside `NavigationSplitView` confuses the outer
+/// layout and squishes everything. We get a fixed-width list column on the
+/// left and a scrolling detail on the right.
+///
+/// Selection here is *editing* selection, distinct from
+/// `AudioState.activeProfileID` (the profile being applied to the audio
+/// engine). The detail's "Make Active" button bridges the two.
 struct ProfilesView: View {
+    @EnvironmentObject private var profileStore: ProfileStore
+    @EnvironmentObject private var audioState: AudioState
+
+    @State private var selection: UUID?
+    @State private var profileToDelete: HearingProfile?
+
     var body: some View {
-        PlaceholderView(
-            title: "Profiles",
-            summary: "Create, edit, delete, duplicate, import and export hearing profiles. Detail panel shows name, device link, icon, compensation factor, global trim, and safe-listening ceiling.",
-            sessionRef: "Session 7",
-            symbol: "person.crop.circle"
+        HStack(spacing: 0) {
+            listColumn
+                .frame(width: 260)
+                .background(.regularMaterial)
+            Divider()
+            detailColumn
+        }
+        .navigationTitle("Profiles")
+        .onAppear { syncSelectionWithActive() }
+        .onChange(of: profileStore.profiles) { _, _ in
+            if let id = selection, !profileStore.profiles.contains(where: { $0.id == id }) {
+                selection = profileStore.profiles.first?.id
+            } else if selection == nil {
+                syncSelectionWithActive()
+            }
+        }
+        .confirmationDialog(
+            "Delete \(profileToDelete?.name ?? "profile")?",
+            isPresented: deletionDialogBinding,
+            titleVisibility: .visible,
+            presenting: profileToDelete
+        ) { profile in
+            Button("Delete", role: .destructive) { confirmDelete(profile) }
+            Button("Cancel", role: .cancel) { profileToDelete = nil }
+        } message: { _ in
+            Text("This removes the profile's JSON file. This cannot be undone.")
+        }
+    }
+
+    // MARK: - List column
+
+    @ViewBuilder private var listColumn: some View {
+        VStack(spacing: 0) {
+            List(selection: $selection) {
+                ForEach(profileStore.profiles) { profile in
+                    ProfileListItem(
+                        profile: profile,
+                        isActive: audioState.activeProfileID == profile.id
+                    )
+                    .tag(profile.id)
+                    .contextMenu {
+                        Button("Make Active") { audioState.activeProfileID = profile.id }
+                            .disabled(audioState.activeProfileID == profile.id)
+                        Button("Duplicate") { duplicate(profile) }
+                        Divider()
+                        Button("Delete", role: .destructive) { profileToDelete = profile }
+                            .disabled(profileStore.profiles.count <= 1)
+                    }
+                }
+            }
+            .listStyle(.inset)
+            .scrollContentBackground(.hidden)
+
+            Divider()
+            listToolbar
+        }
+    }
+
+    @ViewBuilder private var listToolbar: some View {
+        HStack(spacing: 6) {
+            toolbarButton(systemName: "plus", help: "New profile", action: createNew)
+            toolbarButton(
+                systemName: "plus.square.on.square",
+                help: "Duplicate selected profile",
+                isEnabled: selectedProfile != nil,
+                action: duplicateSelected
+            )
+            toolbarButton(
+                systemName: "minus",
+                help: "Delete selected profile",
+                isEnabled: selectedProfile != nil && profileStore.profiles.count > 1,
+                action: deleteSelected
+            )
+            Spacer()
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(.bar)
+    }
+
+    private func toolbarButton(
+        systemName: String,
+        help: String,
+        isEnabled: Bool = true,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .frame(width: 22, height: 20)
+        }
+        .buttonStyle(.borderless)
+        .disabled(!isEnabled)
+        .help(help)
+    }
+
+    // MARK: - Detail column
+
+    @ViewBuilder private var detailColumn: some View {
+        if let id = selection, let profile = profileStore.profiles.first(where: { $0.id == id }) {
+            ProfileDetailView(profileID: profile.id)
+        } else {
+            ContentUnavailableView(
+                "No profile selected",
+                systemImage: "person.crop.circle.badge.questionmark",
+                description: Text("Pick one from the list, or create a new profile.")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    // MARK: - Actions
+
+    private var selectedProfile: HearingProfile? {
+        guard let id = selection else { return nil }
+        return profileStore.profiles.first { $0.id == id }
+    }
+
+    private var deletionDialogBinding: Binding<Bool> {
+        Binding(
+            get: { profileToDelete != nil },
+            set: { if !$0 { profileToDelete = nil } }
         )
+    }
+
+    private func syncSelectionWithActive() {
+        if selection == nil {
+            selection = audioState.activeProfileID ?? profileStore.profiles.first?.id
+        }
+    }
+
+    private func createNew() {
+        let newProfile = HearingProfile.makeDefault(name: uniqueName(base: "New Profile"))
+        do {
+            try profileStore.save(newProfile)
+            selection = newProfile.id
+        } catch { /* surfaced via ProfileStore.lastError in Debug */ }
+    }
+
+    private func duplicateSelected() {
+        guard let p = selectedProfile else { return }
+        duplicate(p)
+    }
+
+    private func duplicate(_ source: HearingProfile) {
+        var copy = source
+        copy.id = UUID()
+        copy.name = uniqueName(base: "\(source.name) Copy")
+        let now = Date()
+        copy.createdAt = now
+        copy.modifiedAt = now
+        do {
+            try profileStore.save(copy)
+            selection = copy.id
+        } catch { /* see note above */ }
+    }
+
+    private func deleteSelected() {
+        guard let p = selectedProfile, profileStore.profiles.count > 1 else { return }
+        profileToDelete = p
+    }
+
+    private func confirmDelete(_ profile: HearingProfile) {
+        defer { profileToDelete = nil }
+        do {
+            try profileStore.delete(profile)
+            if audioState.activeProfileID == profile.id {
+                audioState.activeProfileID = profileStore.profiles.first?.id
+            }
+        } catch { /* see note above */ }
+    }
+
+    private func uniqueName(base: String) -> String {
+        let existing = Set(profileStore.profiles.map(\.name))
+        if !existing.contains(base) { return base }
+        var i = 2
+        while existing.contains("\(base) \(i)") { i += 1 }
+        return "\(base) \(i)"
     }
 }
