@@ -153,9 +153,13 @@ final class SpectrumAnalyzer: ObservableObject {
         for k in 0..<Self.halfFFT {
             magSquared[k] = realOut[k] * realOut[k] + imagOut[k] * imagOut[k]
         }
+        // Normalise so bin values are dBFS-scaled. Without this, raw biquads
+        // are in arbitrary 0…+60 dB range and the parametric canvas paints
+        // a solid block instead of a varying spectrum.
+        let invN2 = Float(1.0 / (Double(Self.fftSize) * Double(Self.fftSize)))
         var dbBins = [Float](repeating: 0, count: Self.halfFFT)
         for k in 0..<Self.halfFFT {
-            dbBins[k] = 10 * log10(max(magSquared[k], 1e-20))
+            dbBins[k] = 10 * log10(max(magSquared[k] * invN2, 1e-20))
         }
 
         Task { @MainActor [weak self] in
