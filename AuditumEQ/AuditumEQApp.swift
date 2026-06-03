@@ -8,7 +8,7 @@ struct AuditumEQApp: App {
 
     var body: some Scene {
         Window("AuditumEQ", id: "main") {
-            ContentView()
+            MainWindowView()
                 .environmentObject(audioState)
                 .environmentObject(profileStore)
                 .task {
