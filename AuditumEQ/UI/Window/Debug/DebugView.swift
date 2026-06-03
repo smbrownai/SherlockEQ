@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import Combine
+import UserNotifications
 
 /// Diagnostic surface that lived in `ContentView` through Sessions 1–5.
 /// Now scoped to the Debug sidebar entry of the main window. Will be trimmed
@@ -9,6 +10,7 @@ import Combine
 struct DebugView: View {
     @EnvironmentObject private var state: AudioState
     @EnvironmentObject private var profileStore: ProfileStore
+    @StateObject private var notifications = NotificationManager.shared
     @State private var tick = 0
 
     private let counterTimer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
@@ -110,6 +112,35 @@ struct DebugView: View {
             Button("Stop") { state.stopAll() }
         }
 
+        HStack(spacing: 12) {
+            Button("Reset dose") { state.safeListening.resetDose() }
+            Button("Force 80% (amber)") {
+                state.safeListening.forceForTesting(dose: 0.80)
+            }
+            Button("Force 100% (red)") {
+                state.safeListening.forceForTesting(dose: 1.0)
+            }
+        }
+
+        Text("Notifications").font(.subheadline).foregroundStyle(.secondary)
+        labeled("Authorization", value: authorizationLabel)
+        HStack(spacing: 12) {
+            Button("Request permission") {
+                Task { await notifications.requestAuthorization() }
+            }
+            Button("Send test notification") {
+                NotificationManager.shared.send(
+                    title: "AuditumEQ test",
+                    body: "If you see this banner, notifications are wired."
+                )
+            }
+            Button("Open System Settings") {
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        }
+
         Toggle("Reference Mode (bypass EQ)", isOn: Binding(
             get: { state.referenceMode },
             set: { state.referenceMode = $0 }
@@ -144,6 +175,17 @@ struct DebugView: View {
         case .starting: return "starting"
         case .running: return "running"
         case .failed(let m): return "failed: \(m)"
+        }
+    }
+
+    private var authorizationLabel: String {
+        switch notifications.authorizationStatus {
+        case .notDetermined: return "not determined — click Request permission"
+        case .denied: return "denied — enable in System Settings → Notifications"
+        case .authorized: return "authorized"
+        case .provisional: return "provisional"
+        case .ephemeral: return "ephemeral"
+        @unknown default: return "unknown (\(notifications.authorizationStatus.rawValue))"
         }
     }
 

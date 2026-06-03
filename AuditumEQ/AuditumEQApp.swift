@@ -16,6 +16,7 @@ struct AuditumEQApp: App {
                     profileStore.seedDefaultsIfEmpty()
                     audioState.adoptDefaultProfileIfNeeded(from: profileStore)
                     audioState.connect(profileStore: profileStore)
+                    await NotificationManager.shared.requestAuthorization()
                 }
                 .onDisappear {
                     // Window closed → back to menu-bar-only.
@@ -23,10 +24,12 @@ struct AuditumEQApp: App {
                 }
         }
 
-        MenuBarExtra("AuditumEQ", systemImage: "waveform.and.magnifyingglass") {
+        MenuBarExtra {
             MainPopoverView()
                 .environmentObject(audioState)
                 .environmentObject(profileStore)
+        } label: {
+            MenuBarIcon(audioState: audioState)
         }
         .menuBarExtraStyle(.window)
     }

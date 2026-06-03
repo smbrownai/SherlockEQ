@@ -21,6 +21,13 @@ final class SafeListeningTracker: ObservableObject {
     /// Most recently observed A-weighted level (dBA estimate from the analyzer).
     @Published private(set) var currentLevelDBA: Double = 0
 
+    /// True once dose crossed 80 % today (reset at midnight or manual reset).
+    /// Drives the amber menu-bar icon tint + first warning notification.
+    @Published private(set) var didCrossAmberToday: Bool = false
+    /// True once dose hit 100 % today. Drives the red icon tint + final
+    /// "take a break" notification.
+    @Published private(set) var didCrossRedToday: Bool = false
+
     /// Reset after this much sustained quiet (default 2 hours, per spec).
     var quietResetDuration: TimeInterval = 2 * 3600
     /// Below this, we consider the user not listening — controls the
@@ -35,6 +42,7 @@ final class SafeListeningTracker: ObservableObject {
 
     private var lastUpdateTime: Date?
     private var quietStartTime: Date?
+    private var currentResetDay: Date = Calendar.current.startOfDay(for: Date())
     private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "SafeListening")
 
     /// Permissible exposure duration in seconds at a given dBA level.
@@ -51,6 +59,15 @@ final class SafeListeningTracker: ObservableObject {
         let now = Date()
         let elapsed = lastUpdateTime.map { now.timeIntervalSince($0) } ?? 0
         lastUpdateTime = now
+
+        // Midnight rollover.
+        let today = Calendar.current.startOfDay(for: now)
+        if today != currentResetDay {
+            resetDose(reason: "midnight rollover")
+            currentResetDay = today
+        }
+
+        let priorDose = sessionDose
 
         // Clamp to a sane range — runaway calibration or near-silent rooms
         // can otherwise produce nonsense values that distort the math.
@@ -91,6 +108,47 @@ final class SafeListeningTracker: ObservableObject {
         } else {
             remainingMinutes = nil   // effectively unlimited / not listening
         }
+
+        // Threshold crossings → notifications (only fire once per day).
+        if !didCrossAmberToday, priorDose < 0.8, sessionDose >= 0.8 {
+            didCrossAmberToday = true
+            log.info("Crossed 80% dose threshold")
+            NotificationManager.shared.send(
+                title: "Approaching your safe listening limit",
+                body: "You've used 80% of your recommended daily exposure. Consider turning the volume down."
+            )
+        }
+        if !didCrossRedToday, priorDose < 1.0, sessionDose >= 1.0 {
+            didCrossRedToday = true
+            log.info("Reached 100% dose threshold")
+            NotificationManager.shared.send(
+                title: "Safe listening limit reached",
+                body: "You've reached your safe listening limit for today. Consider taking a break."
+            )
+        }
+    }
+
+    /// Debug helper: jam the dose to a specific value, triggering any
+    /// crossings on the way. Used by the Debug section to verify the
+    /// menu-bar icon tint and notifications without waiting hours.
+    func forceForTesting(dose: Double) {
+        let target = max(0, min(1, dose))
+        let prior = sessionDose
+        sessionDose = target
+        if !didCrossAmberToday, prior < 0.8, target >= 0.8 {
+            didCrossAmberToday = true
+            NotificationManager.shared.send(
+                title: "Approaching your safe listening limit",
+                body: "You've used 80% of your recommended daily exposure. Consider turning the volume down."
+            )
+        }
+        if !didCrossRedToday, prior < 1.0, target >= 1.0 {
+            didCrossRedToday = true
+            NotificationManager.shared.send(
+                title: "Safe listening limit reached",
+                body: "You've reached your safe listening limit for today. Consider taking a break."
+            )
+        }
     }
 
     /// Manual reset (user action or midnight rollover, spec §5.4).
@@ -100,5 +158,7 @@ final class SafeListeningTracker: ObservableObject {
         }
         sessionDose = 0
         quietStartTime = nil
+        didCrossAmberToday = false
+        didCrossRedToday = false
     }
 }
