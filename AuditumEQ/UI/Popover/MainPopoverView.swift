@@ -54,16 +54,18 @@ struct MainPopoverView: View {
         }
     }
 
-    /// Open (or focus) the main window. Because the app launches in
-    /// `.accessory` policy (LSUIElement = YES), `openWindow` alone won't bring
-    /// us to front — we have to explicitly activate the app. Switching the
-    /// policy to `.regular` while the window is up also gets the Dock icon and
-    /// CMD-Tab participation that the spec describes (§4 Activation Policy);
-    /// the switch back to `.accessory` on close lands in Session 6.
+    /// Open (or focus) the main window. The app switches to `.accessory` on
+    /// window close, so reopening has to flip back to `.regular` and
+    /// re-activate to get the menu bar back. Calling `activate` in the same
+    /// run-loop tick as `setActivationPolicy` is unreliable — AppKit hasn't
+    /// finished registering the policy change, and the menu bar fails to
+    /// redraw. Deferring activation to the next tick fixes it.
     private func openMainWindow() {
         NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
         openWindow(id: "main")
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 
     private var deviceSymbol: String {

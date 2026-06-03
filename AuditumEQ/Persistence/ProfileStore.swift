@@ -15,10 +15,20 @@ final class ProfileStore: ObservableObject {
     @Published private(set) var profiles: [HearingProfile] = []
     @Published private(set) var lastError: String?
 
+    /// Set by views via the SwiftUI environment so save/delete can register
+    /// undo. nil while no main window is up.
+    var undoManager: UndoManager?
+
     private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "ProfileStore")
     private let directory: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+
+    /// Per-profile timestamp of the most recent save. Saves of the same
+    /// profile within `coalesceWindow` are treated as one undo step, so a
+    /// slider drag that fires save() dozens of times reverts as one Cmd-Z.
+    private var lastBurstSaveAt: [UUID: Date] = [:]
+    private let coalesceWindow: TimeInterval = 0.5
 
     init(directory: URL? = nil) {
         self.directory = directory ?? Self.defaultDirectory()
@@ -65,11 +75,20 @@ final class ProfileStore: ObservableObject {
     }
 
     /// Write `profile` to its `<uuid>.json` file (atomic via temp + rename).
-    /// Bumps `modifiedAt` to now.
+    /// Bumps `modifiedAt` to now. Registers an undo entry against the
+    /// current `undoManager` unless we're inside a coalescing burst (rapid
+    /// repeated saves of the same profile, e.g. slider drags).
     func save(_ profile: HearingProfile) throws {
         ensureDirectory()
+        let now = Date()
+        let previousOnDisk = profiles.first { $0.id == profile.id }
+        let inBurst: Bool = {
+            guard let last = lastBurstSaveAt[profile.id] else { return false }
+            return now.timeIntervalSince(last) < coalesceWindow
+        }()
+
         var p = profile
-        p.modifiedAt = Date()
+        p.modifiedAt = now
         let data = try encoder.encode(p)
         let url = directory.appendingPathComponent("\(p.id.uuidString).json")
         try data.write(to: url, options: .atomic)
@@ -79,6 +98,23 @@ final class ProfileStore: ObservableObject {
             profiles.append(p)
             profiles.sort { $0.createdAt < $1.createdAt }
         }
+
+        if let undoManager, !inBurst {
+            let actionName = previousOnDisk == nil ? "Create \(p.name)" : "Edit \(p.name)"
+            if let snapshot = previousOnDisk {
+                undoManager.registerUndo(withTarget: self) { store in
+                    try? store.save(snapshot)
+                }
+            } else {
+                // First time this profile hit disk → undo = delete.
+                undoManager.registerUndo(withTarget: self) { store in
+                    try? store.delete(p)
+                }
+            }
+            undoManager.setActionName(actionName)
+        }
+        lastBurstSaveAt[profile.id] = now
+
         log.info("Saved profile \(p.name, privacy: .public) (\(p.id.uuidString, privacy: .public))")
     }
 
@@ -117,13 +153,23 @@ final class ProfileStore: ObservableObject {
         return "\(base) \(i)"
     }
 
-    /// Remove the on-disk file and drop the profile from the in-memory array.
+    /// Remove the on-disk file and drop the profile from the in-memory
+    /// array. Registers an undo that re-saves the deleted snapshot.
     func delete(_ profile: HearingProfile) throws {
         let url = directory.appendingPathComponent("\(profile.id.uuidString).json")
         if FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)
         }
         profiles.removeAll { $0.id == profile.id }
+        lastBurstSaveAt[profile.id] = nil
+
+        if let undoManager {
+            undoManager.registerUndo(withTarget: self) { store in
+                try? store.save(profile)
+            }
+            undoManager.setActionName("Delete \(profile.name)")
+        }
+
         log.info("Deleted profile \(profile.name, privacy: .public)")
     }
 

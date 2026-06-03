@@ -18,6 +18,7 @@ struct MainWindowView: View {
         // top of the spectrum canvas + comfortable sidebar that never
         // truncates its section labels.
         .frame(minWidth: 1020, idealWidth: 1100, minHeight: 680, idealHeight: 740)
+        .linkUndoManagerToProfileStore()
     }
 
     @ViewBuilder private var detail: some View {
