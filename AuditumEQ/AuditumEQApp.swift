@@ -23,6 +23,14 @@ struct AuditumEQApp: App {
                     NSApp.setActivationPolicy(.accessory)
                 }
         }
+        .commands {
+            CommandMenu("Audio") {
+                Button(audioState.referenceMode ? "Disable Reference Mode" : "Enable Reference Mode") {
+                    audioState.referenceMode.toggle()
+                }
+                .keyboardShortcut("b", modifiers: .command)
+            }
+        }
 
         MenuBarExtra {
             MainPopoverView()
