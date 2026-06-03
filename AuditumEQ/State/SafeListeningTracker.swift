@@ -29,12 +29,14 @@ final class SafeListeningTracker: ObservableObject {
     @Published private(set) var didCrossRedToday: Bool = false
 
     /// Reset after this much sustained quiet (default 2 hours, per spec).
-    var quietResetDuration: TimeInterval = 2 * 3600
+    @Published var quietResetDuration: TimeInterval = 2 * 3600
     /// Below this, we consider the user not listening — controls the
     /// quiet-period reset and the "remaining minutes" display only. Dose
     /// itself accumulates at all levels (NIOSH math is self-regulating —
     /// permissible duration at e.g. 30 dBA is days, contribution is ~0).
-    var quietThresholdDBA: Double = 50
+    @Published var quietThresholdDBA: Double = 50
+    /// User-facing kill switch for the 80/100 % notifications.
+    @Published var notificationsEnabled: Bool = true
 
     static let nioshReferenceLevelDBA: Double = 85
     static let nioshReferenceDuration: TimeInterval = 8 * 3600   // 28 800 s
@@ -113,18 +115,22 @@ final class SafeListeningTracker: ObservableObject {
         if !didCrossAmberToday, priorDose < 0.8, sessionDose >= 0.8 {
             didCrossAmberToday = true
             log.info("Crossed 80% dose threshold")
-            NotificationManager.shared.send(
-                title: "Approaching your safe listening limit",
-                body: "You've used 80% of your recommended daily exposure. Consider turning the volume down."
-            )
+            if notificationsEnabled {
+                NotificationManager.shared.send(
+                    title: "Approaching your safe listening limit",
+                    body: "You've used 80% of your recommended daily exposure. Consider turning the volume down."
+                )
+            }
         }
         if !didCrossRedToday, priorDose < 1.0, sessionDose >= 1.0 {
             didCrossRedToday = true
             log.info("Reached 100% dose threshold")
-            NotificationManager.shared.send(
-                title: "Safe listening limit reached",
-                body: "You've reached your safe listening limit for today. Consider taking a break."
-            )
+            if notificationsEnabled {
+                NotificationManager.shared.send(
+                    title: "Safe listening limit reached",
+                    body: "You've reached your safe listening limit for today. Consider taking a break."
+                )
+            }
         }
     }
 
