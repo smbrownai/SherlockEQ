@@ -72,6 +72,13 @@ final class AuditumEQAudioEngine: ObservableObject {
         engine.connect(leftSource, to: leq, format: tapFormat)
         engine.connect(rightSource, to: req, format: tapFormat)
 
+        // Sine tone generator — direct path to mainMixer, no EQ.
+        if let toneNode = toneGenerator.makeSourceNode(sampleRate: sampleRate) {
+            engine.attach(toneNode)
+            engine.connect(toneNode, to: engine.mainMixerNode, format: tapFormat)
+            toneSourceNode = toneNode
+        }
+
         let outRate = engine.outputNode.outputFormat(forBus: 0).sampleRate
         let mixer = engine.mainMixerNode
 
@@ -165,6 +172,12 @@ final class AuditumEQAudioEngine: ObservableObject {
 
     private var spectrumTapInstalled = false
 
+    /// Tone Finder's sine generator. Attached to mainMixer directly so the
+    /// reference pitch isn't colored by the user's per-ear EQ — they need
+    /// to hear the same tone the comparison process expects.
+    let toneGenerator = SineToneGenerator()
+    private var toneSourceNode: AVAudioSourceNode?
+
     /// The sample rate the engine's output is running at — what `mainMixerNode`
     /// emits and therefore what the spectrum tap sees. nil if the engine isn't
     /// running yet.
@@ -203,6 +216,7 @@ final class AuditumEQAudioEngine: ObservableObject {
         if let req = rightEQ { engine.detach(req); rightEQ = nil }
         if let b = sampleRateBridge { engine.detach(b); sampleRateBridge = nil }
         if let l = limiter { engine.detach(l); limiter = nil }
+        if let t = toneSourceNode { engine.detach(t); toneSourceNode = nil }
     }
 
     // MARK: - Controls
