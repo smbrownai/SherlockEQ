@@ -27,17 +27,26 @@ struct AdvancedEQView: View {
 
     @ViewBuilder private func content(_ profile: HearingProfile) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                header
+            VStack(alignment: .leading, spacing: 14) {
+                topBar
                 previewCanvas(profile)
-                Toggle("Link left + right channels", isOn: $linkChannels)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
                 slidersRow(profile)
                 resetButton(profile)
             }
-            .padding(24)
+            .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var topBar: some View {
+        HStack(spacing: 12) {
+            Text("10 octave-spaced bands per ear")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Toggle("Link L + R", isOn: $linkChannels)
+                .toggleStyle(.switch)
+                .controlSize(.small)
         }
     }
 
@@ -60,16 +69,6 @@ struct AdvancedEQView: View {
         .frame(height: 180)
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Advanced EQ")
-                .font(.title2.weight(.semibold))
-            Text("10 octave-spaced bands per ear. Sliders edit one wide parametric band each.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-    }
-
     @ViewBuilder
     private func slidersRow(_ profile: HearingProfile) -> some View {
         HStack(alignment: .top, spacing: 6) {
@@ -84,6 +83,11 @@ struct AdvancedEQView: View {
         )
     }
 
+    /// Fixed column width regardless of channel mode. Two narrow sliders
+    /// (28+4+28 = 60) or one centered wide slider both fit inside the same
+    /// envelope, so toggling Link doesn't reflow the whole row.
+    private static let columnWidth: CGFloat = 60
+
     @ViewBuilder
     private func bandColumn(profile: HearingProfile, frequency: Double) -> some View {
         VStack(spacing: 8) {
@@ -92,30 +96,37 @@ struct AdvancedEQView: View {
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 4) {
-                VerticalGainSlider(
-                    value: gainBinding(profile: profile, frequency: frequency, channel: .left),
-                    range: -12...12,
-                    tint: .blue
-                )
-                .frame(width: linkChannels ? 40 : 28)
-                if !linkChannels {
+                if linkChannels {
+                    VerticalGainSlider(
+                        value: gainBinding(profile: profile, frequency: frequency, channel: .left),
+                        range: -12...12,
+                        tint: .blue
+                    )
+                    .frame(width: 40)
+                } else {
+                    VerticalGainSlider(
+                        value: gainBinding(profile: profile, frequency: frequency, channel: .left),
+                        range: -12...12,
+                        tint: .blue
+                    )
+                    .frame(width: 26)
                     VerticalGainSlider(
                         value: gainBinding(profile: profile, frequency: frequency, channel: .right),
                         range: -12...12,
                         tint: .red
                     )
-                    .frame(width: 28)
+                    .frame(width: 26)
                 }
             }
-            .frame(height: 220)
+            .frame(width: Self.columnWidth, height: 220)
 
             Text(formatGain(displayedGain(profile: profile, frequency: frequency)))
                 .font(.caption.monospaced().weight(.medium))
                 .foregroundStyle(.primary)
-                .frame(width: 56)
+                .frame(width: Self.columnWidth)
                 .lineLimit(1)
         }
-        .frame(maxWidth: .infinity)
+        .frame(width: Self.columnWidth)
     }
 
     private enum Channel { case left, right }

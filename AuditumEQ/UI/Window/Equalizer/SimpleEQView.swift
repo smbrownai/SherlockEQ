@@ -36,17 +36,19 @@ struct SimpleEQView: View {
 
     @ViewBuilder private func content(_ profile: HearingProfile) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                header
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Three quick knobs per ear. For finer control switch to Advanced or Expert.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
                 previewCanvas(profile)
-                HStack(spacing: 16) {
+                HStack(alignment: .top, spacing: 16) {
                     bandColumn(for: profile, ear: .left, color: .blue)
                     bandColumn(for: profile, ear: .right, color: .red)
                 }
                 resetButton(profile)
                 educationCard
             }
-            .padding(24)
+            .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -68,16 +70,6 @@ struct SimpleEQView: View {
             selectedBandID: $dummySelection
         )
         .frame(height: 180)
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Simple EQ")
-                .font(.title2.weight(.semibold))
-            Text("Three quick knobs per ear. For finer control switch to Advanced or Expert.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
     }
 
     private enum Ear { case left, right }

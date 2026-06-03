@@ -46,6 +46,7 @@ struct ExpertEQView: View {
                 shadowColor: shadowColor,
                 selectedBandID: $selectedBandID
             )
+            .frame(minHeight: 280)
             .focusable()
             .focused($canvasFocused)
             .onKeyPress { press in handleKey(press, in: profile) }

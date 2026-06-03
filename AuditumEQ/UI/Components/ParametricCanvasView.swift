@@ -84,7 +84,6 @@ struct ParametricCanvasView: View {
                 .modifier(InteractionModifier(active: !readOnly, gesture: dragGesture(in: geo.size)))
             }
         }
-        .frame(minHeight: 280)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color.black.opacity(0.85))
