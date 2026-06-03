@@ -26,6 +26,30 @@ final class AudioState: ObservableObject {
         didSet { audio.setTestTone(testToneEnabled) }
     }
 
+    /// ID of the currently-active hearing profile. The profile itself lives in
+    /// `ProfileStore`; we hold only the ID so the store remains the source of
+    /// truth and edits naturally flow through `ProfileStore.save(_:)`.
+    @Published var activeProfileID: UUID?
+
+    /// Safe-listening session dose (0…1). Populated by `SafeListeningTracker`
+    /// when that lands in Session 10; until then it stays at zero.
+    @Published var sessionDosePercent: Double = 0
+    @Published var remainingMinutes: Double?
+    @Published var currentLeveldBSPL: Double = 0
+
+    func activeProfile(in store: ProfileStore) -> HearingProfile? {
+        guard let id = activeProfileID else { return nil }
+        return store.profiles.first { $0.id == id }
+    }
+
+    /// On first launch, pick the first available profile so the popover and
+    /// the audio engine have something to point at.
+    func adoptDefaultProfileIfNeeded(from store: ProfileStore) {
+        if activeProfileID == nil, let first = store.profiles.first {
+            activeProfileID = first.id
+        }
+    }
+
     private var tapObserver: AnyCancellable?
     private var audioObserver: AnyCancellable?
     private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "AudioState")

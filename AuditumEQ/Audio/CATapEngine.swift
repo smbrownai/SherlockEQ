@@ -21,6 +21,7 @@ final class CATapEngine: ObservableObject {
     @Published private(set) var state: State = .idle
     @Published private(set) var permissionGranted: Bool = false
     @Published private(set) var currentOutputDeviceID: AudioDeviceID = kAudioObjectUnknown
+    @Published private(set) var currentOutputDeviceName: String = "—"
 
     /// Mono source node for the left channel of the captured stream.
     /// Emits **stereo** with L = tapped L, R = 0 — so a downstream EQ can process
@@ -132,6 +133,7 @@ final class CATapEngine: ObservableObject {
     private func buildTapAndAggregate() throws {
         let outputDeviceID = try Self.defaultOutputDeviceID()
         currentOutputDeviceID = outputDeviceID
+        currentOutputDeviceName = (try? Self.deviceName(outputDeviceID)) ?? "Device \(outputDeviceID)"
 
         let outputDeviceUID = try Self.deviceUID(outputDeviceID)
 
@@ -515,6 +517,19 @@ extension CATapEngine {
         )
         guard status == noErr else { throw TapError.defaultOutputUnavailable(status) }
         return deviceID
+    }
+
+    static func deviceName(_ deviceID: AudioDeviceID) throws -> String {
+        var name: CFString = "" as CFString
+        var size = UInt32(MemoryLayout<CFString>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioObjectPropertyName,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &name)
+        guard status == noErr else { throw TapError.deviceUIDUnavailable(status) }
+        return name as String
     }
 
     static func deviceUID(_ deviceID: AudioDeviceID) throws -> String {
