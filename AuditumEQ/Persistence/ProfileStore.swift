@@ -97,7 +97,7 @@ final class ProfileStore: ObservableObject {
     func seedDefaultsIfEmpty() {
         guard profiles.isEmpty else { return }
         do {
-            try save(.makeDefault())
+            try save(.makeDefault(isBuiltIn: true))
             try save(.makeVoiceClarityPreset())
             log.info("Seeded initial profiles")
         } catch {

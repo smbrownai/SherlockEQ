@@ -8,6 +8,10 @@ struct ProfileDetailView: View {
     @EnvironmentObject private var audioState: AudioState
 
     let profileID: UUID
+    /// Optional hook the parent uses to follow up on a "Duplicate to
+    /// customize" tap from the built-in banner — typically the parent
+    /// updates its own selection to the new copy's ID.
+    var onDuplicatedToCopy: ((HearingProfile) -> Void)? = nil
 
     private static let availableSymbols: [String] = [
         "person.fill",
@@ -29,10 +33,18 @@ struct ProfileDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     headerBlock(profile)
-                    identitySection(profile)
-                    deviceSection(profile)
-                    tuningSection(profile)
-                    safetySection(profile)
+                    if profile.isBuiltIn {
+                        BuiltInProfileBanner(profileName: profile.name) {
+                            duplicateAndHandoff(profile)
+                        }
+                    }
+                    Group {
+                        identitySection(profile)
+                        deviceSection(profile)
+                        tuningSection(profile)
+                        safetySection(profile)
+                    }
+                    .disabled(profile.isBuiltIn)
                     metadataSection(profile)
                 }
                 .padding(28)
@@ -313,5 +325,27 @@ struct ProfileDetailView: View {
         var copy = profile
         mutate(&copy)
         try? profileStore.save(copy)
+    }
+
+    /// Save a duplicate of the built-in, activate it, and let the parent
+    /// follow up (typically by syncing its list selection).
+    private func duplicateAndHandoff(_ profile: HearingProfile) {
+        var copy = profile.duplicated()
+        copy.name = uniqueName(base: copy.name)
+        do {
+            try profileStore.save(copy)
+            audioState.activeProfileID = copy.id
+            onDuplicatedToCopy?(copy)
+        } catch {
+            // Surfaced via ProfileStore.lastError; built-in stays as-is.
+        }
+    }
+
+    private func uniqueName(base: String) -> String {
+        let existing = Set(profileStore.profiles.map(\.name))
+        if !existing.contains(base) { return base }
+        var i = 2
+        while existing.contains("\(base) \(i)") { i += 1 }
+        return "\(base) \(i)"
     }
 }

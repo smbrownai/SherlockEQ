@@ -62,7 +62,7 @@ struct ProfilesView: View {
                         Button("Duplicate") { duplicate(profile) }
                         Divider()
                         Button("Delete", role: .destructive) { profileToDelete = profile }
-                            .disabled(profileStore.profiles.count <= 1)
+                            .disabled(profile.isBuiltIn || profileStore.profiles.count <= 1)
                     }
                 }
             }
@@ -86,7 +86,7 @@ struct ProfilesView: View {
             toolbarButton(
                 systemName: "minus",
                 help: "Delete selected profile",
-                isEnabled: selectedProfile != nil && profileStore.profiles.count > 1,
+                isEnabled: (selectedProfile.map { !$0.isBuiltIn } ?? false) && profileStore.profiles.count > 1,
                 action: deleteSelected
             )
             Spacer()
@@ -115,7 +115,11 @@ struct ProfilesView: View {
 
     @ViewBuilder private var detailColumn: some View {
         if let id = selection, let profile = profileStore.profiles.first(where: { $0.id == id }) {
-            ProfileDetailView(profileID: profile.id)
+            ProfileDetailView(profileID: profile.id) { copy in
+                // Built-in banner's Duplicate button → also follow the new
+                // copy in the master list, so the user is editing it.
+                selection = copy.id
+            }
         } else {
             ContentUnavailableView(
                 "No profile selected",
@@ -173,7 +177,7 @@ struct ProfilesView: View {
     }
 
     private func deleteSelected() {
-        guard let p = selectedProfile, profileStore.profiles.count > 1 else { return }
+        guard let p = selectedProfile, !p.isBuiltIn, profileStore.profiles.count > 1 else { return }
         profileToDelete = p
     }
 

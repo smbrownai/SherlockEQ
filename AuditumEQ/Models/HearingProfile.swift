@@ -16,12 +16,13 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     var autoEQCurveURL: URL?                    // optional headphone correction file
     var safeListeningCeilingDB: Double          // user-set, default 85.0
     var compensationFactor: Double              // 0.25–1.0 — audiogram→EQ strength
+    var isBuiltIn: Bool                         // true for curated presets (Default, Voice Clarity) — UI blocks edits and offers Duplicate
 
     var createdAt: Date
     var modifiedAt: Date
 
-    // Custom decoder so older profile JSON (pre-balance) still loads — missing
-    // `balance` decodes as 0 (centered). Encoding stays synthesized.
+    // Custom decoder so older profile JSON (pre-balance, pre-isBuiltIn) still
+    // loads — missing fields decode to safe defaults. Encoding stays synthesized.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.id                     = try c.decode(UUID.self, forKey: .id)
@@ -36,6 +37,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.autoEQCurveURL         = try c.decodeIfPresent(URL.self, forKey: .autoEQCurveURL)
         self.safeListeningCeilingDB = try c.decode(Double.self, forKey: .safeListeningCeilingDB)
         self.compensationFactor     = try c.decode(Double.self, forKey: .compensationFactor)
+        self.isBuiltIn              = try c.decodeIfPresent(Bool.self, forKey: .isBuiltIn) ?? false
         self.createdAt              = try c.decode(Date.self, forKey: .createdAt)
         self.modifiedAt             = try c.decode(Date.self, forKey: .modifiedAt)
     }
@@ -45,6 +47,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         leftEar: EarProfile, rightEar: EarProfile, notch: TinnitusNotch,
         globalTrimDB: Double, balance: Double = 0, autoEQCurveURL: URL?,
         safeListeningCeilingDB: Double, compensationFactor: Double,
+        isBuiltIn: Bool = false,
         createdAt: Date, modifiedAt: Date
     ) {
         self.id = id; self.name = name; self.symbol = symbol
@@ -54,14 +57,29 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.autoEQCurveURL = autoEQCurveURL
         self.safeListeningCeilingDB = safeListeningCeilingDB
         self.compensationFactor = compensationFactor
+        self.isBuiltIn = isBuiltIn
         self.createdAt = createdAt; self.modifiedAt = modifiedAt
     }
 }
 
 extension HearingProfile {
+    /// Returns a copy with a fresh ID, "{name} Copy" name, fresh timestamps,
+    /// and `isBuiltIn` cleared. Callers handle name-collision disambiguation
+    /// against the store before saving.
+    func duplicated() -> HearingProfile {
+        var copy = self
+        copy.id = UUID()
+        copy.name = "\(self.name) Copy"
+        copy.isBuiltIn = false
+        let now = Date()
+        copy.createdAt = now
+        copy.modifiedAt = now
+        return copy
+    }
+
     /// A new, untouched profile. Flat audiogram on both ears, no tinnitus notch,
     /// safe-listening ceiling at the NIOSH-aligned default of 85 dB.
-    static func makeDefault(name: String = "Default", symbol: String = "person.fill") -> HearingProfile {
+    static func makeDefault(name: String = "Default", symbol: String = "person.fill", isBuiltIn: Bool = false) -> HearingProfile {
         let now = Date()
         return HearingProfile(
             id: UUID(),
@@ -75,6 +93,7 @@ extension HearingProfile {
             autoEQCurveURL: nil,
             safeListeningCeilingDB: 85.0,
             compensationFactor: 0.5,
+            isBuiltIn: isBuiltIn,
             createdAt: now,
             modifiedAt: now
         )
@@ -104,6 +123,7 @@ extension HearingProfile {
             autoEQCurveURL: nil,
             safeListeningCeilingDB: 85.0,
             compensationFactor: 0.5,
+            isBuiltIn: true,
             createdAt: now,
             modifiedAt: now
         )
