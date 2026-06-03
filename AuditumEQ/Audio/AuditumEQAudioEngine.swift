@@ -222,19 +222,35 @@ final class AuditumEQAudioEngine: ObservableObject {
     func applyProfile(_ profile: HearingProfile) {
         guard let leq = leftEQ, let req = rightEQ else { return }
 
-        // Global trim — clamped to AVAudioUnitEQ's ±96 dB but profile is ±12.
         let trim = Float(profile.globalTrimDB)
         leq.globalGain = trim
         req.globalGain = trim
 
-        Self.apply(bands: profile.leftEar.bands, to: leq)
-        Self.apply(bands: profile.rightEar.bands, to: req)
+        // Notch is shared across ears (spec §5.3) — pretend it's an extra
+        // band tacked onto each per-ear chain so the existing apply() works.
+        let leftBands = profile.leftEar.bands + Self.notchAsBand(profile.notch)
+        let rightBands = profile.rightEar.bands + Self.notchAsBand(profile.notch)
 
-        // Reference mode bypass is independent of band content; reassert.
+        Self.apply(bands: leftBands, to: leq)
+        Self.apply(bands: rightBands, to: req)
+
         leq.bypass = referenceMode
         req.bypass = referenceMode
 
-        log.info("Applied profile \(profile.name, privacy: .public) — L:\(profile.leftEar.bands.count) bands, R:\(profile.rightEar.bands.count) bands, trim:\(profile.globalTrimDB) dB")
+        log.info("Applied profile \(profile.name, privacy: .public) — L:\(leftBands.count) bands, R:\(rightBands.count) bands, trim:\(profile.globalTrimDB) dB, notch:\(profile.notch.enabled ? "on" : "off")")
+    }
+
+    private static func notchAsBand(_ notch: TinnitusNotch) -> [EQBand] {
+        guard notch.enabled else { return [] }
+        return [
+            EQBand(
+                frequencyHz: notch.frequencyHz,
+                gaindB: notch.depthdB,
+                bandwidth: 1.0 / max(notch.qWidth.qValue, 0.1),
+                filterType: .notch,
+                enabled: true
+            )
+        ]
     }
 
     private static func apply(bands profileBands: [EQBand], to eq: AVAudioUnitEQ) {

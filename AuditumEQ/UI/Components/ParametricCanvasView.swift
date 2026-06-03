@@ -13,10 +13,21 @@ import SwiftUI
 struct ParametricCanvasView: View {
     @Binding var bands: [EQBand]
     var shadowBands: [EQBand] = []
+    /// Optional tinnitus notch (spec §5.3). Rendered as an extra band on the
+    /// composite curve when `enabled`. Not draggable from the canvas — edits
+    /// happen via `NotchControlView` so the dedicated frequency/depth/width
+    /// inputs stay authoritative.
+    var notch: TinnitusNotch? = nil
     var spectrumBinsDB: [Float] = []
+    var spectrumPeakHoldDB: [Float] = []
     var spectrumSampleRate: Double = 48_000
     var earColor: Color = .blue
     var shadowColor: Color = .red
+    /// When true, the canvas is a passive visualisation — no drag handles,
+    /// no node markers, no selection. Used by Simple/Advanced tabs to give
+    /// an at-a-glance preview of the current curve while the user moves
+    /// sliders below.
+    var readOnly: Bool = false
     @Binding var selectedBandID: UUID?
 
     private let minHz: Double = 20
@@ -54,15 +65,16 @@ struct ParametricCanvasView: View {
                     )
                     drawCurve(
                         context, size: size,
-                        bands: bands, color: earColor,
+                        bands: bandsForCurve, color: earColor,
                         thick: true
                     )
-                    drawNodes(context, size: size)
+                    drawNotchMarker(context, size: size)
+                    if !readOnly { drawNodes(context, size: size) }
                     drawFrequencyLabels(context, size: size)
                     drawDBLabels(context, size: size)
                 }
-                .gesture(dragGesture(in: geo.size))
                 .contentShape(Rectangle())
+                .modifier(InteractionModifier(active: !readOnly, gesture: dragGesture(in: geo.size)))
             }
         }
         .frame(minHeight: 280)
@@ -125,6 +137,42 @@ struct ParametricCanvasView: View {
         )
     }
 
+    /// Synthesise an extra band from the tinnitus notch so the curve renderer
+    /// includes it. `EQBand`'s `notch` filterType + the notch's Q and depth
+    /// map naturally to a high-Q biquad bandstop with negative gain.
+    private var bandsForCurve: [EQBand] {
+        guard let notch, notch.enabled else { return bands }
+        let notchBand = EQBand(
+            frequencyHz: notch.frequencyHz,
+            gaindB: notch.depthdB,
+            bandwidth: 1.0 / max(notch.qWidth.qValue, 0.1),
+            filterType: .notch,
+            enabled: true
+        )
+        return bands + [notchBand]
+    }
+
+    /// Vertical marker + label at the notch frequency. Stays visible even
+    /// when the notch isn't rendered as part of the curve (turned off) so
+    /// the user always sees where their pitch is set.
+    private func drawNotchMarker(_ context: GraphicsContext, size: CGSize) {
+        guard let notch else { return }
+        let x = xForFreq(notch.frequencyHz, width: size.width)
+        var line = Path()
+        line.move(to: CGPoint(x: x, y: 0))
+        line.addLine(to: CGPoint(x: x, y: size.height))
+        let color: Color = notch.enabled ? .purple : .gray
+        context.stroke(
+            line,
+            with: .color(color.opacity(notch.enabled ? 0.5 : 0.25)),
+            style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+        )
+        let label = Text("notch \(Int(notch.frequencyHz)) Hz")
+            .font(.caption2.monospaced())
+            .foregroundColor(color.opacity(0.75))
+        context.draw(label, at: CGPoint(x: x + 6, y: 14), anchor: .leading)
+    }
+
     private func drawNodes(_ context: GraphicsContext, size: CGSize) {
         for band in bands {
             let p = pointFor(band: band, in: size)
@@ -167,23 +215,55 @@ struct ParametricCanvasView: View {
         guard !spectrumBinsDB.isEmpty else { return }
         let baselineY = size.height
         let topY = size.height * (1 - spectrumHeightFraction)
-        var path = Path()
-        path.move(to: CGPoint(x: 0, y: baselineY))
+
+        var fillPath = Path()
+        fillPath.move(to: CGPoint(x: 0, y: baselineY))
         let binCount = spectrumBinsDB.count
         for k in 0..<binCount {
             let hz = Double(k) * spectrumSampleRate / (Double(binCount) * 2.0)
             if hz < minHz { continue }
             if hz > maxHz { break }
             let x = xForFreq(hz, width: size.width)
-            let dbfs = Double(spectrumBinsDB[k])
-            let clamped = max(spectrumMinDB, min(spectrumMaxDB, dbfs))
-            let normalized = (clamped - spectrumMinDB) / (spectrumMaxDB - spectrumMinDB)
-            let y = baselineY - CGFloat(normalized) * (baselineY - topY)
-            path.addLine(to: CGPoint(x: x, y: y))
+            let y = spectrumY(
+                dbfs: Double(spectrumBinsDB[k]),
+                baseline: baselineY, top: topY
+            )
+            fillPath.addLine(to: CGPoint(x: x, y: y))
         }
-        path.addLine(to: CGPoint(x: size.width, y: baselineY))
-        path.closeSubpath()
-        context.fill(path, with: .color(.white.opacity(0.18)))
+        fillPath.addLine(to: CGPoint(x: size.width, y: baselineY))
+        fillPath.closeSubpath()
+        context.fill(fillPath, with: .color(.white.opacity(0.18)))
+
+        guard !spectrumPeakHoldDB.isEmpty else { return }
+        var peakPath = Path()
+        var started = false
+        for k in 0..<spectrumPeakHoldDB.count {
+            let hz = Double(k) * spectrumSampleRate / (Double(spectrumPeakHoldDB.count) * 2.0)
+            if hz < minHz { continue }
+            if hz > maxHz { break }
+            let x = xForFreq(hz, width: size.width)
+            let y = spectrumY(
+                dbfs: Double(spectrumPeakHoldDB[k]),
+                baseline: baselineY, top: topY
+            )
+            if !started {
+                peakPath.move(to: CGPoint(x: x, y: y))
+                started = true
+            } else {
+                peakPath.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        context.stroke(
+            peakPath,
+            with: .color(.white.opacity(0.55)),
+            style: StrokeStyle(lineWidth: 1.0, lineCap: .round, lineJoin: .round)
+        )
+    }
+
+    private func spectrumY(dbfs: Double, baseline: CGFloat, top: CGFloat) -> CGFloat {
+        let clamped = max(spectrumMinDB, min(spectrumMaxDB, dbfs))
+        let normalized = (clamped - spectrumMinDB) / (spectrumMaxDB - spectrumMinDB)
+        return baseline - CGFloat(normalized) * (baseline - top)
     }
 
     private func drawFrequencyLabels(_ context: GraphicsContext, size: CGSize) {
@@ -300,5 +380,18 @@ struct ParametricCanvasView: View {
             return k == k.rounded() ? "\(Int(k))k" : String(format: "%.1fk", k)
         }
         return "\(Int(hz))"
+    }
+}
+
+/// Conditionally attaches a gesture so readOnly mode is a passive surface.
+private struct InteractionModifier<G: Gesture>: ViewModifier {
+    let active: Bool
+    let gesture: G
+    func body(content: Content) -> some View {
+        if active {
+            content.gesture(gesture)
+        } else {
+            content
+        }
     }
 }

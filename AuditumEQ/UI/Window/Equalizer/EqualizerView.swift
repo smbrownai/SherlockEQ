@@ -26,22 +26,9 @@ struct EqualizerView: View {
             Divider().padding(.top, 12)
 
             switch tab {
-            case .simple:
-                PlaceholderView(
-                    title: "Simple EQ",
-                    summary: "Three-band Bass / Mids / Treble derived from the full curve. A friendly starting point for users who don't want to touch individual bands.",
-                    sessionRef: "Session 14",
-                    symbol: "slider.horizontal.below.rectangle"
-                )
-            case .advanced:
-                PlaceholderView(
-                    title: "Advanced EQ",
-                    summary: "10-band graphic EQ with vertical sliders. Shows L and R as separate columns when ears differ.",
-                    sessionRef: "Session 14",
-                    symbol: "slider.vertical.3"
-                )
-            case .expert:
-                ExpertEQView()
+            case .simple:   SimpleEQView()
+            case .advanced: AdvancedEQView()
+            case .expert:   ExpertEQView()
             }
         }
         .navigationTitle("Equalizer")

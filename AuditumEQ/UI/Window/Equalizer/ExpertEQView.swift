@@ -32,15 +32,29 @@ struct ExpertEQView: View {
             ParametricCanvasView(
                 bands: bandsBinding(for: profile),
                 shadowBands: shadowBands(for: profile),
+                notch: profile.notch,
                 spectrumBinsDB: audioState.spectrum.spectrumBinsDB,
+                spectrumPeakHoldDB: audioState.spectrum.spectrumPeakHoldDB,
                 spectrumSampleRate: audioState.audio.outputSampleRate ?? 48_000,
                 earColor: earColor,
                 shadowColor: shadowColor,
                 selectedBandID: $selectedBandID
             )
             controlsBar(profile)
+            NotchControlView(notch: notchBinding(for: profile))
         }
         .padding(20)
+    }
+
+    private func notchBinding(for profile: HearingProfile) -> Binding<TinnitusNotch> {
+        Binding(
+            get: { profile.notch },
+            set: { newValue in
+                var updated = profile
+                updated.notch = newValue
+                try? profileStore.save(updated)
+            }
+        )
     }
 
     // MARK: - Sections
