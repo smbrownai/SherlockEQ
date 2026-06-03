@@ -13,6 +13,10 @@ final class AuditumEQAudioEngine: ObservableObject {
     @Published private(set) var lastError: String?
     @Published private(set) var referenceMode = false
     @Published private(set) var testCurveEnabled = false
+    /// Non-nil when tap rate differs from output rate — audio quality is
+    /// degraded by AVAudioMixerNode's internal resampler on this path.
+    /// Cleared when rates match.
+    @Published private(set) var sampleRateMismatchWarning: String?
 
     private let engine = AVAudioEngine()
     private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "AudioEngine")
@@ -27,8 +31,18 @@ final class AuditumEQAudioEngine: ObservableObject {
     @Published private(set) var toneEnabled: Bool = false
     @Published private(set) var outputFormatDescription: String = "—"
 
+    private var sampleRateBridge: AVAudioMixerNode?
+
     /// Wires up the graph with the L/R source nodes from the tap.
     /// Tears down any prior graph first; safe to call on device change.
+    ///
+    /// Sample-rate handling: when the tap's rate (driven by the system's default
+    /// output device at tap-creation time) differs from the engine's outputNode
+    /// rate (driven by the *current* default output device, which can change),
+    /// `mainMixerNode`'s built-in conversion produces audible distortion on at
+    /// least the 3.5mm/USB-C path. Inserting an explicit `AVAudioMixerNode`
+    /// downstream of the EQs whose connection to mainMixer is at the output's
+    /// rate confines the SR conversion to a dedicated node, which sounds clean.
     func attach(
         leftSource: AVAudioSourceNode,
         rightSource: AVAudioSourceNode,
@@ -36,7 +50,7 @@ final class AuditumEQAudioEngine: ObservableObject {
     ) {
         teardownGraph()
 
-        guard let stereoFormat = AVAudioFormat(
+        guard let tapFormat = AVAudioFormat(
             standardFormatWithSampleRate: sampleRate,
             channels: 2
         ) else {
@@ -54,13 +68,33 @@ final class AuditumEQAudioEngine: ObservableObject {
         engine.attach(leq)
         engine.attach(req)
 
-        engine.connect(leftSource, to: leq, format: stereoFormat)
-        engine.connect(rightSource, to: req, format: stereoFormat)
+        engine.connect(leftSource, to: leq, format: tapFormat)
+        engine.connect(rightSource, to: req, format: tapFormat)
 
+        let outRate = engine.outputNode.outputFormat(forBus: 0).sampleRate
         let mixer = engine.mainMixerNode
-        // mainMixerNode auto-assigns next input bus for each connect call.
-        engine.connect(leq, to: mixer, format: stereoFormat)
-        engine.connect(req, to: mixer, format: stereoFormat)
+
+        if outRate > 0 && Int(outRate.rounded()) != Int(sampleRate.rounded()),
+           let outFormat = AVAudioFormat(standardFormatWithSampleRate: outRate, channels: 2) {
+            // SR mismatch — insert a bridging mixer so the conversion lives in
+            // a dedicated node. Note: this only confines the bad resampling, it
+            // doesn't fix it. The real fix is a manual AVAudioConverter-based
+            // resampler in the source-node render block; tracked for follow-up.
+            let bridge = AVAudioMixerNode()
+            engine.attach(bridge)
+            engine.connect(leq, to: bridge, format: tapFormat)
+            engine.connect(req, to: bridge, format: tapFormat)
+            engine.connect(bridge, to: mixer, format: outFormat)
+            self.sampleRateBridge = bridge
+            sampleRateMismatchWarning = "Tap \(Int(sampleRate)) Hz ≠ output \(Int(outRate)) Hz — audio quality degraded until manual resampler lands."
+            log.info("Graph attached — tap \(Int(sampleRate)) Hz, output \(Int(outRate)) Hz (SR-bridged, degraded)")
+        } else {
+            // Matched SR end-to-end — direct, no bridge needed.
+            engine.connect(leq, to: mixer, format: tapFormat)
+            engine.connect(req, to: mixer, format: tapFormat)
+            sampleRateMismatchWarning = nil
+            log.info("Graph attached — \(Int(sampleRate)) Hz end-to-end")
+        }
 
         self.leftSource = leftSource
         self.rightSource = rightSource
@@ -69,13 +103,11 @@ final class AuditumEQAudioEngine: ObservableObject {
 
         leq.bypass = referenceMode
         req.bypass = referenceMode
-
-        log.info("Graph attached @ \(Int(sampleRate)) Hz")
     }
 
     func start() {
         guard !isRunning else { return }
-        guard leftEQ != nil, rightEQ != nil else {
+        guard leftSource != nil, rightSource != nil else {
             lastError = "Graph not attached"
             return
         }
@@ -119,6 +151,7 @@ final class AuditumEQAudioEngine: ObservableObject {
         if let rs = rightSource { engine.detach(rs); rightSource = nil }
         if let leq = leftEQ { engine.detach(leq); leftEQ = nil }
         if let req = rightEQ { engine.detach(req); rightEQ = nil }
+        if let b = sampleRateBridge { engine.detach(b); sampleRateBridge = nil }
     }
 
     // MARK: - Controls
@@ -130,8 +163,9 @@ final class AuditumEQAudioEngine: ObservableObject {
     }
 
     /// Hard-coded asymmetric test curve: L gets +6 dB at 3 kHz, R stays flat.
-    /// Listen on headphones — the left ear should sound noticeably brighter on
-    /// sibilants/consonants, the right ear unchanged.
+    /// When enabled, overrides any active hearing-profile bands; when disabled
+    /// the caller (AudioState) reapplies the active profile so we don't leave
+    /// the chain flattened.
     func setTestCurveEnabled(_ on: Bool) {
         testCurveEnabled = on
         guard let leq = leftEQ, let req = rightEQ else { return }
@@ -144,6 +178,58 @@ final class AuditumEQAudioEngine: ObservableObject {
             band.bandwidth = 0.5    // octaves
             band.gain = 6.0
             band.bypass = false
+        }
+    }
+
+    /// Apply a hearing profile's per-ear bands + global trim to the chain.
+    /// Excess band slots beyond the profile's band count are flattened and
+    /// bypassed. Reference mode is preserved (we don't fight the bypass flag).
+    /// Has no effect if the graph isn't attached yet (CATap permission denied,
+    /// device not ready, etc.) — `attach()` calls this when the graph comes up.
+    func applyProfile(_ profile: HearingProfile) {
+        guard let leq = leftEQ, let req = rightEQ else { return }
+
+        // Global trim — clamped to AVAudioUnitEQ's ±96 dB but profile is ±12.
+        let trim = Float(profile.globalTrimDB)
+        leq.globalGain = trim
+        req.globalGain = trim
+
+        Self.apply(bands: profile.leftEar.bands, to: leq)
+        Self.apply(bands: profile.rightEar.bands, to: req)
+
+        // Reference mode bypass is independent of band content; reassert.
+        leq.bypass = referenceMode
+        req.bypass = referenceMode
+
+        log.info("Applied profile \(profile.name, privacy: .public) — L:\(profile.leftEar.bands.count) bands, R:\(profile.rightEar.bands.count) bands, trim:\(profile.globalTrimDB) dB")
+    }
+
+    private static func apply(bands profileBands: [EQBand], to eq: AVAudioUnitEQ) {
+        let slots = eq.bands.count
+        for i in 0..<slots {
+            let node = eq.bands[i]
+            if i < profileBands.count {
+                let b = profileBands[i]
+                node.filterType = avFilterType(from: b.filterType)
+                node.frequency = Float(b.frequencyHz)
+                node.gain = Float(b.gaindB)
+                node.bandwidth = Float(b.bandwidth)
+                node.bypass = !b.enabled
+            } else {
+                node.bypass = true
+                node.gain = 0
+            }
+        }
+    }
+
+    private static func avFilterType(from t: EQFilterType) -> AVAudioUnitEQFilterType {
+        switch t {
+        case .parametric: return .parametric
+        case .lowShelf:   return .lowShelf
+        case .highShelf:  return .highShelf
+        case .notch:      return .bandStop
+        case .lowPass:    return .lowPass
+        case .highPass:   return .highPass
         }
     }
 

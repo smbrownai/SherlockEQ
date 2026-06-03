@@ -19,7 +19,14 @@ final class AudioState: ObservableObject {
     }
 
     @Published var testCurveEnabled: Bool = false {
-        didSet { audio.setTestCurveEnabled(testCurveEnabled) }
+        didSet {
+            audio.setTestCurveEnabled(testCurveEnabled)
+            // When the test curve is turned off, restore the active profile so
+            // the chain doesn't sit flattened.
+            if !testCurveEnabled {
+                applyActiveProfile()
+            }
+        }
     }
 
     @Published var testToneEnabled: Bool = false {
@@ -50,8 +57,41 @@ final class AudioState: ObservableObject {
         }
     }
 
+    /// Bridge profile state into the audio engine. Subscribes to the active
+    /// profile ID and the store's profile array so a change to either
+    /// (switching profiles, editing the active profile's audiogram/trim)
+    /// re-applies the resulting bands to the EQ nodes.
+    func connect(profileStore: ProfileStore) {
+        connectedStore = profileStore
+        profileSubscriptions.removeAll()
+
+        $activeProfileID
+            .dropFirst()
+            .sink { [weak self] _ in self?.applyActiveProfile() }
+            .store(in: &profileSubscriptions)
+
+        profileStore.$profiles
+            .dropFirst()
+            .sink { [weak self] _ in self?.applyActiveProfile() }
+            .store(in: &profileSubscriptions)
+
+        applyActiveProfile()
+    }
+
+    /// Look up the active profile in the connected store and push it to the
+    /// engine. No-op if no store is connected, no profile is active, the test
+    /// curve is currently overriding, or the engine graph isn't attached yet.
+    private func applyActiveProfile() {
+        guard !testCurveEnabled else { return }
+        guard let store = connectedStore,
+              let profile = activeProfile(in: store) else { return }
+        audio.applyProfile(profile)
+    }
+
     private var tapObserver: AnyCancellable?
     private var audioObserver: AnyCancellable?
+    private var profileSubscriptions: Set<AnyCancellable> = []
+    private weak var connectedStore: ProfileStore?
     private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "AudioState")
 
     init() {
@@ -102,5 +142,6 @@ final class AudioState: ObservableObject {
             sampleRate: format.sampleRate
         )
         audio.start()
+        applyActiveProfile()
     }
 }

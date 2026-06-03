@@ -52,6 +52,14 @@ struct DebugView: View {
         labeled("Running", value: state.audio.isRunning ? "yes" : "no")
         labeled("Output format", value: state.audio.outputFormatDescription)
         labeled("Last error", value: state.audio.lastError ?? "—")
+        if let warn = state.audio.sampleRateMismatchWarning {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text(warn).font(.callout).foregroundStyle(.orange)
+            }
+            .padding(.top, 4)
+        }
     }
 
     @ViewBuilder private var profilesSection: some View {

@@ -15,6 +15,7 @@ struct AuditumEQApp: App {
                     profileStore.loadAll()
                     profileStore.seedDefaultsIfEmpty()
                     audioState.adoptDefaultProfileIfNeeded(from: profileStore)
+                    audioState.connect(profileStore: profileStore)
                 }
                 .onDisappear {
                     // Window closed → back to menu-bar-only.
