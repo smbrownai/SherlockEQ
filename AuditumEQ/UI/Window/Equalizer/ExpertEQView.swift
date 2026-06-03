@@ -57,6 +57,14 @@ struct ExpertEQView: View {
             .frame(minHeight: 280)
             .focusable()
             .focused($canvasFocused)
+            // Band navigation: Tab and L go forward, J goes back.
+            // Shift+Tab is reserved by macOS for focus traversal and can't
+            // be intercepted — hence the gamer-style J/L pair as the
+            // bidirectional binding.
+            .onKeyPress(.tab) {
+                cycleSelection(forward: true, in: profile)
+                return .handled
+            }
             .onKeyPress { press in handleKey(press, in: profile) }
             .onTapGesture { canvasFocused = true }
             controlsBar(profile)
@@ -69,6 +77,19 @@ struct ExpertEQView: View {
     /// edit reads the band fresh because the binding's captured profile may
     /// be stale after the previous edit's save.
     private func handleKey(_ press: KeyPress, in profile: HearingProfile) -> KeyPress.Result {
+        // Tab is handled by an explicit `.onKeyPress(.tab)` upstream. J/L
+        // are handled here because they should also work with nothing
+        // selected (picks the first/last band, same as Tab does).
+        let chars = press.characters.lowercased()
+        if chars == "j" {
+            cycleSelection(forward: false, in: profile)
+            return .handled
+        }
+        if chars == "l" {
+            cycleSelection(forward: true, in: profile)
+            return .handled
+        }
+
         guard let id = selectedBandID,
               let band = activeBands(in: profile).first(where: { $0.id == id }) else {
             return .ignored
@@ -122,6 +143,24 @@ struct ExpertEQView: View {
 
     private func activeBands(in profile: HearingProfile) -> [EQBand] {
         tab == .left ? profile.leftEar.bands : profile.rightEar.bands
+    }
+
+    /// Advance `selectedBandID` to the next (or previous) band, sorted by
+    /// frequency so Tab feels like sweeping left→right across the canvas.
+    /// Wraps at both ends; nothing-selected + Tab picks the lowest band,
+    /// nothing-selected + Shift+Tab picks the highest.
+    private func cycleSelection(forward: Bool, in profile: HearingProfile) {
+        let sorted = activeBands(in: profile).sorted { $0.frequencyHz < $1.frequencyHz }
+        guard !sorted.isEmpty else { return }
+
+        guard let current = selectedBandID,
+              let idx = sorted.firstIndex(where: { $0.id == current }) else {
+            selectedBandID = (forward ? sorted.first : sorted.last)?.id
+            return
+        }
+
+        let next = (idx + (forward ? 1 : sorted.count - 1)) % sorted.count
+        selectedBandID = sorted[next].id
     }
 
     private func notchBinding(for profile: HearingProfile) -> Binding<TinnitusNotch> {
