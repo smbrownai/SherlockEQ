@@ -163,14 +163,14 @@ final class AudioState: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.handleWillSleep() }
+            Task { @MainActor [weak self] in self?.handleWillSleep() }
         }
         wakeObserverToken = center.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.handleDidWake() }
+            Task { @MainActor [weak self] in self?.handleDidWake() }
         }
     }
 

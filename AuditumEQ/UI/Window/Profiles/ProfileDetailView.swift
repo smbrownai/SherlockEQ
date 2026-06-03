@@ -126,7 +126,39 @@ struct ProfileDetailView: View {
                 format: { String(format: "%+.1f dB", $0) },
                 set: { v in update(profile) { $0.globalTrimDB = v } }
             )
+            Divider()
+            balanceRow(profile)
         }
+    }
+
+    /// Stereo balance: linear L↔R pan. Double-click the slider to recenter.
+    @ViewBuilder private func balanceRow(_ profile: HearingProfile) -> some View {
+        HStack {
+            Text("Balance")
+                .foregroundStyle(.secondary)
+                .frame(width: 120, alignment: .leading)
+            Slider(
+                value: Binding(
+                    get: { profile.balance },
+                    set: { v in update(profile) { $0.balance = v } }
+                ),
+                in: -1...1
+            )
+            .controlSize(.small)
+            .onTapGesture(count: 2) {
+                update(profile) { $0.balance = 0 }
+            }
+            Text(balanceLabel(profile.balance))
+                .font(.callout.monospaced())
+                .foregroundStyle(.primary)
+                .frame(width: 72, alignment: .trailing)
+        }
+    }
+
+    private func balanceLabel(_ b: Double) -> String {
+        if abs(b) < 0.005 { return "Center" }
+        let pct = Int((abs(b) * 100).rounded())
+        return b < 0 ? "L \(pct)%" : "R \(pct)%"
     }
 
     @ViewBuilder private func safetySection(_ profile: HearingProfile) -> some View {

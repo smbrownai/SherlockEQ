@@ -259,10 +259,6 @@ final class AuditumEQAudioEngine: ObservableObject {
     func applyProfile(_ profile: HearingProfile) {
         guard let leq = leftEQ, let req = rightEQ else { return }
 
-        let trim = Float(profile.globalTrimDB)
-        leq.globalGain = trim
-        req.globalGain = trim
-
         // Notch is shared across ears (spec §5.3) — pretend it's an extra
         // band tacked onto each per-ear chain so the existing apply() works.
         let leftBands = profile.leftEar.bands + Self.notchAsBand(profile.notch)
@@ -271,10 +267,26 @@ final class AuditumEQAudioEngine: ObservableObject {
         Self.apply(bands: leftBands, to: leq)
         Self.apply(bands: rightBands, to: req)
 
+        let (leftPanDB, rightPanDB) = Self.balanceDeltaDB(profile.balance)
+        leq.globalGain = Float(profile.globalTrimDB + leftPanDB)
+        req.globalGain = Float(profile.globalTrimDB + rightPanDB)
+
         leq.bypass = referenceMode
         req.bypass = referenceMode
 
-        log.info("Applied profile \(profile.name, privacy: .public) — L:\(leftBands.count) bands, R:\(rightBands.count) bands, trim:\(profile.globalTrimDB) dB, notch:\(profile.notch.enabled ? "on" : "off")")
+        log.info("Applied profile \(profile.name, privacy: .public) — L:\(leftBands.count) bands, R:\(rightBands.count) bands, trim:\(profile.globalTrimDB) dB, balance:\(profile.balance, format: .fixed(precision: 2)), notch:\(profile.notch.enabled ? "on" : "off")")
+    }
+
+    /// Linear-pan attenuation converted to dB so it can ride along with the
+    /// per-ear EQ globalGain. AVAudioUnitEQ doesn't expose AVAudioMixing.volume,
+    /// so we can't do it as a send level — folding into globalGain is the same
+    /// effect with one fewer node in the chain. Full-opposite caps at -60 dB so
+    /// log10 doesn't blow up at zero.
+    static func balanceDeltaDB(_ balance: Double) -> (left: Double, right: Double) {
+        let b = max(-1, min(1, balance))
+        let leftLinear  = b <= 0 ? 1.0 : max(0.001, 1.0 - b)
+        let rightLinear = b >= 0 ? 1.0 : max(0.001, 1.0 + b)
+        return (20 * log10(leftLinear), 20 * log10(rightLinear))
     }
 
     private static func notchAsBand(_ notch: TinnitusNotch) -> [EQBand] {
