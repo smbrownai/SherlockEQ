@@ -131,8 +131,11 @@ struct ProfileDetailView: View {
         }
     }
 
-    /// Stereo balance: linear L↔R pan. Double-click the slider to recenter.
+    /// Stereo balance: linear L↔R pan. The recenter button next to the
+    /// readout resets to 0 — a double-click on the slider doesn't work
+    /// because Slider's own gesture eats the tap.
     @ViewBuilder private func balanceRow(_ profile: HearingProfile) -> some View {
+        let centered = abs(profile.balance) < 0.005
         HStack {
             Text("Balance")
                 .foregroundStyle(.secondary)
@@ -145,13 +148,20 @@ struct ProfileDetailView: View {
                 in: -1...1
             )
             .controlSize(.small)
-            .onTapGesture(count: 2) {
-                update(profile) { $0.balance = 0 }
-            }
             Text(balanceLabel(profile.balance))
                 .font(.callout.monospaced())
                 .foregroundStyle(.primary)
                 .frame(width: 72, alignment: .trailing)
+            Button {
+                update(profile) { $0.balance = 0 }
+            } label: {
+                Image(systemName: "arrow.counterclockwise")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(.borderless)
+            .help("Reset balance to center")
+            .disabled(centered)
+            .opacity(centered ? 0.35 : 1)
         }
     }
 
