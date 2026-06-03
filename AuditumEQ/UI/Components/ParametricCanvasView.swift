@@ -18,8 +18,14 @@ struct ParametricCanvasView: View {
     /// happen via `NotchControlView` so the dedicated frequency/depth/width
     /// inputs stay authoritative.
     var notch: TinnitusNotch? = nil
+    /// Pre-smoothed log-binned spectrum from `SpectrumAnalyzer.logSpectrumDB`.
+    /// Linear-bin FFT data (`spectrumBinsDB`) is no longer drawn — the log
+    /// version is uniform across the visible frequency range.
     var spectrumBinsDB: [Float] = []
     var spectrumPeakHoldDB: [Float] = []
+    /// Optional pre-EQ spectrum (log-binned) drawn as a thin cyan outline so
+    /// the user can see what's coming in vs what's leaving the chain.
+    var preSpectrumBinsDB: [Float] = []
     var spectrumSampleRate: Double = 48_000
     var earColor: Color = .blue
     var shadowColor: Color = .red
@@ -57,6 +63,7 @@ struct ParametricCanvasView: View {
             ZStack {
                 Canvas { context, size in
                     drawSpectrum(context, size: size)
+                    drawPreSpectrum(context, size: size)
                     drawGrid(context, size: size)
                     drawCurve(
                         context, size: size,
@@ -216,16 +223,16 @@ struct ParametricCanvasView: View {
         let baselineY = size.height
         let topY = size.height * (1 - spectrumHeightFraction)
 
+        // The data is already log-binned — each bucket maps linearly to the
+        // visible 20 Hz–20 kHz log range, no per-bin Hz conversion needed.
+        let buckets = spectrumBinsDB.count
+
         var fillPath = Path()
         fillPath.move(to: CGPoint(x: 0, y: baselineY))
-        let binCount = spectrumBinsDB.count
-        for k in 0..<binCount {
-            let hz = Double(k) * spectrumSampleRate / (Double(binCount) * 2.0)
-            if hz < minHz { continue }
-            if hz > maxHz { break }
-            let x = xForFreq(hz, width: size.width)
+        for b in 0..<buckets {
+            let x = size.width * CGFloat(b) / CGFloat(max(1, buckets - 1))
             let y = spectrumY(
-                dbfs: Double(spectrumBinsDB[k]),
+                dbfs: Double(spectrumBinsDB[b]),
                 baseline: baselineY, top: topY
             )
             fillPath.addLine(to: CGPoint(x: x, y: y))
@@ -236,27 +243,41 @@ struct ParametricCanvasView: View {
 
         guard !spectrumPeakHoldDB.isEmpty else { return }
         var peakPath = Path()
-        var started = false
-        for k in 0..<spectrumPeakHoldDB.count {
-            let hz = Double(k) * spectrumSampleRate / (Double(spectrumPeakHoldDB.count) * 2.0)
-            if hz < minHz { continue }
-            if hz > maxHz { break }
-            let x = xForFreq(hz, width: size.width)
+        for b in 0..<spectrumPeakHoldDB.count {
+            let x = size.width * CGFloat(b) / CGFloat(max(1, spectrumPeakHoldDB.count - 1))
             let y = spectrumY(
-                dbfs: Double(spectrumPeakHoldDB[k]),
+                dbfs: Double(spectrumPeakHoldDB[b]),
                 baseline: baselineY, top: topY
             )
-            if !started {
-                peakPath.move(to: CGPoint(x: x, y: y))
-                started = true
-            } else {
-                peakPath.addLine(to: CGPoint(x: x, y: y))
-            }
+            if b == 0 { peakPath.move(to: CGPoint(x: x, y: y)) }
+            else { peakPath.addLine(to: CGPoint(x: x, y: y)) }
         }
         context.stroke(
             peakPath,
             with: .color(.white.opacity(0.55)),
             style: StrokeStyle(lineWidth: 1.0, lineCap: .round, lineJoin: .round)
+        )
+    }
+
+    private func drawPreSpectrum(_ context: GraphicsContext, size: CGSize) {
+        guard !preSpectrumBinsDB.isEmpty else { return }
+        let baselineY = size.height
+        let topY = size.height * (1 - spectrumHeightFraction)
+        let buckets = preSpectrumBinsDB.count
+        var path = Path()
+        for b in 0..<buckets {
+            let x = size.width * CGFloat(b) / CGFloat(max(1, buckets - 1))
+            let y = spectrumY(
+                dbfs: Double(preSpectrumBinsDB[b]),
+                baseline: baselineY, top: topY
+            )
+            if b == 0 { path.move(to: CGPoint(x: x, y: y)) }
+            else { path.addLine(to: CGPoint(x: x, y: y)) }
+        }
+        context.stroke(
+            path,
+            with: .color(.cyan.opacity(0.85)),
+            style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [4, 2])
         )
     }
 

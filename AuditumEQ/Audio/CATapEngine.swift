@@ -37,6 +37,25 @@ final class CATapEngine: ObservableObject {
 
     var onOutputDeviceChanged: ((AudioDeviceID) -> Void)?
 
+    /// Side-channel for the pre-EQ spectrum analyzer. We can't store this as
+    /// a plain property on a @MainActor type and have the audio-thread render
+    /// block read it — access from outside the actor returns stale state.
+    /// A bare reference class with a single mutable property avoids the
+    /// isolation hop entirely: the render block captures `preIngest`
+    /// strongly, then reads its callback field directly each frame.
+    let preIngest = PreSpectrumIngestSlot()
+
+    /// Plain class holding a single nullable callback. Lives outside any
+    /// actor so the audio thread can read its `callback` field without an
+    /// isolation hop. Writers (AudioState) just assign to `.callback`.
+    final class PreSpectrumIngestSlot {
+        var callback: ((UnsafePointer<Float>, Int, Double) -> Void)?
+        /// Bumped from the audio thread whenever the callback path runs.
+        /// Racy on purpose — for diagnostics only.
+        var renderBlockEntries: Int = 0
+        var callbackInvocations: Int = 0
+    }
+
     /// Diagnostic counters. Sampled from the UI; updated from realtime threads.
     let tapFramesIn = AudioCounter()
     let leftSourceFramesOut = AudioCounter()
@@ -220,6 +239,9 @@ final class CATapEngine: ObservableObject {
         let rightCounter = rightSourceFramesOut
         let outPeak = sourceOutputPeakMilli
 
+        let sourceSR = stereoFormat.sampleRate
+        let preIngest = self.preIngest    // strong capture — bare class, no actor
+
         leftSourceNode = AVAudioSourceNode(format: stereoFormat) { [weak leftRing] _, _, frameCount, audioBufferList -> OSStatus in
             let status = Self.fillFromMonoRing(
                 ring: leftRing,
@@ -229,6 +251,14 @@ final class CATapEngine: ObservableObject {
             )
             leftCounter.add(Int(frameCount))
             Self.recordPeak(abl: audioBufferList, frameCount: frameCount, into: outPeak)
+            preIngest.renderBlockEntries &+= 1
+            if let callback = preIngest.callback {
+                let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+                if let lPtr = buffers[0].mData?.assumingMemoryBound(to: Float.self) {
+                    callback(lPtr, Int(frameCount), sourceSR)
+                    preIngest.callbackInvocations &+= 1
+                }
+            }
             return status
         }
         rightSourceNode = AVAudioSourceNode(format: stereoFormat) { [weak rightRing] _, _, frameCount, audioBufferList -> OSStatus in

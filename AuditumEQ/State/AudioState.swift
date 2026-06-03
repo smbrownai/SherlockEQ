@@ -14,6 +14,7 @@ final class AudioState: ObservableObject {
     @Published private(set) var tap: CATapEngine
     @Published private(set) var audio: AuditumEQAudioEngine
     @Published private(set) var spectrum: SpectrumAnalyzer
+    @Published private(set) var preSpectrum: SpectrumAnalyzer
     @Published private(set) var safeListening: SafeListeningTracker
 
     @Published var referenceMode: Bool = false {
@@ -102,10 +103,12 @@ final class AudioState: ObservableObject {
         let tap = CATapEngine()
         let audio = AuditumEQAudioEngine()
         let spectrum = SpectrumAnalyzer()
+        let preSpectrum = SpectrumAnalyzer()
         let tracker = SafeListeningTracker()
         self.tap = tap
         self.audio = audio
         self.spectrum = spectrum
+        self.preSpectrum = preSpectrum
         self.safeListening = tracker
 
         tap.onOutputDeviceChanged = { [weak self] _ in
@@ -158,6 +161,7 @@ final class AudioState: ObservableObject {
     private func rebuildAudioGraph() {
         audio.stop()
         spectrum.detached()
+        preSpectrum.detached()
         guard let leftSource = tap.leftSourceNode,
               let rightSource = tap.rightSourceNode,
               let format = tap.sourceFormat else {
@@ -172,14 +176,20 @@ final class AudioState: ObservableObject {
         audio.start()
         applyActiveProfile()
         installSpectrumTap()
+        installPreSpectrumTap(tapSR: format.sampleRate)
     }
 
     private func installSpectrumTap() {
-        // The analyzer wants to know the actual buffer SR (which may be the
-        // output rate, not the tap rate, when the SR-bridge mixer is in play).
         spectrum.configureForSampleRate(audio.outputSampleRate ?? 48000)
         audio.installSpectrumTap { [weak spectrum] buffer, _ in
             spectrum?.ingest(buffer)
+        }
+    }
+
+    private func installPreSpectrumTap(tapSR: Double) {
+        preSpectrum.configureForSampleRate(tapSR)
+        tap.preIngest.callback = { [weak preSpectrum] ptr, frames, sr in
+            preSpectrum?.ingest(monoSamples: ptr, frameCount: frames, sampleRate: sr)
         }
     }
 }

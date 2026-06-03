@@ -7,6 +7,7 @@ enum EQFilterType: String, Codable, CaseIterable {
     case lowShelf
     case highShelf
     case notch
+    case bandPass
     case lowPass
     case highPass
 }

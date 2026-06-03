@@ -32,6 +32,7 @@ final class AuditumEQAudioEngine: ObservableObject {
     @Published private(set) var outputFormatDescription: String = "—"
 
     private var sampleRateBridge: AVAudioMixerNode?
+    private var limiter: AVAudioUnitDistortion?
 
     /// Wires up the graph with the L/R source nodes from the tap.
     /// Tears down any prior graph first; safe to call on device change.
@@ -74,26 +75,41 @@ final class AuditumEQAudioEngine: ObservableObject {
         let outRate = engine.outputNode.outputFormat(forBus: 0).sampleRate
         let mixer = engine.mainMixerNode
 
+        // Output limiter — AVAudioUnitDistortion's soft-clip preset gives a
+        // gentle saturation curve that flattens peaks before mainMixer, so
+        // bands summing past 0 dBFS don't slam into hard clipping.
+        let lim = AVAudioUnitDistortion()
+        lim.loadFactoryPreset(.drumsLoFi)   // mild soft-curve baseline
+        lim.wetDryMix = 18                  // mostly dry, gentle limiting only at peaks
+        lim.preGain = -3                    // a touch of headroom before the curve
+        engine.attach(lim)
+        self.limiter = lim
+
         if outRate > 0 && Int(outRate.rounded()) != Int(sampleRate.rounded()),
            let outFormat = AVAudioFormat(standardFormatWithSampleRate: outRate, channels: 2) {
-            // SR mismatch — insert a bridging mixer so the conversion lives in
-            // a dedicated node. Note: this only confines the bad resampling, it
-            // doesn't fix it. The real fix is a manual AVAudioConverter-based
-            // resampler in the source-node render block; tracked for follow-up.
             let bridge = AVAudioMixerNode()
             engine.attach(bridge)
             engine.connect(leq, to: bridge, format: tapFormat)
             engine.connect(req, to: bridge, format: tapFormat)
-            engine.connect(bridge, to: mixer, format: outFormat)
+            engine.connect(bridge, to: lim, format: tapFormat)
+            engine.connect(lim, to: mixer, format: outFormat)
             self.sampleRateBridge = bridge
             sampleRateMismatchWarning = "Tap \(Int(sampleRate)) Hz ≠ output \(Int(outRate)) Hz — audio quality degraded until manual resampler lands."
             log.info("Graph attached — tap \(Int(sampleRate)) Hz, output \(Int(outRate)) Hz (SR-bridged, degraded)")
         } else {
-            // Matched SR end-to-end — direct, no bridge needed.
-            engine.connect(leq, to: mixer, format: tapFormat)
-            engine.connect(req, to: mixer, format: tapFormat)
+            // AVAudioUnitDistortion has a single input bus, so we can't
+            // connect leq and req directly to it — the second connection
+            // silently overrides the first and kills the L chain. Sum L+R
+            // through an explicit mixer first.
+            let sumMixer = AVAudioMixerNode()
+            engine.attach(sumMixer)
+            engine.connect(leq, to: sumMixer, format: tapFormat)
+            engine.connect(req, to: sumMixer, format: tapFormat)
+            engine.connect(sumMixer, to: lim, format: tapFormat)
+            engine.connect(lim, to: mixer, format: tapFormat)
+            self.sampleRateBridge = sumMixer
             sampleRateMismatchWarning = nil
-            log.info("Graph attached — \(Int(sampleRate)) Hz end-to-end")
+            log.info("Graph attached — \(Int(sampleRate)) Hz end-to-end (sum + limiter inline)")
         }
 
         self.leftSource = leftSource
@@ -179,12 +195,14 @@ final class AuditumEQAudioEngine: ObservableObject {
         spectrumTapInstalled = false
     }
 
+
     private func teardownGraph() {
         if let ls = leftSource { engine.detach(ls); leftSource = nil }
         if let rs = rightSource { engine.detach(rs); rightSource = nil }
         if let leq = leftEQ { engine.detach(leq); leftEQ = nil }
         if let req = rightEQ { engine.detach(req); rightEQ = nil }
         if let b = sampleRateBridge { engine.detach(b); sampleRateBridge = nil }
+        if let l = limiter { engine.detach(l); limiter = nil }
     }
 
     // MARK: - Controls
@@ -277,6 +295,7 @@ final class AuditumEQAudioEngine: ObservableObject {
         case .lowShelf:   return .lowShelf
         case .highShelf:  return .highShelf
         case .notch:      return .bandStop
+        case .bandPass:   return .bandPass
         case .lowPass:    return .lowPass
         case .highPass:   return .highPass
         }

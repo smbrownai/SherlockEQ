@@ -95,6 +95,17 @@ enum BiquadResponse {
                 a1: -2.0 * cosW0,
                 a2: 1.0 - alpha
             )
+        case .bandPass:
+            // Constant-skirt band-pass (peak gain = Q). Matches AVAudioUnitEQ's
+            // .bandPass mode so the curve we draw matches the audio.
+            return Coefficients(
+                b0: alpha,
+                b1: 0,
+                b2: -alpha,
+                a0: 1.0 + alpha,
+                a1: -2.0 * cosW0,
+                a2: 1.0 - alpha
+            )
         case .lowPass:
             return Coefficients(
                 b0: (1.0 - cosW0) / 2.0,

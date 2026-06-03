@@ -17,6 +17,13 @@ final class SpectrumAnalyzer: ObservableObject {
 
     static let fftSize: Int = 2048
     static let halfFFT: Int = fftSize / 2
+    /// Output log-bucket count for the canvas. ~3 buckets per pixel at
+    /// 800 pt wide → 256 is plenty and keeps each bucket cheap to draw.
+    static let logBucketCount: Int = 256
+    /// Lower frequency cutoff for the log-binned view.
+    static let logMinHz: Double = 20
+    /// Upper frequency cutoff (nyquist ceiling for the canvas).
+    static let logMaxHz: Double = 20_000
 
     /// Per-bin dBFS magnitudes with attack/release smoothing applied — what
     /// the spectrum view should draw filled. Updated at FFT rate.
@@ -24,6 +31,12 @@ final class SpectrumAnalyzer: ObservableObject {
     /// Per-bin peak-hold trace that climbs to recent maxima and then
     /// gradually decays. Drawn as a thin overlay line for that pro-tool feel.
     @Published private(set) var spectrumPeakHoldDB: [Float] = Array(repeating: -120, count: halfFFT)
+    /// Same data as `spectrumBinsDB` but resampled onto log-spaced frequency
+    /// buckets — what the parametric canvas should draw to avoid the
+    /// cramped-bass / sparse-treble distribution of a linear FFT.
+    @Published private(set) var logSpectrumDB: [Float] = Array(repeating: -120, count: logBucketCount)
+    /// Log-binned peak hold mirroring `logSpectrumDB`.
+    @Published private(set) var logSpectrumPeakHoldDB: [Float] = Array(repeating: -120, count: logBucketCount)
     /// A-weighted RMS over the most recent FFT frame, in dBFS.
     @Published private(set) var aWeightedDBFS: Float = -120
     /// dBA estimate = dBFS + calibrationOffsetDBA.
@@ -125,11 +138,36 @@ final class SpectrumAnalyzer: ObservableObject {
         }
     }
 
+    /// Raw-mono ingest path used by the pre-EQ side-channel from
+    /// `CATapEngine` — the source-node render block delivers freshly-
+    /// filled L samples here, bypassing the buffer-list mixing step.
+    func ingest(monoSamples: UnsafePointer<Float>, frameCount: Int, sampleRate captureSR: Double) {
+        guard frameCount > 0 else { return }
+
+        var mono = [Float](repeating: 0, count: frameCount)
+        memcpy(&mono, monoSamples, frameCount * MemoryLayout<Float>.size)
+
+        accumulatorLock.lock()
+        accumulator.append(contentsOf: mono)
+        if accumulator.count > Self.maxAccumulatorSamples {
+            accumulator.removeFirst(accumulator.count - Self.maxAccumulatorSamples)
+        }
+        let canProcess = accumulator.count >= Self.fftSize
+        accumulatorLock.unlock()
+
+        if canProcess {
+            processingQueue.async { [weak self] in
+                self?.drainAndProcess(sampleRate: captureSR)
+            }
+        }
+    }
+
     /// Configure tap-installation. The engine wrapper calls back with the
     /// buffer format so we can precompute A-weights at the right SR.
     func configureForSampleRate(_ sr: Double) {
         sampleRate = sr
         precomputeAWeights()
+        rebuildLogBucketMap()
         accumulatorLock.lock()
         accumulator.removeAll(keepingCapacity: true)
         accumulatorLock.unlock()
@@ -149,6 +187,29 @@ final class SpectrumAnalyzer: ObservableObject {
     private func resetSmoothing() {
         spectrumBinsDB = Array(repeating: -120, count: Self.halfFFT)
         spectrumPeakHoldDB = Array(repeating: -120, count: Self.halfFFT)
+        logSpectrumDB = Array(repeating: -120, count: Self.logBucketCount)
+        logSpectrumPeakHoldDB = Array(repeating: -120, count: Self.logBucketCount)
+        rebuildLogBucketMap()
+    }
+
+    /// For each FFT bin, the log bucket it falls into. Precomputed once per
+    /// sample-rate change so the per-frame resampling is O(N).
+    private var logBucketForBin: [Int] = []
+
+    private func rebuildLogBucketMap() {
+        let n = Self.halfFFT
+        let buckets = Self.logBucketCount
+        let logMin = log10(Self.logMinHz)
+        let logMax = log10(Self.logMaxHz)
+        let logRange = logMax - logMin
+        logBucketForBin = Array(repeating: -1, count: n)
+        for k in 0..<n {
+            let hz = Double(k) * sampleRate / Double(Self.fftSize)
+            guard hz >= Self.logMinHz && hz <= Self.logMaxHz else { continue }
+            let logHz = log10(hz)
+            let bucket = Int(Double(buckets) * (logHz - logMin) / logRange)
+            logBucketForBin[k] = max(0, min(buckets - 1, bucket))
+        }
     }
 
     // MARK: - Background FFT
@@ -248,6 +309,35 @@ final class SpectrumAnalyzer: ObservableObject {
 
         spectrumBinsDB = smoothed
         spectrumPeakHoldDB = peaks
+
+        // Log-binned: each output bucket = max of the FFT bins mapped to it.
+        // Max (not avg) preserves peaks across sparse-bin regions; otherwise
+        // treble looks artificially flat.
+        let buckets = Self.logBucketCount
+        var logSmoothed = [Float](repeating: -120, count: buckets)
+        var logPeaks = [Float](repeating: -120, count: buckets)
+        for k in 0..<Self.halfFFT {
+            let b = logBucketForBin[k]
+            if b < 0 { continue }
+            if smoothed[k] > logSmoothed[b] { logSmoothed[b] = smoothed[k] }
+            if peaks[k] > logPeaks[b] { logPeaks[b] = peaks[k] }
+        }
+        // Fill any empty buckets via nearest-neighbor so the line stays
+        // continuous in sparse-bin regions.
+        var lastValid: Float = -120
+        var lastValidPeak: Float = -120
+        for b in 0..<buckets {
+            if logSmoothed[b] > -119 {
+                lastValid = logSmoothed[b]
+                lastValidPeak = logPeaks[b]
+            } else {
+                logSmoothed[b] = lastValid
+                logPeaks[b] = lastValidPeak
+            }
+        }
+        logSpectrumDB = logSmoothed
+        logSpectrumPeakHoldDB = logPeaks
+
         aWeightedDBFS = dbfs
         estimateDBA = dba
         onLevelUpdate?(dba)
