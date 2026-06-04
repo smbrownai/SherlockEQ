@@ -11,6 +11,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 24) {
                 header
                 outputSection
+                limiterSection
                 placeholderSection
             }
             .padding(28)
@@ -85,9 +86,80 @@ struct SettingsView: View {
         return String(format: "%+.1f dB", db)
     }
 
+    private var limiterSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Peak limiter").font(.headline)
+            sectionBox {
+                limiterParamRow(
+                    label: "Attack",
+                    value: audioState.limiterAttackMs,
+                    range: 1.0...30.0,
+                    defaultValue: 12.0,
+                    format: { String(format: "%.1f ms", $0) },
+                    set: { audioState.limiterAttackMs = $0 }
+                )
+                Divider()
+                limiterParamRow(
+                    label: "Decay",
+                    value: audioState.limiterDecayMs,
+                    range: 1.0...60.0,
+                    defaultValue: 24.0,
+                    format: { String(format: "%.1f ms", $0) },
+                    set: { audioState.limiterDecayMs = $0 }
+                )
+                Divider()
+                limiterParamRow(
+                    label: "Pre-gain",
+                    value: audioState.limiterPreGainDB,
+                    range: -40...40,
+                    defaultValue: 0,
+                    format: { String(format: "%+.1f dB", $0) },
+                    set: { audioState.limiterPreGainDB = $0 }
+                )
+                Divider()
+                Text("Shorter attack catches sharp transients but adds distortion. Longer decay smooths out sustained signals at the cost of pumping. Pre-gain pushes the signal harder into the limiter before it triggers.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding(.vertical, 4)
+            }
+        }
+    }
+
+    private func limiterParamRow(
+        label: String,
+        value: Double,
+        range: ClosedRange<Double>,
+        defaultValue: Double,
+        format: @escaping (Double) -> String,
+        set: @escaping (Double) -> Void
+    ) -> some View {
+        let isDefault = abs(value - defaultValue) < 0.05
+        return HStack {
+            Text(label)
+                .foregroundStyle(.secondary)
+                .frame(width: 120, alignment: .leading)
+            Slider(value: Binding(get: { value }, set: set), in: range)
+                .controlSize(.small)
+            Text(format(value))
+                .font(.callout.monospaced())
+                .foregroundStyle(.primary)
+                .frame(width: 72, alignment: .trailing)
+            Button {
+                set(defaultValue)
+            } label: {
+                Image(systemName: "arrow.counterclockwise")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(.borderless)
+            .help("Reset \(label.lowercased()) to default")
+            .disabled(isDefault)
+            .opacity(isDefault ? 0.35 : 1)
+        }
+    }
+
     private var placeholderSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Coming in Session 17").font(.headline)
+            Text("Still to come").font(.headline)
             sectionBox {
                 Text("Launch at login, global Reference Mode shortcut, device auto-switching, AutoEQ library, profile backup location, acknowledgments.")
                     .font(.callout)

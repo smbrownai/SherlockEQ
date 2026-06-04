@@ -256,6 +256,29 @@ final class AuditumEQAudioEngine: ObservableObject {
         masterGainStage?.globalGain = Float(clamped)
     }
 
+    /// AUPeakLimiter parameter setters. Param IDs and ranges come from
+    /// `AudioUnitParameters.h`:
+    /// - attack:  0.001 … 0.03 s  (default 0.012)
+    /// - decay:   0.001 … 0.06 s  (default 0.024)
+    /// - preGain: -40 … +40 dB     (default 0)
+    func setLimiterAttack(seconds: Double) {
+        guard let au = limiter?.audioUnit else { return }
+        let v = Float(max(0.001, min(0.03, seconds)))
+        AudioUnitSetParameter(au, kLimiterParam_AttackTime, kAudioUnitScope_Global, 0, v, 0)
+    }
+
+    func setLimiterDecay(seconds: Double) {
+        guard let au = limiter?.audioUnit else { return }
+        let v = Float(max(0.001, min(0.06, seconds)))
+        AudioUnitSetParameter(au, kLimiterParam_DecayTime, kAudioUnitScope_Global, 0, v, 0)
+    }
+
+    func setLimiterPreGain(dB: Double) {
+        guard let au = limiter?.audioUnit else { return }
+        let v = Float(max(-40, min(40, dB)))
+        AudioUnitSetParameter(au, kLimiterParam_PreGain, kAudioUnitScope_Global, 0, v, 0)
+    }
+
     /// Hard-coded asymmetric test curve: L gets +6 dB at 3 kHz, R stays flat.
     /// When enabled, overrides any active hearing-profile bands; when disabled
     /// the caller (AudioState) reapplies the active profile so we don't leave

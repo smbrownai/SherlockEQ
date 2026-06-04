@@ -40,18 +40,43 @@ final class AudioState: ObservableObject {
     /// Master output gain, post-limiter. Persists across launches via
     /// UserDefaults; re-applied to the engine on every graph rebuild so a
     /// teardown/reattach cycle doesn't drop the user's setting.
-    @Published var masterGainDB: Double = AudioState.loadMasterGainDB() {
+    @Published var masterGainDB: Double = AudioState.loadDouble(key: AudioState.masterGainKey, default: 0) {
         didSet {
             audio.setMasterGain(dB: masterGainDB)
             UserDefaults.standard.set(masterGainDB, forKey: Self.masterGainKey)
         }
     }
 
-    private static let masterGainKey = "auditumeq.masterGainDB"
+    /// AUPeakLimiter parameters — exposed in Settings so users can shape the
+    /// limiter's character (snappier attack for transient material, longer
+    /// decay for sustained mixes, preGain to push harder into the curve).
+    @Published var limiterAttackMs: Double = AudioState.loadDouble(key: AudioState.limiterAttackKey, default: 12.0) {
+        didSet {
+            audio.setLimiterAttack(seconds: limiterAttackMs / 1000.0)
+            UserDefaults.standard.set(limiterAttackMs, forKey: Self.limiterAttackKey)
+        }
+    }
+    @Published var limiterDecayMs: Double = AudioState.loadDouble(key: AudioState.limiterDecayKey, default: 24.0) {
+        didSet {
+            audio.setLimiterDecay(seconds: limiterDecayMs / 1000.0)
+            UserDefaults.standard.set(limiterDecayMs, forKey: Self.limiterDecayKey)
+        }
+    }
+    @Published var limiterPreGainDB: Double = AudioState.loadDouble(key: AudioState.limiterPreGainKey, default: 0) {
+        didSet {
+            audio.setLimiterPreGain(dB: limiterPreGainDB)
+            UserDefaults.standard.set(limiterPreGainDB, forKey: Self.limiterPreGainKey)
+        }
+    }
 
-    private static func loadMasterGainDB() -> Double {
-        let raw = UserDefaults.standard.object(forKey: masterGainKey) as? Double
-        return raw ?? 0
+    private static let masterGainKey = "auditumeq.masterGainDB"
+    private static let limiterAttackKey = "auditumeq.limiterAttackMs"
+    private static let limiterDecayKey = "auditumeq.limiterDecayMs"
+    private static let limiterPreGainKey = "auditumeq.limiterPreGainDB"
+
+    private static func loadDouble(key: String, default defaultValue: Double) -> Double {
+        let raw = UserDefaults.standard.object(forKey: key) as? Double
+        return raw ?? defaultValue
     }
 
     /// ID of the currently-active hearing profile. The profile itself lives in
@@ -249,6 +274,9 @@ final class AudioState: ObservableObject {
         )
         audio.start()
         audio.setMasterGain(dB: masterGainDB)
+        audio.setLimiterAttack(seconds: limiterAttackMs / 1000.0)
+        audio.setLimiterDecay(seconds: limiterDecayMs / 1000.0)
+        audio.setLimiterPreGain(dB: limiterPreGainDB)
         applyActiveProfile()
         installSpectrumTap()
         installPreSpectrumTap(tapSR: format.sampleRate)
