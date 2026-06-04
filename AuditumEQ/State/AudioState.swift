@@ -332,6 +332,13 @@ final class AudioState: ObservableObject {
     }
 
     func startAll() async {
+        // Idempotent: bail if the tap is already up. Both MainWindowView.task
+        // and MainPopoverView.task call this on appearance, and the popover
+        // re-appears every time MenuBarExtra reopens it. Rebuilding a running
+        // tap would deallocate live TapRingBuffers while the IOProc is still
+        // writing to them — crash on the audio thread.
+        if case .running = tap.state { return }
+        if case .starting = tap.state { return }
         await tap.requestPermissionAndStart()
         guard case .running = tap.state else {
             log.error("Tap did not reach .running — skipping AVAudioEngine start")
