@@ -5,6 +5,7 @@ import SwiftUI
 /// AutoEQ library, profile backup location, acknowledgments.
 struct SettingsView: View {
     @EnvironmentObject private var audioState: AudioState
+    @State private var acknowledgmentsShown = false
 
     var body: some View {
         ScrollView {
@@ -14,12 +15,15 @@ struct SettingsView: View {
                 outputSection
                 limiterSection
                 appearanceSection
-                placeholderSection
+                aboutSection
             }
             .padding(28)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Settings")
+        .sheet(isPresented: $acknowledgmentsShown) {
+            AcknowledgmentsView()
+        }
     }
 
     private var header: some View {
@@ -238,14 +242,22 @@ struct SettingsView: View {
         }
     }
 
-    private var placeholderSection: some View {
+    private var aboutSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Still to come").font(.headline)
+            Text("About").font(.headline)
             sectionBox {
-                Text("Launch at login, global Reference Mode shortcut, device auto-switching, AutoEQ library, profile backup location, acknowledgments.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 4)
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Acknowledgments").font(.callout.weight(.medium))
+                        Text("Science, software, and prior art behind AuditumEQ.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("View…") { acknowledgmentsShown = true }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
             }
         }
     }
