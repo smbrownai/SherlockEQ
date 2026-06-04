@@ -2,19 +2,23 @@ import SwiftUI
 
 struct SidebarView: View {
     @Binding var selection: SidebarSection?
+    @EnvironmentObject private var audioState: AudioState
+    @EnvironmentObject private var profileStore: ProfileStore
 
     var body: some View {
         List(selection: $selection) {
-            Section("Library") {
-                ForEach(SidebarSection.librarySections) { section in
+            Section("Audio Processor") {
+                ForEach(SidebarSection.audioProcessorSections) { section in
                     Label(section.title, systemImage: section.symbol)
                         .tag(section)
                 }
             }
 
-            Section("Diagnostics") {
-                Label(SidebarSection.debug.title, systemImage: SidebarSection.debug.symbol)
-                    .tag(SidebarSection.debug)
+            Section("App") {
+                ForEach(SidebarSection.appSections) { section in
+                    Label(section.title, systemImage: section.symbol)
+                        .tag(section)
+                }
             }
         }
         .listStyle(.sidebar)
@@ -22,10 +26,31 @@ struct SidebarView: View {
     }
 
     @ViewBuilder private var profileShortcut: some View {
-        // Quick jump to the Profiles section. Real CRUD lives in the section's
-        // toolbar; this is just navigation.
+        // Active profile name (read-only label) sits above the "Manage
+        // Profiles" jump so the user always knows what's loaded — the
+        // sidebar is the most persistent surface in the window, and
+        // the active profile drives every audio decision downstream.
+        // Real CRUD lives in the section's toolbar; the button is just
+        // navigation.
         VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Active profile")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                Text(activeProfileName)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 8)
+            .accessibilityElement(children: .combine)
+
             Divider()
+
             Button(action: { selection = .profiles }) {
                 Label("Manage Profiles", systemImage: "person.crop.circle.badge.plus")
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -35,5 +60,9 @@ struct SidebarView: View {
             .padding(.vertical, 8)
             .help("Open the Profiles section")
         }
+    }
+
+    private var activeProfileName: String {
+        audioState.activeProfile(in: profileStore)?.name ?? "None"
     }
 }

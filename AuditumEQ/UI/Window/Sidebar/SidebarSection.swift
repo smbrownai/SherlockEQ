@@ -38,9 +38,18 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    /// Sections shown under the "Library" header. Debug lives on its own
-    /// below so it's visually separated from the primary navigation.
-    static var librarySections: [SidebarSection] {
-        [.profiles, .audiogram, .equalizer, .toneFinder, .safeListening, .settings]
+    /// Audio-processing sections — what shapes the signal on its way
+    /// to the user's ears. `.profiles` is reachable via the persistent
+    /// "Manage Profiles" button at the bottom of the sidebar, not from
+    /// this list, to avoid the redundant top + bottom entry.
+    static var audioProcessorSections: [SidebarSection] {
+        [.audiogram, .equalizer, .toneFinder, .safeListening]
+    }
+
+    /// App-level sections — settings and diagnostics. Grouped under
+    /// their own header so they read as "things about the app" rather
+    /// than "things about the audio."
+    static var appSections: [SidebarSection] {
+        [.settings, .debug]
     }
 }
