@@ -575,6 +575,54 @@ extension CATapEngine {
         return uid as String
     }
 
+    /// Lightweight descriptor for the output-device picker.
+    struct OutputDevice: Hashable, Identifiable {
+        let id: AudioDeviceID
+        let uid: String
+        let name: String
+    }
+
+    /// Enumerate every device that can act as an output. Skips devices
+    /// without output streams (mics, aggregate-only inputs) and any
+    /// device whose UID we can't read.
+    static func allOutputDevices() -> [OutputDevice] {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size) == noErr else {
+            return []
+        }
+        let count = Int(size) / MemoryLayout<AudioDeviceID>.size
+        var ids = [AudioDeviceID](repeating: 0, count: count)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &ids) == noErr else {
+            return []
+        }
+        return ids.compactMap { id in
+            guard hasOutputStream(id) else { return nil }
+            guard let uid = try? Self.deviceUID(id), !uid.isEmpty else { return nil }
+            let name = (try? Self.deviceName(id)) ?? "Device \(id)"
+            return OutputDevice(id: id, uid: uid, name: name)
+        }
+    }
+
+    /// True when a device exposes at least one output stream — filters
+    /// microphones and input-only aggregates out of the picker.
+    private static func hasOutputStream(_ deviceID: AudioDeviceID) -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyStreams,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(deviceID, &address, 0, nil, &size) == noErr else {
+            return false
+        }
+        return size > 0
+    }
+
     static func tapUIDString(_ tapID: AudioObjectID) throws -> String {
         var uid: CFString = "" as CFString
         var size = UInt32(MemoryLayout<CFString>.size)

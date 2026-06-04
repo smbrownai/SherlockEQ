@@ -196,6 +196,19 @@ final class AudioState: ObservableObject {
         applyActiveProfile()
     }
 
+    /// When the system output device changes, switch the active profile to
+    /// any profile linked to that device's UID. First match wins. No-op if
+    /// no profile is linked to the new device — the user keeps whichever
+    /// profile they had active.
+    private func autoSwitchProfileIfLinked(deviceID: AudioDeviceID) {
+        guard let store = connectedStore,
+              let uid = try? CATapEngine.deviceUID(deviceID),
+              let match = store.profiles.first(where: { $0.linkedDeviceUID == uid }),
+              match.id != activeProfileID else { return }
+        log.info("Auto-switching to \(match.name, privacy: .public) for device UID \(uid, privacy: .public)")
+        activeProfileID = match.id
+    }
+
     /// Look up the active profile in the connected store and push it to the
     /// engine. No-op if no store is connected, no profile is active, the test
     /// curve is currently overriding, or the engine graph isn't attached yet.
@@ -229,8 +242,11 @@ final class AudioState: ObservableObject {
         self.preSpectrum = preSpectrum
         self.safeListening = tracker
 
-        tap.onOutputDeviceChanged = { [weak self] _ in
-            Task { @MainActor in self?.rebuildAudioGraph() }
+        tap.onOutputDeviceChanged = { [weak self] deviceID in
+            Task { @MainActor in
+                self?.rebuildAudioGraph()
+                self?.autoSwitchProfileIfLinked(deviceID: deviceID)
+            }
         }
 
         // Spectrum analyzer → dose tracker.

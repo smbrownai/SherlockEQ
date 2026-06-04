@@ -26,6 +26,12 @@ struct MainPopoverView: View {
         }
         .padding(14)
         .frame(width: 380)
+        .task {
+            // Auto-start the tap the first time the popover opens, so
+            // users don't have to dig into Debug. No-op if the main
+            // window already started it.
+            await audioState.startAll()
+        }
     }
 
     @ViewBuilder private var header: some View {

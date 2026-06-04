@@ -107,20 +107,84 @@ struct ProfileDetailView: View {
         }
     }
 
+    @State private var availableDevices: [CATapEngine.OutputDevice] = []
+
     @ViewBuilder private func deviceSection(_ profile: HearingProfile) -> some View {
         sectionHeader("Output device")
         sectionBox {
             row("Linked device") {
-                Text(profile.linkedDeviceUID ?? "Not linked")
-                    .font(.callout.monospaced())
-                    .foregroundStyle(.secondary)
+                deviceMenu(profile)
             }
             Divider()
-            Text("Auto-switching to a specific output device lands in Session 17.")
+            Text("When the system output switches to the linked device, AuditumEQ activates this profile automatically. Leave \"Any device\" to keep this profile manual.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .padding(.vertical, 4)
         }
+        .onAppear { refreshDeviceList() }
+    }
+
+    @ViewBuilder private func deviceMenu(_ profile: HearingProfile) -> some View {
+        // If the profile is linked to a device that's not currently
+        // connected (e.g. AirPods that aren't in range), surface that as a
+        // stub entry so the user can still see and unlink it.
+        let stubName: String? = {
+            guard let uid = profile.linkedDeviceUID,
+                  !availableDevices.contains(where: { $0.uid == uid }) else { return nil }
+            return uid
+        }()
+
+        Menu {
+            Button("Any device (manual)") {
+                update(profile) { $0.linkedDeviceUID = nil }
+            }
+            if !availableDevices.isEmpty {
+                Divider()
+                ForEach(availableDevices) { dev in
+                    Button {
+                        update(profile) { $0.linkedDeviceUID = dev.uid }
+                    } label: {
+                        Label(dev.name, systemImage: profile.linkedDeviceUID == dev.uid ? "checkmark" : "")
+                    }
+                }
+            }
+            if let stubName {
+                Divider()
+                Button {
+                    update(profile) { $0.linkedDeviceUID = nil }
+                } label: {
+                    Label("Disconnected: \(stubName)", systemImage: "exclamationmark.triangle")
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: profile.linkedDeviceUID == nil ? "circle" : "headphones")
+                Text(currentDeviceLabel(profile))
+                Image(systemName: "chevron.up.chevron.down").font(.caption2)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(Color.secondary.opacity(0.3))
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    private func currentDeviceLabel(_ profile: HearingProfile) -> String {
+        guard let uid = profile.linkedDeviceUID else { return "Any device" }
+        if let match = availableDevices.first(where: { $0.uid == uid }) {
+            return match.name
+        }
+        return "Disconnected"
+    }
+
+    private func refreshDeviceList() {
+        availableDevices = CATapEngine.allOutputDevices()
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     @ViewBuilder private func autoEQSection(_ profile: HearingProfile) -> some View {

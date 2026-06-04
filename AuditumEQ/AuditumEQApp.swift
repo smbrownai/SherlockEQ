@@ -17,6 +17,11 @@ struct AuditumEQApp: App {
                     audioState.adoptDefaultProfileIfNeeded(from: profileStore)
                     audioState.connect(profileStore: profileStore)
                     await NotificationManager.shared.requestAuthorization()
+                    // Auto-start the tap on first window-open so the user
+                    // doesn't have to find the Debug → Start button. No-op
+                    // if the tap is already running (popover may have
+                    // started it first).
+                    await audioState.startAll()
                 }
                 .onDisappear {
                     // Window closed → back to menu-bar-only, unless the
