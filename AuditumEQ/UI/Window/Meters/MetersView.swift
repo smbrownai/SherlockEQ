@@ -6,7 +6,7 @@ import SwiftUI
 // (see SidebarSection — the `.meters` case has been removed). Level
 // monitoring + the L/R VU lives in `MonitorSidebar` on the right-hand
 // side of the main window now, and that sidebar's triple-tap easter egg
-// uses the same VectorscopeView / AnalogVUMeterView / WaveformView
+// uses the same VectorscopeView / AnalogVUMeter / WaveformView
 // components that used to be hosted here.
 //
 // Both the view code and the surrounding component files (Vectorscope,
@@ -128,9 +128,14 @@ struct MetersView: View {
 
     private var analogCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            AnalogVUMeterView(monitor: audioState.stereoMonitor)
-                .frame(maxWidth: 520)
-            Text("Cosmetic — needles follow a damped RMS envelope so the inertia feels mechanical. The real listening-dose meters live in Safe Listening.")
+            AnalogVUMeter(
+                monitor: audioState.stereoMonitor,
+                mode: .stereo,
+                calibration: .standardDigital(),
+                showCalibrationLabel: true
+            )
+            .frame(maxWidth: 520)
+            Text("Average-program-loudness meter with classic VU ballistics (≈300 ms rise time). For safe-listening exposure tracking, see Safe Listening.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }

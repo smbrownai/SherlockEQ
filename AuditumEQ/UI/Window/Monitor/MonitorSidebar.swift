@@ -85,10 +85,15 @@ struct MonitorSidebar: View {
             case .analog:
                 // Stacked layout for the narrow sidebar — two dials side-
                 // by-side would each be ~85pt wide, too small to read the
-                // dial markings. Vertical stacking gives each dial ~110pt
-                // wide × ~80pt tall, comfortably legible.
-                AnalogVUMeterView(monitor: audioState.stereoMonitor, vertical: true)
-                    .frame(height: 240)
+                // dial markings. Vertical stacking gives each dial a
+                // comfortable ~110pt height at aspect 1.6.
+                AnalogVUMeter(
+                    monitor: audioState.stereoMonitor,
+                    mode: .stereo,
+                    calibration: .standardDigital(),
+                    vertical: true
+                )
+                .frame(height: 240)
             case .vectorscope:
                 VectorscopeView(monitor: audioState.stereoMonitor)
                     .frame(height: 180)

@@ -21,6 +21,15 @@ final class StereoMonitor: ObservableObject {
     @Published private(set) var leftNeedle: Float = 0
     @Published private(set) var rightNeedle: Float = 0
 
+    /// Raw per-tick RMS, linear (0…1). Republished every display tick
+    /// even when the value is unchanged so downstream consumers driving
+    /// their own ballistics (e.g. `AnalogVUMeter`) get a steady 60 Hz
+    /// pulse rather than stalling on silent stretches. Distinct from
+    /// `leftPeak` / `rightPeak`, which are already envelope-decayed and
+    /// would double-smooth a proper VU integrator.
+    @Published private(set) var leftRMS: Float = 0
+    @Published private(set) var rightRMS: Float = 0
+
     struct SamplePair: Hashable {
         let l: Float
         let r: Float
@@ -152,6 +161,7 @@ final class StereoMonitor: ObservableObject {
             count: Self.scopeSampleCount
         )
         leftPeak = 0; rightPeak = 0
+        leftRMS = 0; rightRMS = 0
         leftNeedle = 0; rightNeedle = 0
         leftNeedleVelocity = 0; rightNeedleVelocity = 0
         stagingLock.withLock { staging in
@@ -186,6 +196,26 @@ final class StereoMonitor: ObservableObject {
 
         if !snapshot.samples.isEmpty {
             scopeSamples = snapshot.samples
+        }
+        // Per-tick RMS for `AnalogVUMeter`'s ballistics. The audio tap
+        // delivers ~21 ms buffers (1024 frames @ 48 kHz) while this
+        // timer fires every ~16.7 ms — so on roughly 22 % of ticks no
+        // new buffer has arrived and `snapshot.leftPeakLinear` is 0.
+        // A naïve assignment would crash the VU integrator's target
+        // to the floor on every gap and pin the needle at −∞ during
+        // normal playback. Hold the previous reading with a gentle
+        // per-tick decay so single-tick gaps don't bounce to zero but
+        // real silence still drains away within a couple of frames.
+        let kHoldDecay: Float = 0.85
+        if snapshot.leftPeakLinear > 0 {
+            leftRMS = snapshot.leftPeakLinear
+        } else {
+            leftRMS = leftRMS * kHoldDecay
+        }
+        if snapshot.rightPeakLinear > 0 {
+            rightRMS = snapshot.rightPeakLinear
+        } else {
+            rightRMS = rightRMS * kHoldDecay
         }
         // Attack-fast / release-slow envelope on the peak.
         leftPeak = max(snapshot.leftPeakLinear, leftPeak * 0.85)
