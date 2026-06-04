@@ -18,6 +18,9 @@ struct MainPopoverView: View {
                 percent: audioState.sessionDosePercent,
                 remainingMinutes: audioState.remainingMinutes
             )
+            if let warning = audioState.audio.sampleRateMismatchWarning {
+                sampleRateBanner(warning)
+            }
             Divider()
             ProfilePickerRow()
             CompensationSliderView()
@@ -58,6 +61,26 @@ struct MainPopoverView: View {
             .buttonStyle(.plain)
             .help("Open AuditumEQ")
         }
+    }
+
+    @ViewBuilder private func sampleRateBanner(_ message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "speaker.slash")
+                .foregroundStyle(.orange)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.orange.opacity(0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Color.orange.opacity(0.4), lineWidth: 1)
+        )
     }
 
     /// Open (or focus) the main window. The app switches to `.accessory` on

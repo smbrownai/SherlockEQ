@@ -37,6 +37,11 @@ final class SpectrumAnalyzer: ObservableObject {
     @Published private(set) var logSpectrumDB: [Float] = Array(repeating: -120, count: logBucketCount)
     /// Log-binned peak hold mirroring `logSpectrumDB`.
     @Published private(set) var logSpectrumPeakHoldDB: [Float] = Array(repeating: -120, count: logBucketCount)
+    /// Rolling history of recent `logSpectrumDB` frames — the spectrogram
+    /// view consumes this as a time × frequency × dB heatmap. Oldest frame
+    /// at index 0, newest at end. Capped at `spectrogramHistoryLength`.
+    @Published private(set) var spectrogramHistory: [[Float]] = []
+    static let spectrogramHistoryLength: Int = 180
     /// A-weighted RMS over the most recent FFT frame, in dBFS.
     @Published private(set) var aWeightedDBFS: Float = -120
     /// dBA estimate = dBFS + calibrationOffsetDBA.
@@ -189,6 +194,7 @@ final class SpectrumAnalyzer: ObservableObject {
         spectrumPeakHoldDB = Array(repeating: -120, count: Self.halfFFT)
         logSpectrumDB = Array(repeating: -120, count: Self.logBucketCount)
         logSpectrumPeakHoldDB = Array(repeating: -120, count: Self.logBucketCount)
+        spectrogramHistory.removeAll(keepingCapacity: true)
         rebuildLogBucketMap()
     }
 
@@ -337,6 +343,12 @@ final class SpectrumAnalyzer: ObservableObject {
         }
         logSpectrumDB = logSmoothed
         logSpectrumPeakHoldDB = logPeaks
+
+        // Append to the spectrogram ring; trimming oldest frames when full.
+        spectrogramHistory.append(logSmoothed)
+        if spectrogramHistory.count > Self.spectrogramHistoryLength {
+            spectrogramHistory.removeFirst(spectrogramHistory.count - Self.spectrogramHistoryLength)
+        }
 
         aWeightedDBFS = dbfs
         estimateDBA = dba

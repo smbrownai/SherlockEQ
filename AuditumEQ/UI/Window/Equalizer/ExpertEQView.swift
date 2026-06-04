@@ -18,6 +18,8 @@ struct ExpertEQView: View {
     @State private var showQAsOctaves: Bool = false
     /// When on, every band edit propagates to both ears in lockstep.
     @State private var linkChannels: Bool = false
+    /// Selected underlay visualisation, persisted across launches.
+    @AppStorage("auditumeq.expertVizMode") private var vizModeRaw: String = CanvasVizMode.spectrum.rawValue
 
     /// Standard 8 bands at audiogram frequencies — used by Quick start
     /// to populate an empty profile with a useful working surface.
@@ -49,9 +51,11 @@ struct ExpertEQView: View {
                 spectrumBinsDB: audioState.spectrum.logSpectrumDB,
                 spectrumPeakHoldDB: audioState.spectrum.logSpectrumPeakHoldDB,
                 preSpectrumBinsDB: audioState.preSpectrum.logSpectrumDB,
+                spectrumHistory: audioState.spectrum.spectrogramHistory,
                 spectrumSampleRate: audioState.audio.outputSampleRate ?? 48_000,
                 earColor: earColor,
                 shadowColor: shadowColor,
+                vizMode: vizMode,
                 selectedBandID: $selectedBandID
             )
             .frame(minHeight: 280)
@@ -176,6 +180,17 @@ struct ExpertEQView: View {
 
     // MARK: - Sections
 
+    private var vizMode: CanvasVizMode {
+        get { CanvasVizMode(rawValue: vizModeRaw) ?? .spectrum }
+    }
+
+    private var vizModeBinding: Binding<CanvasVizMode> {
+        Binding(
+            get: { CanvasVizMode(rawValue: vizModeRaw) ?? .spectrum },
+            set: { vizModeRaw = $0.rawValue }
+        )
+    }
+
     private var header: some View {
         HStack(spacing: 12) {
             Picker("", selection: $tab) {
@@ -185,6 +200,15 @@ struct ExpertEQView: View {
             }
             .pickerStyle(.segmented)
             .frame(maxWidth: 240)
+
+            Picker("", selection: vizModeBinding) {
+                ForEach(CanvasVizMode.allCases) { mode in
+                    Text(mode.label).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 220)
+            .help("Pick the visualisation behind the EQ curve")
 
             Spacer()
 

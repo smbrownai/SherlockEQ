@@ -1,5 +1,24 @@
 import SwiftUI
 
+/// Underlay mode for the parametric canvas. `.spectrum` keeps the
+/// existing line+peak-hold + pre-EQ outline. `.spectrogram` swaps in a
+/// rolling time × frequency heatmap. `.octaveBars` collapses the
+/// spectrum into 31 ISO 1/3-octave bars.
+enum CanvasVizMode: String, CaseIterable, Identifiable {
+    case spectrum
+    case spectrogram
+    case octaveBars
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .spectrum:    return "Spectrum"
+        case .spectrogram: return "Spectrogram"
+        case .octaveBars:  return "Bars"
+        }
+    }
+}
+
 /// Interactive frequency-response canvas for a per-ear EQ chain.
 ///
 /// Vertical axis: ±24 dB. Horizontal axis: log frequency from 20 Hz to 20 kHz.
@@ -26,9 +45,16 @@ struct ParametricCanvasView: View {
     /// Optional pre-EQ spectrum (log-binned) drawn as a thin cyan outline so
     /// the user can see what's coming in vs what's leaving the chain.
     var preSpectrumBinsDB: [Float] = []
+    /// Rolling history of past `spectrumBinsDB` frames — only consumed in
+    /// `.spectrogram` mode. Oldest frame at index 0, newest at end.
+    var spectrumHistory: [[Float]] = []
     var spectrumSampleRate: Double = 48_000
     var earColor: Color = .blue
     var shadowColor: Color = .red
+    /// Which underlay visualisation to render. Editors that want a static
+    /// preview default to `.spectrum`; the Expert canvas drives this from
+    /// a segmented control persisted in `@AppStorage`.
+    var vizMode: CanvasVizMode = .spectrum
     /// When true, the canvas is a passive visualisation — no drag handles,
     /// no node markers, no selection. Used by Simple/Advanced tabs to give
     /// an at-a-glance preview of the current curve while the user moves
@@ -62,8 +88,15 @@ struct ParametricCanvasView: View {
         GeometryReader { geo in
             ZStack {
                 Canvas { context, size in
-                    drawSpectrum(context, size: size)
-                    drawPreSpectrum(context, size: size)
+                    switch vizMode {
+                    case .spectrum:
+                        drawSpectrum(context, size: size)
+                        drawPreSpectrum(context, size: size)
+                    case .spectrogram:
+                        drawSpectrogram(context, size: size)
+                    case .octaveBars:
+                        drawOctaveBars(context, size: size)
+                    }
                     drawGrid(context, size: size)
                     drawCurve(
                         context, size: size,
@@ -279,6 +312,121 @@ struct ParametricCanvasView: View {
             style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [4, 2])
         )
     }
+
+    /// Rolling time × frequency heatmap occupying the same bottom band as
+    /// the spectrum overlay. Newest column on the right; each column is one
+    /// past frame from `spectrumHistory` colored by dB.
+    private func drawSpectrogram(_ context: GraphicsContext, size: CGSize) {
+        guard !spectrumHistory.isEmpty else { return }
+        let baselineY = size.height
+        let topY = size.height * (1 - spectrumHeightFraction)
+        let height = baselineY - topY
+        let frames = spectrumHistory.count
+        let bins = spectrumHistory.last?.count ?? 0
+        guard bins > 0 else { return }
+
+        let colW = size.width / CGFloat(frames)
+        let rowH = height / CGFloat(bins)
+
+        for (frameIdx, column) in spectrumHistory.enumerated() {
+            let x = CGFloat(frameIdx) * colW
+            for b in 0..<bins {
+                let db = Double(column[b])
+                // bin 0 = lowest frequency → bottom; flip so high freqs at top
+                let y = baselineY - CGFloat(b + 1) * rowH
+                let color = Self.heatmapColor(forDB: db)
+                let rect = CGRect(x: x, y: y, width: colW + 0.5, height: rowH + 0.5)
+                context.fill(Path(rect), with: .color(color))
+            }
+        }
+    }
+
+    /// dB → color map. Below -80 dBFS: nearly black. Above -25 dBFS: hot
+    /// red. Mid range blends through blue → cyan → green → yellow.
+    static func heatmapColor(forDB db: Double) -> Color {
+        let lo: Double = -90
+        let hi: Double = -20
+        let t = max(0, min(1, (db - lo) / (hi - lo)))
+        // 5-stop palette: black/navy → blue → cyan → yellow → red
+        let stops: [(Double, Double, Double, Double)] = [
+            (0.00, 0.02, 0.02, 0.06),  // near-black
+            (0.20, 0.08, 0.12, 0.36),  // deep blue
+            (0.45, 0.10, 0.55, 0.85),  // cyan
+            (0.70, 0.95, 0.85, 0.20),  // yellow
+            (1.00, 0.95, 0.20, 0.15),  // red
+        ]
+        for i in 0..<(stops.count - 1) {
+            let (t0, r0, g0, b0) = stops[i]
+            let (t1, r1, g1, b1) = stops[i + 1]
+            if t >= t0 && t <= t1 {
+                let frac = (t - t0) / (t1 - t0)
+                return Color(
+                    red: r0 + frac * (r1 - r0),
+                    green: g0 + frac * (g1 - g0),
+                    blue: b0 + frac * (b1 - b0)
+                )
+            }
+        }
+        return Color(red: stops.last!.1, green: stops.last!.2, blue: stops.last!.3)
+    }
+
+    /// 1/3-octave bar analyzer. For each ISO band, takes the max dB across
+    /// the log-bins falling in the band's width and draws a vertical bar
+    /// rising from the canvas baseline, just like a hardware spectrum
+    /// analyzer.
+    private func drawOctaveBars(_ context: GraphicsContext, size: CGSize) {
+        guard !spectrumBinsDB.isEmpty else { return }
+        let baselineY = size.height
+        let topY = size.height * (1 - spectrumHeightFraction)
+
+        let bins = spectrumBinsDB.count
+        let logMin = log10(minHz)
+        let logMax = log10(maxHz)
+        let logRange = logMax - logMin
+
+        let barFactor = pow(2.0, 1.0 / 6.0)         // half-width of 1/3 octave
+        let gap: CGFloat = 1.5
+
+        for centerHz in Self.thirdOctaveCenters where centerHz >= minHz && centerHz <= maxHz {
+            let lowHz = centerHz / barFactor
+            let highHz = centerHz * barFactor
+
+            let lowFrac = (log10(lowHz) - logMin) / logRange
+            let highFrac = (log10(highHz) - logMin) / logRange
+            let lowBin = max(0, Int(Double(bins) * lowFrac))
+            let highBin = min(bins - 1, Int(Double(bins) * highFrac))
+            guard lowBin <= highBin else { continue }
+
+            var peakDB: Float = -120
+            for b in lowBin...highBin {
+                if spectrumBinsDB[b] > peakDB { peakDB = spectrumBinsDB[b] }
+            }
+            let topYBar = spectrumY(dbfs: Double(peakDB), baseline: baselineY, top: topY)
+            let x0 = CGFloat(lowFrac) * size.width
+            let x1 = CGFloat(highFrac) * size.width
+            let rect = CGRect(x: x0 + gap / 2, y: topYBar, width: max(1, x1 - x0 - gap), height: baselineY - topYBar)
+            context.fill(Path(rect), with: .color(.white.opacity(0.28)))
+
+            // A thin cap at the peak-hold dB for that band
+            if !spectrumPeakHoldDB.isEmpty {
+                var peakHold: Float = -120
+                for b in lowBin...highBin {
+                    if spectrumPeakHoldDB[b] > peakHold { peakHold = spectrumPeakHoldDB[b] }
+                }
+                let capY = spectrumY(dbfs: Double(peakHold), baseline: baselineY, top: topY)
+                let cap = CGRect(x: x0 + gap / 2, y: capY - 1, width: max(1, x1 - x0 - gap), height: 1.5)
+                context.fill(Path(cap), with: .color(.white.opacity(0.75)))
+            }
+        }
+    }
+
+    /// ISO 1/3-octave center frequencies covering the 20 Hz – 20 kHz
+    /// audible range. 31 bands total.
+    private static let thirdOctaveCenters: [Double] = [
+        25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200,
+        250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000,
+        2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000
+    ]
 
     private func spectrumY(dbfs: Double, baseline: CGFloat, top: CGFloat) -> CGFloat {
         let clamped = max(spectrumMinDB, min(spectrumMaxDB, dbfs))

@@ -124,34 +124,46 @@ final class AuditumEQAudioEngine: ObservableObject {
         engine.attach(gainStage)
         self.masterGainStage = gainStage
 
-        if outRate > 0 && Int(outRate.rounded()) != Int(sampleRate.rounded()),
-           let outFormat = AVAudioFormat(standardFormatWithSampleRate: outRate, channels: 2) {
-            let bridge = AVAudioMixerNode()
-            engine.attach(bridge)
-            engine.connect(leq, to: bridge, format: tapFormat)
-            engine.connect(req, to: bridge, format: tapFormat)
-            engine.connect(bridge, to: lim, format: tapFormat)
-            engine.connect(lim, to: gainStage, format: tapFormat)
-            engine.connect(gainStage, to: mixer, format: outFormat)
-            self.sampleRateBridge = bridge
-            sampleRateMismatchWarning = "Tap \(Int(sampleRate)) Hz ≠ output \(Int(outRate)) Hz — audio quality degraded until manual resampler lands."
-            log.info("Graph attached — tap \(Int(sampleRate)) Hz, output \(Int(outRate)) Hz (SR-bridged, degraded)")
-        } else {
-            // AUPeakLimiter has a single input bus, so we can't connect leq
-            // and req directly to it — the second connection silently
-            // overrides the first and kills the L chain. Sum L+R through an
-            // explicit mixer first.
-            let sumMixer = AVAudioMixerNode()
-            engine.attach(sumMixer)
-            engine.connect(leq, to: sumMixer, format: tapFormat)
-            engine.connect(req, to: sumMixer, format: tapFormat)
-            engine.connect(sumMixer, to: lim, format: tapFormat)
-            engine.connect(lim, to: gainStage, format: tapFormat)
-            engine.connect(gainStage, to: mixer, format: tapFormat)
-            self.sampleRateBridge = sumMixer
-            sampleRateMismatchWarning = nil
-            log.info("Graph attached — \(Int(sampleRate)) Hz end-to-end (sum + limiter + gain stage inline)")
+        if outRate > 0 && Int(outRate.rounded()) != Int(sampleRate.rounded()) {
+            // SR mismatch path is intentionally silenced.
+            //
+            // The previous behaviour wired in an AVAudioMixerNode bridge to
+            // perform the conversion, but the built-in mixer resampler on
+            // macOS Tahoe produces audibly robotic / crackly output on the
+            // mismatched path (see `audio-engine-sr-mismatch.md`). Shipping
+            // degraded audio under the user's profile is worse UX than
+            // silence + a clear "device not supported" surface.
+            //
+            // Source nodes are *attached* but not *connected*, so the
+            // engine still starts cleanly; there's just no audio path
+            // from the tap to the output. Switching to a matching-rate
+            // device triggers `rebuildAudioGraph()` and audio resumes.
+            sampleRateMismatchWarning = "Tap \(Int(sampleRate)) Hz ≠ output \(Int(outRate)) Hz — audio muted until a manual resampler lands or you pick a matching-rate output."
+            self.sampleRateBridge = nil
+            self.leftSource = leftSource
+            self.rightSource = rightSource
+            self.leftEQ = leq
+            self.rightEQ = req
+            self.leftAutoEQ = lAuto
+            self.rightAutoEQ = rAuto
+            log.info("Graph attached — tap \(Int(sampleRate)) Hz, output \(Int(outRate)) Hz (SR-mismatch — audio muted)")
+            return
         }
+
+        // Matching-rate path. AUPeakLimiter has a single input bus, so we
+        // can't connect leq and req directly to it — the second connection
+        // silently overrides the first and kills the L chain. Sum L+R
+        // through an explicit mixer first.
+        let sumMixer = AVAudioMixerNode()
+        engine.attach(sumMixer)
+        engine.connect(leq, to: sumMixer, format: tapFormat)
+        engine.connect(req, to: sumMixer, format: tapFormat)
+        engine.connect(sumMixer, to: lim, format: tapFormat)
+        engine.connect(lim, to: gainStage, format: tapFormat)
+        engine.connect(gainStage, to: mixer, format: tapFormat)
+        self.sampleRateBridge = sumMixer
+        sampleRateMismatchWarning = nil
+        log.info("Graph attached — \(Int(sampleRate)) Hz end-to-end (sum + limiter + gain stage inline)")
 
         self.leftSource = leftSource
         self.rightSource = rightSource
