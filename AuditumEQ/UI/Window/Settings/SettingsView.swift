@@ -10,6 +10,7 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header
+                startupSection
                 outputSection
                 limiterSection
                 appearanceSection
@@ -33,6 +34,25 @@ struct SettingsView: View {
                 Text("App-wide preferences").font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
+        }
+    }
+
+    private var startupSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Startup").font(.headline)
+            sectionBox {
+                HStack {
+                    Toggle("Launch at login", isOn: $audioState.launchAtLoginEnabled)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                    Spacer()
+                }
+                Divider()
+                Text("When enabled, AuditumEQ starts automatically when you log in and runs in the menu bar. You can revoke this in System Settings → General → Login Items.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding(.vertical, 4)
+            }
         }
     }
 

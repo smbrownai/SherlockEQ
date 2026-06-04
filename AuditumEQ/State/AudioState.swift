@@ -4,6 +4,7 @@ import AVFoundation
 import Combine
 import CoreAudio
 import OSLog
+import ServiceManagement
 import SwiftUI
 
 /// Single source of truth for audio lifecycle, injected as `@EnvironmentObject`
@@ -82,6 +83,31 @@ final class AudioState: ObservableObject {
 
     static let defaultLeftEarColor: Color = .blue
     static let defaultRightEarColor: Color = .red
+
+    /// Mirrors `SMAppService.mainApp.status == .enabled`. Setting it
+    /// calls `register()` / `unregister()`; if the OS rejects (Login Items
+    /// permission denied or similar) the value reverts and the error is
+    /// logged so the UI stays in sync with reality.
+    @Published var launchAtLoginEnabled: Bool = (SMAppService.mainApp.status == .enabled) {
+        didSet {
+            guard launchAtLoginEnabled != oldValue else { return }
+            do {
+                if launchAtLoginEnabled {
+                    try SMAppService.mainApp.register()
+                } else {
+                    try SMAppService.mainApp.unregister()
+                }
+            } catch {
+                log.error("Launch-at-login toggle failed: \(error.localizedDescription, privacy: .public)")
+                // Revert without re-triggering didSet (oldValue is the
+                // pre-toggle truth; assign on next runloop).
+                let revertTo = oldValue
+                DispatchQueue.main.async { [weak self] in
+                    self?.launchAtLoginEnabled = revertTo
+                }
+            }
+        }
+    }
 
     private static let masterGainKey = "auditumeq.masterGainDB"
     private static let limiterAttackKey = "auditumeq.limiterAttackMs"
