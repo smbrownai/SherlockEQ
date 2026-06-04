@@ -1,23 +1,63 @@
 import SwiftUI
 
-/// Stereo meters page. Shows the vectorscope by default; an unmarked
-/// secret double-tap on the section title flips to the analog VU
-/// meter easter egg.
+/// Stereo meters page. Vectorscope is the default; triple-tapping the
+/// section title cycles through Vectorscope → Analog VU → Waveform →
+/// back to Vectorscope. The latter two are easter eggs / fun bonuses
+/// rather than load-bearing diagnostics.
 struct MetersView: View {
     @EnvironmentObject private var audioState: AudioState
-    @AppStorage("auditumeq.metersAnalogMode") private var analogMode: Bool = false
-    @State private var titleTapCount: Int = 0
-    @State private var lastTapAt: Date = .distantPast
+    @AppStorage("auditumeq.metersMode") private var modeRaw: String = MetersMode.vectorscope.rawValue
+
+    enum MetersMode: String, CaseIterable {
+        case vectorscope
+        case analogVU
+        case waveform
+
+        var title: String {
+            switch self {
+            case .vectorscope: return "Vectorscope"
+            case .analogVU:    return "Analog VU"
+            case .waveform:    return "Waveform"
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .vectorscope: return "scope"
+            case .analogVU:    return "speedometer"
+            case .waveform:    return "waveform.path"
+            }
+        }
+
+        var subtitle: String {
+            switch self {
+            case .vectorscope:
+                return "Stereo phase scope — in-phase mono content reads vertical, anti-phase horizontal."
+            case .analogVU:
+                return "Tap the title three times to switch modes."
+            case .waveform:
+                return "Time-domain oscilloscope, L on top, R on bottom. Triggered on a positive zero-cross."
+            }
+        }
+
+        var next: MetersMode {
+            switch self {
+            case .vectorscope: return .analogVU
+            case .analogVU:    return .waveform
+            case .waveform:    return .vectorscope
+            }
+        }
+    }
+
+    private var mode: MetersMode {
+        MetersMode(rawValue: modeRaw) ?? .vectorscope
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
-                if analogMode {
-                    analogCard
-                } else {
-                    vectorscopeCard
-                }
+                content
                 tipFooter
             }
             .padding(28)
@@ -28,19 +68,17 @@ struct MetersView: View {
 
     private var header: some View {
         HStack(spacing: 14) {
-            Image(systemName: analogMode ? "speedometer" : "scope")
+            Image(systemName: mode.symbol)
                 .font(.system(size: 28))
                 .foregroundStyle(.tint)
                 .frame(width: 44, height: 44)
                 .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
             VStack(alignment: .leading, spacing: 2) {
-                Text(analogMode ? "Analog VU" : "Vectorscope")
+                Text(mode.title)
                     .font(.title3.weight(.semibold))
                     .contentShape(Rectangle())
-                    .onTapGesture(count: 3, perform: toggleEasterEgg)
-                Text(analogMode
-                     ? "Tap the title three times to switch back."
-                     : "Stereo phase scope — in-phase mono content reads vertical, anti-phase horizontal.")
+                    .onTapGesture(count: 3, perform: cycleMode)
+                Text(mode.subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -48,19 +86,21 @@ struct MetersView: View {
         }
     }
 
+    @ViewBuilder private var content: some View {
+        switch mode {
+        case .vectorscope: vectorscopeCard
+        case .analogVU:    analogCard
+        case .waveform:    waveformCard
+        }
+    }
+
     private var vectorscopeCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             VectorscopeView(monitor: audioState.stereoMonitor)
                 .frame(maxWidth: 460)
-            peakReadout
+            StereoPeakReadout(monitor: audioState.stereoMonitor)
+                .padding(.top, 4)
         }
-    }
-
-    private var peakReadout: some View {
-        // Wrapper subview that observes the monitor directly so the text
-        // updates at the meter rate without re-rendering the canvas above.
-        StereoPeakReadout(monitor: audioState.stereoMonitor)
-            .padding(.top, 4)
     }
 
     private var analogCard: some View {
@@ -73,9 +113,30 @@ struct MetersView: View {
         }
     }
 
-    /// Inline subview so the surrounding MetersView body doesn't observe
-    /// the monitor directly and re-render the header / canvases on every
-    /// peak update.
+    private var waveformCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            WaveformView(
+                monitor: audioState.stereoMonitor,
+                earColor: audioState.leftEarColor,
+                rightColor: audioState.rightEarColor
+            )
+            .frame(maxWidth: 620)
+            Text("For fun. Triggered on a positive zero-cross in L so the trace appears to stand still during steady-state material.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private var tipFooter: some View {
+        Text(mode == .vectorscope
+             ? ""
+             : "(Hint: triple-tap the title to cycle to the next view.)")
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+    }
+
+    /// Inline subview so MetersView's body doesn't observe the monitor
+    /// directly — that would re-render the canvas on every needle update.
     private struct StereoPeakReadout: View {
         @ObservedObject var monitor: StereoMonitor
 
@@ -98,24 +159,7 @@ struct MetersView: View {
         }
     }
 
-    private func legendDot(_ color: Color, label: String) -> some View {
-        HStack(spacing: 4) {
-            Circle().fill(color).frame(width: 8, height: 8)
-            Text(label).font(.caption).foregroundStyle(.secondary)
-        }
-    }
-
-    private var tipFooter: some View {
-        Text(analogMode
-             ? "(Hint: triple-tap the title to flip back to the modern scope.)"
-             : "")
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
-    }
-
-    /// Triple-tap title toggles the easter-egg state. The 3-count modifier
-    /// on the gesture handles the timing; we just flip the flag.
-    private func toggleEasterEgg() {
-        analogMode.toggle()
+    private func cycleMode() {
+        modeRaw = mode.next.rawValue
     }
 }
