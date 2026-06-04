@@ -14,10 +14,15 @@ struct MainWindowView: View {
             detail
                 .navigationSplitViewColumnWidth(min: 760, ideal: 820)
         }
-        // Sized for Advanced's 10-band slider row (10 × 60 pt + padding) on
-        // top of the spectrum canvas + comfortable sidebar that never
-        // truncates its section labels.
-        .frame(minWidth: 1020, idealWidth: 1100, minHeight: 680, idealHeight: 740)
+        // Sized so the Expert layer-chip strip (Lens + 6 chips: Output /
+        // Input / EQ / Audiogram / Safety / Peaks) fits on one row at the
+        // default Dynamic Type size, with the existing top header bar
+        // (ear picker + viz picker + bands badge + Q/Oct + Link L+R + Add
+        // band) above it — and a sidebar wide enough that section labels
+        // never truncate. Height accommodates the chip strip plus a
+        // comfortable canvas plus the controls bar + Tinnitus notch
+        // section without forcing a scroll on default-size windows.
+        .frame(minWidth: 1180, idealWidth: 1240, minHeight: 740, idealHeight: 820)
         .linkUndoManagerToProfileStore()
     }
 

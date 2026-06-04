@@ -9,6 +9,7 @@ struct EqualizerView: View {
 
     private enum Tab: String, CaseIterable, Hashable {
         case simple = "Simple"
+        case speech = "Speech"
         case advanced = "Advanced"
         case expert = "Expert"
     }
@@ -25,7 +26,7 @@ struct EqualizerView: View {
                 }
             }
             .pickerStyle(.segmented)
-            .frame(maxWidth: 360)
+            .frame(maxWidth: 460)
             .padding(.horizontal, 20)
             .padding(.top, 16)
 
@@ -42,6 +43,7 @@ struct EqualizerView: View {
             Group {
                 switch tab {
                 case .simple:   SimpleEQView()
+                case .speech:   SpeechEQView()
                 case .advanced: AdvancedEQView()
                 case .expert:   ExpertEQView()
                 }

@@ -64,6 +64,12 @@ struct MetersView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Meters")
+        // The StereoMonitor's 60 Hz display loop is gated on at least one
+        // attached subscriber — it only spins while a Meters view is on
+        // screen. When the user navigates away, the timer (and its 5
+        // @Published mutations per tick) goes idle.
+        .onAppear { audioState.stereoMonitor.subscribe() }
+        .onDisappear { audioState.stereoMonitor.unsubscribe() }
     }
 
     private var header: some View {

@@ -436,6 +436,62 @@ final class AuditumEQAudioEngine: ObservableObject {
         }
     }
 
+    /// 1 kHz reference tone for the dB-SPL calibration workflow. Routed
+    /// straight into `mainMixerNode` so it bypasses the user's EQ chain
+    /// (the calibration tone must not be coloured by the user's curve).
+    /// Amplitude is fixed at −12 dBFS — loud enough to register cleanly on
+    /// a phone SPL meter, with enough headroom to clear the limiter
+    /// without triggering compression.
+    static let calibrationToneDBFS: Float = -12
+    private var calibrationTonePlayer: AVAudioPlayerNode?
+    private var calibrationToneBuffer: AVAudioPCMBuffer?
+    @Published private(set) var calibrationToneEnabled: Bool = false
+
+    func setCalibrationTone(_ on: Bool) {
+        if on {
+            guard calibrationTonePlayer == nil else { return }
+            let mixerFormat = engine.mainMixerNode.outputFormat(forBus: 0)
+            let sr = mixerFormat.sampleRate > 0 ? mixerFormat.sampleRate : 48000
+            guard let format = AVAudioFormat(standardFormatWithSampleRate: sr, channels: 2) else { return }
+            // One second of audio looped — long enough that the loop seam
+            // is between cycle boundaries (1 kHz divides cleanly into any
+            // common sample rate) so there's no audible click on wrap.
+            let frames: AVAudioFrameCount = AVAudioFrameCount(sr)
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames) else { return }
+            buffer.frameLength = frames
+
+            let freq: Float = 1000
+            let twoPi: Float = 2 * .pi
+            let sampleRate = Float(sr)
+            let amplitude = pow(10.0, Self.calibrationToneDBFS / 20.0)  // −12 dBFS → ≈0.251
+            for ch in 0..<Int(format.channelCount) {
+                guard let p = buffer.floatChannelData?[ch] else { continue }
+                for i in 0..<Int(frames) {
+                    p[i] = sin(twoPi * freq * Float(i) / sampleRate) * amplitude
+                }
+            }
+
+            let player = AVAudioPlayerNode()
+            engine.attach(player)
+            engine.connect(player, to: engine.mainMixerNode, format: format)
+            player.scheduleBuffer(buffer, at: nil, options: .loops)
+            player.play()
+            calibrationTonePlayer = player
+            calibrationToneBuffer = buffer
+            calibrationToneEnabled = true
+            log.info("Calibration tone: 1 kHz @ \(Self.calibrationToneDBFS) dBFS, \(Int(sr)) Hz output")
+        } else {
+            if let player = calibrationTonePlayer {
+                player.stop()
+                engine.detach(player)
+            }
+            calibrationTonePlayer = nil
+            calibrationToneBuffer = nil
+            calibrationToneEnabled = false
+            log.info("Calibration tone stopped")
+        }
+    }
+
     /// Diagnostic: route a 440 Hz sine through mainMixer directly, bypassing the
     /// tap → source → EQ chain. If audible → engine→output path is alive (so the
     /// silence is from the upstream chain producing zeros). If silent → output

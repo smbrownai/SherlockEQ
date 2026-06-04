@@ -25,6 +25,14 @@ struct SafeListeningView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Safe Listening")
+        // Safety: if the user navigates away while the calibration tone is
+        // playing, kill it so they don't return to find a 1 kHz tone still
+        // looping. Toggling the same flag is cheap if it's already off.
+        .onDisappear {
+            if state.calibrationToneEnabled {
+                state.calibrationToneEnabled = false
+            }
+        }
     }
 
     // MARK: - Cards
@@ -132,6 +140,21 @@ struct SafeListeningView: View {
 
             Divider()
 
+            sliderRow(
+                "Playback calibration",
+                value: state.calibrationOffsetDBA,
+                range: 80...115,
+                format: { String(format: "%.0f dB SPL @ 0 dBFS", $0) },
+                set: { state.calibrationOffsetDBA = $0 }
+            )
+            Text("The dB SPL produced at your ear when a full-scale (0 dBFS) digital sample plays through your current output device at your usual volume. Used to convert dBFS into dBA for dose tracking AND to anchor the Loudness lens's safety overlay to real SPL. Default 100 is a rough estimate for consumer headphones at moderate volume — for accurate values use the reference tone below.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+
+            calibrationToneRow
+
+            Divider()
+
             Toggle("Send notifications at 80 % and 100 %", isOn: Binding(
                 get: { state.safeListening.notificationsEnabled },
                 set: { state.safeListening.notificationsEnabled = $0 }
@@ -147,6 +170,81 @@ struct SafeListeningView: View {
                 }
             }
         }
+    }
+
+    /// Local state for the meter-reading text field — kept here instead of
+    /// pushed into AudioState because it's a transient UI value, not a
+    /// persisted setting. The persisted value is `calibrationOffsetDBA`,
+    /// which we recompute from this reading + the tone's known dBFS level.
+    @State private var meterReadingText: String = ""
+
+    @ViewBuilder private var calibrationToneRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Button {
+                    state.calibrationToneEnabled.toggle()
+                } label: {
+                    Label(
+                        state.calibrationToneEnabled ? "Stop 1 kHz tone" : "Play 1 kHz tone",
+                        systemImage: state.calibrationToneEnabled ? "stop.fill" : "play.fill"
+                    )
+                }
+                .buttonStyle(.bordered)
+                .tint(state.calibrationToneEnabled ? .red : .accentColor)
+
+                Text(String(format: "Tone level: %.0f dBFS",
+                            Double(state.calibrationToneLevelDBFS)))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+            }
+
+            HStack(spacing: 8) {
+                Text("Meter reading")
+                    .font(.callout)
+                    .frame(width: 110, alignment: .leading)
+                TextField("e.g. 78", text: $meterReadingText)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 90)
+                    .monospacedDigit()
+                Text("dBA")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Button("Apply") {
+                    applyMeterReading()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(parsedMeterReading == nil)
+                Spacer()
+            }
+
+            Text("Play the tone with your usual output device at your usual volume. Hold a phone-based SPL meter (NIOSH SLM is recommended on iPhone — it's been NIOSH-validated within ±2 dB) at your listening position. Type the dBA reading and tap Apply — the slider above will jump to the matching calibration. For headphones, cup the earcup over the phone mic; results are within a few dB. Don't forget to stop the tone before measuring music!")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// `nil` when the field is empty or unparseable. Constrained to a
+    /// sensible dBA range (40–130) so junk input doesn't slide through.
+    private var parsedMeterReading: Double? {
+        let trimmed = meterReadingText.trimmingCharacters(in: .whitespaces)
+        guard let v = Double(trimmed), v >= 40, v <= 130 else { return nil }
+        return v
+    }
+
+    private func applyMeterReading() {
+        guard let reading = parsedMeterReading else { return }
+        // The tone plays at `calibrationToneLevelDBFS` (negative dBFS). The
+        // slider stores "dB SPL at 0 dBFS." So we ADD the tone's absolute
+        // dBFS level to the meter reading: a tone at -12 dBFS measured at
+        // 78 dBA implies 90 dB SPL at 0 dBFS.
+        let toneOffset = Double(abs(state.calibrationToneLevelDBFS))
+        let inferred = reading + toneOffset
+        // Clamp to the slider's published range so we never silently push
+        // a value the slider would reject.
+        state.calibrationOffsetDBA = min(115, max(80, inferred))
     }
 
     @ViewBuilder private var historyCard: some View {

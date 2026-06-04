@@ -39,6 +39,17 @@ struct DebugView: View {
         }
         .onReceive(counterTimer) { _ in tick &+= 1 }
         .navigationTitle("Debug")
+        // The analyzers' aWeightedDBFS / estimateDBA only update while the
+        // FFT pipeline is running. We subscribe here so the Debug readouts
+        // stay live without forcing a canvas tab to be open.
+        .onAppear {
+            state.spectrum.subscribe()
+            state.preSpectrum.subscribe()
+        }
+        .onDisappear {
+            state.spectrum.unsubscribe()
+            state.preSpectrum.unsubscribe()
+        }
     }
 
     @ViewBuilder private var tapSection: some View {

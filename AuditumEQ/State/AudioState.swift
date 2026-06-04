@@ -40,6 +40,18 @@ final class AudioState: ObservableObject {
         didSet { audio.setTestTone(testToneEnabled) }
     }
 
+    /// Plays the 1 kHz / −12 dBFS reference tone used by the SPL-calibration
+    /// workflow in Safe Listening. Routed via mainMixer so the user's EQ
+    /// doesn't colour it.
+    @Published var calibrationToneEnabled: Bool = false {
+        didSet { audio.setCalibrationTone(calibrationToneEnabled) }
+    }
+
+    /// dBFS level of the calibration tone, exposed so the UI can compute
+    /// the offset between the meter reading and the slider value. Always
+    /// matches `AuditumEQAudioEngine.calibrationToneDBFS`.
+    var calibrationToneLevelDBFS: Float { AuditumEQAudioEngine.calibrationToneDBFS }
+
     /// Master output gain, post-limiter. Persists across launches via
     /// UserDefaults; re-applied to the engine on every graph rebuild so a
     /// teardown/reattach cycle doesn't drop the user's setting.
@@ -163,6 +175,26 @@ final class AudioState: ObservableObject {
     @Published var remainingMinutes: Double?
     @Published var currentLeveldBSPL: Double = 0
 
+    /// SPL calibration in dB: the dB SPL the user actually hears when a
+    /// 0 dBFS signal plays through the current output device at their
+    /// current volume. Drives the dBFS → dBA conversion used by the dose
+    /// tracker and the canvas's safety-threshold curve. Default 100 is the
+    /// "consumer-headphones at moderate volume" rule of thumb from spec
+    /// §5.4 — quieter listeners should set this lower (e.g. 85), louder
+    /// listeners higher (e.g. 110). Persisted so the user only calibrates
+    /// once per setup.
+    @Published var calibrationOffsetDBA: Double = AudioState.loadDouble(
+        key: AudioState.calibrationKey,
+        default: 100
+    ) {
+        didSet {
+            spectrum.calibrationOffsetDBA = Float(calibrationOffsetDBA)
+            preSpectrum.calibrationOffsetDBA = Float(calibrationOffsetDBA)
+            UserDefaults.standard.set(calibrationOffsetDBA, forKey: Self.calibrationKey)
+        }
+    }
+    static let calibrationKey = "auditumeq.calibrationOffsetDBA"
+
     func activeProfile(in store: ProfileStore) -> HearingProfile? {
         guard let id = activeProfileID else { return nil }
         return store.profiles.first { $0.id == id }
@@ -222,7 +254,6 @@ final class AudioState: ObservableObject {
 
     private var tapObserver: AnyCancellable?
     private var audioObserver: AnyCancellable?
-    private var spectrumObserver: AnyCancellable?
     private var trackerObserver: AnyCancellable?
     private var profileSubscriptions: Set<AnyCancellable> = []
     private weak var connectedStore: ProfileStore?
@@ -252,6 +283,18 @@ final class AudioState: ObservableObject {
             }
         }
 
+        // No always-on subscribe. Both analyzers run a CHEAP level pass in
+        // `ingest` (one vDSP_measqv per buffer + a 20 Hz onLevelUpdate fire)
+        // unconditionally, so dose tracking keeps working when no canvas
+        // observes the FFT pipeline. The expensive FFT + smoothing + main-
+        // actor publish only run while a `LiveParametricCanvas` is on screen
+        // — see its subscribe/unsubscribe lifecycle.
+
+        // Apply persisted SPL calibration to both analyzers so the dBA
+        // figures the dose tracker integrates match the user's setup.
+        spectrum.calibrationOffsetDBA = Float(calibrationOffsetDBA)
+        preSpectrum.calibrationOffsetDBA = Float(calibrationOffsetDBA)
+
         // Spectrum analyzer → dose tracker.
         spectrum.onLevelUpdate = { [weak tracker] dba in
             Task { @MainActor in tracker?.update(levelDBA: Double(dba)) }
@@ -265,14 +308,18 @@ final class AudioState: ObservableObject {
         audioObserver = audio.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
-        spectrumObserver = spectrum.objectWillChange.sink { [weak self] _ in
-            self?.objectWillChange.send()
-        }
-        // Intentionally NOT rebroadcast — stereoMonitor publishes at the
-        // display-loop rate (60 Hz) and would re-evaluate every view
-        // observing AudioState. Meters views observe stereoMonitor
-        // directly via @ObservedObject so only that section pays the cost.
-        _ = stereoMonitor  // keep the property used so the compiler doesn't elide
+        // Intentionally NOT rebroadcast — the two SpectrumAnalyzers and
+        // the StereoMonitor publish at high rates (FFT cadence ≈ 23 Hz and
+        // display-loop 60 Hz respectively). Rebroadcasting either through
+        // `audioState.objectWillChange` would re-evaluate every SwiftUI
+        // view holding an `@EnvironmentObject AudioState` reference on
+        // every publish — i.e. the entire window tree. Canvas / Meters
+        // views observe the analyzer / monitor directly via @ObservedObject
+        // (see `LiveParametricCanvas`, `MetersView`) so only that subtree
+        // pays the cost.
+        _ = spectrum
+        _ = preSpectrum
+        _ = stereoMonitor
         trackerObserver = tracker.objectWillChange.sink { [weak self] _ in
             Task { @MainActor in self?.mirrorTrackerState() }
         }
@@ -387,20 +434,24 @@ final class AudioState: ObservableObject {
 
     private func installSpectrumTap() {
         spectrum.configureForSampleRate(audio.outputSampleRate ?? 48000)
-        audio.installSpectrumTap { [weak spectrum, weak stereoMonitor] buffer, _ in
-            // Same buffer, two consumers — the spectrum analyzer mixes to
-            // mono, the stereo monitor keeps L/R separate for the
-            // vectorscope + VU. Closures inherit @MainActor here so both
-            // calls auto-hop synchronously off the render thread.
-            spectrum?.ingest(buffer)
-            stereoMonitor?.ingest(buffer)
+        // Capture strong references to the nonisolated consumers BEFORE the
+        // closure literal so the AVAudioEngine tap block doesn't inherit
+        // `@MainActor` isolation from this method. Both `ingest` methods
+        // are `nonisolated` and realtime-safe; previously the closure was
+        // hopping to MainActor on every tap callback (~200/sec).
+        let spectrum = self.spectrum
+        let stereoMonitor = self.stereoMonitor
+        audio.installSpectrumTap { buffer, _ in
+            spectrum.ingest(buffer)
+            stereoMonitor.ingest(buffer)
         }
     }
 
     private func installPreSpectrumTap(tapSR: Double) {
         preSpectrum.configureForSampleRate(tapSR)
-        tap.preIngest.callback = { [weak preSpectrum] ptr, frames, sr in
-            preSpectrum?.ingest(monoSamples: ptr, frameCount: frames, sampleRate: sr)
+        let preSpectrum = self.preSpectrum
+        tap.preIngest.callback = { ptr, frames, sr in
+            preSpectrum.ingest(monoSamples: ptr, frameCount: frames, sampleRate: sr)
         }
     }
 }

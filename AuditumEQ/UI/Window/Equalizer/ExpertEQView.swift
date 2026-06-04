@@ -21,6 +21,23 @@ struct ExpertEQView: View {
     /// Selected underlay visualisation, persisted across launches.
     @AppStorage("auditumeq.expertVizMode") private var vizModeRaw: String = CanvasVizMode.spectrum.rawValue
 
+    // Canvas layer visibility — persisted per-user via @AppStorage so the
+    // layout the user picked last session is what they see next launch.
+    // Each chip in the layer strip mutates one of these.
+    @AppStorage("auditumeq.layer.output")    private var showOutputLayer    = true
+    @AppStorage("auditumeq.layer.input")     private var showInputLayer     = false
+    @AppStorage("auditumeq.layer.eq")        private var showEQLayer        = true
+    @AppStorage("auditumeq.layer.audiogram") private var showAudiogramLayer = true
+    @AppStorage("auditumeq.layer.safety")    private var showSafetyLayer    = false
+    @AppStorage("auditumeq.layer.peaks")     private var showPeaksLayer     = false
+    // Spectrogram-mode layers (separate keys so toggling them doesn't
+    // disturb the user's Spectrum-mode chip configuration).
+    @AppStorage("auditumeq.spectrogram.notch")       private var showNotchLineLayer    = true
+    @AppStorage("auditumeq.spectrogram.regions")     private var showRegionLabelsLayer = true
+    @AppStorage("auditumeq.spectrogram.legend")      private var showColorLegendLayer  = true
+    @AppStorage("auditumeq.spectrogram.time")        private var showTimeAxisLayer     = true
+    @AppStorage("auditumeq.spectrogram.persistence") private var showPersistenceLayer  = false
+
     /// Standard 8 bands at audiogram frequencies — used by Quick start
     /// to populate an empty profile with a useful working surface.
     private static let quickStartFrequencies: [Double] = [
@@ -42,21 +59,73 @@ struct ExpertEQView: View {
     @FocusState private var canvasFocused: Bool
 
     @ViewBuilder private func content(_ profile: HearingProfile) -> some View {
-        VStack(spacing: 14) {
-            header
-            ParametricCanvasView(
+        let target = targetBands(for: profile)
+        // Wrapped in ScrollView (matching AdvancedEQView) so the view
+        // breathes when window height is tight. Outer padding bumped from
+        // 20 → 24 to match the rest of the app's window-content margins,
+        // and VStack spacing raised so the canvas, controls bar, and notch
+        // section don't visually crowd each other.
+        ScrollView {
+            VStack(spacing: 18) {
+                header
+            // Layer chips only matter when the spectrum visualisation is
+            // active — they toggle pieces of that scene. In Spectrogram /
+            // Bars modes the chips would just sit greyed out, so hide the
+            // strip entirely instead.
+            if vizMode == .spectrum {
+                CanvasLayerChipStrip(
+                    showInputSpectrum: $showInputLayer,
+                    showOutputSpectrum: $showOutputLayer,
+                    showEQCurve: $showEQLayer,
+                    showAudiogramTarget: $showAudiogramLayer,
+                    showSafetyOverlay: $showSafetyLayer,
+                    showPeakCallouts: $showPeaksLayer,
+                    hasAudiogram: !target.isEmpty,
+                    earColor: earColor
+                )
+            } else if vizMode == .spectrogram {
+                SpectrogramLayerChipStrip(
+                    showEQCurve: $showEQLayer,
+                    showNotchLine: $showNotchLineLayer,
+                    showRegionLabels: $showRegionLabelsLayer,
+                    showColorLegend: $showColorLegendLayer,
+                    showTimeAxis: $showTimeAxisLayer,
+                    showPersistence: $showPersistenceLayer,
+                    earColor: earColor,
+                    hasNotch: profile.notch.enabled
+                )
+            }
+            LiveParametricCanvas(
+                spectrum: audioState.spectrum,
+                preSpectrum: audioState.preSpectrum,
+                includeHistory: true,
                 bands: bandsBinding(for: profile),
                 shadowBands: shadowBands(for: profile),
+                targetBands: target,
                 notch: profile.notch,
-                spectrumBinsDB: audioState.spectrum.logSpectrumDB,
-                spectrumPeakHoldDB: audioState.spectrum.logSpectrumPeakHoldDB,
-                preSpectrumBinsDB: audioState.preSpectrum.logSpectrumDB,
-                spectrumHistory: audioState.spectrum.spectrogramHistory,
                 spectrumSampleRate: audioState.audio.outputSampleRate ?? 48_000,
                 earColor: earColor,
                 shadowColor: shadowColor,
                 vizMode: vizMode,
-                selectedBandID: $selectedBandID
+                selectedBandID: $selectedBandID,
+                showInputSpectrum: showInputLayer,
+                showOutputSpectrum: showOutputLayer,
+                showEQCurve: showEQLayer,
+                showAudiogramTarget: showAudiogramLayer,
+                showSafetyOverlay: showSafetyLayer,
+                showPeakCallouts: showPeaksLayer,
+                showNotchLine: showNotchLineLayer,
+                showRegionLabels: showRegionLabelsLayer,
+                showColorLegend: showColorLegendLayer,
+                showTimeAxis: showTimeAxisLayer,
+                showPersistence: showPersistenceLayer,
+                // Profile's user-set ceiling + AudioState's SPL calibration
+                // drive the safety threshold curve. With both at their
+                // defaults the curve sits where the old heuristic was;
+                // editing the ceiling in Safe Listening or the calibration
+                // in its settings card immediately reshapes the danger fill.
+                safetyCeilingDBA: profile.safeListeningCeilingDB,
+                calibrationOffsetDBA: audioState.calibrationOffsetDBA
             )
             .frame(minHeight: 280)
             .focusable()
@@ -73,8 +142,10 @@ struct ExpertEQView: View {
             .onTapGesture { canvasFocused = true }
             controlsBar(profile)
             NotchControlView(notch: notchBinding(for: profile))
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(20)
     }
 
     /// Map keys to selected-band edits (spec §5.9 power-user goal). Each
@@ -181,14 +252,23 @@ struct ExpertEQView: View {
     // MARK: - Sections
 
     private var vizMode: CanvasVizMode {
-        get { CanvasVizMode(rawValue: vizModeRaw) ?? .spectrum }
+        get { Self.resolveVizMode(vizModeRaw) }
     }
 
     private var vizModeBinding: Binding<CanvasVizMode> {
         Binding(
-            get: { CanvasVizMode(rawValue: vizModeRaw) ?? .spectrum },
+            get: { Self.resolveVizMode(vizModeRaw) },
             set: { vizModeRaw = $0.rawValue }
         )
+    }
+
+    /// Decode the persisted raw value, coercing any legacy
+    /// `.spectrogram` value back to `.spectrum` so a user whose stored
+    /// preference predates the temporary hiding doesn't end up showing
+    /// a mode whose picker tile no longer exists.
+    private static func resolveVizMode(_ raw: String) -> CanvasVizMode {
+        let parsed = CanvasVizMode(rawValue: raw) ?? .spectrum
+        return CanvasVizMode.userVisibleCases.contains(parsed) ? parsed : .spectrum
     }
 
     private var header: some View {
@@ -202,12 +282,12 @@ struct ExpertEQView: View {
             .frame(maxWidth: 240)
 
             Picker("", selection: vizModeBinding) {
-                ForEach(CanvasVizMode.allCases) { mode in
+                ForEach(CanvasVizMode.userVisibleCases) { mode in
                     Text(mode.label).tag(mode)
                 }
             }
             .pickerStyle(.segmented)
-            .frame(maxWidth: 220)
+            .frame(maxWidth: 160)
             .help("Pick the visualisation behind the EQ curve")
 
             Spacer()
@@ -270,6 +350,8 @@ struct ExpertEQView: View {
                 paramRow("Gain", value: Int(band.gaindB), unit: "dB") { dragged in
                     update(band: band) { $0.gaindB = clampDB($0.gaindB + Double(dragged) * 0.1) }
                 }
+
+                targetDeltaReadout(for: band, profile: profile)
 
                 let widthLabel = showQAsOctaves ? "BW" : "Q"
                 let widthDisplay: String = showQAsOctaves
@@ -394,6 +476,58 @@ struct ExpertEQView: View {
 
     private func shadowBands(for profile: HearingProfile) -> [EQBand] {
         tab == .left ? profile.rightEar.bands : profile.leftEar.bands
+    }
+
+    /// Compact "Δ vs target" readout shown next to the Gain field when an
+    /// audiogram-derived target exists for this ear. Compares the user's
+    /// COMPOSITE curve at the selected band's frequency to the target's
+    /// composite curve — composite (not per-band gain) because adjacent
+    /// bands' skirts contribute to the response at any single point.
+    /// Hidden when the audiogram is flat or has no actionable thresholds.
+    @ViewBuilder
+    private func targetDeltaReadout(for band: EQBand, profile: HearingProfile) -> some View {
+        let target = targetBands(for: profile)
+        if !target.isEmpty && showAudiogramLayer {
+            let userDB = BiquadResponse.compositeMagnitudeDB(at: band.frequencyHz, bands: activeBands)
+            let targetDB = BiquadResponse.compositeMagnitudeDB(at: band.frequencyHz, bands: target)
+            let delta = userDB - targetDB
+            VStack(alignment: .leading, spacing: 1) {
+                Text("vs target")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(formatDelta(delta))
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(deltaTint(delta))
+            }
+            .frame(width: 78, alignment: .leading)
+            .help("How far your active EQ is from the audiogram-derived target at \(Int(band.frequencyHz)) Hz. Drag Gain (or other bands) to close the gap.")
+        }
+    }
+
+    private func formatDelta(_ dB: Double) -> String {
+        let abs = Swift.abs(dB)
+        if abs < 0.05 { return "± 0.0 dB" }
+        return String(format: "%@%.1f dB", dB > 0 ? "+" : "−", abs)
+    }
+
+    private func deltaTint(_ dB: Double) -> Color {
+        let abs = Swift.abs(dB)
+        if abs < 1 { return .green }
+        if abs < 3 { return .yellow }
+        return .orange
+    }
+
+    /// Audiogram-derived "target" correction bands for the active ear.
+    /// Computed from the profile's stored thresholds and the user's
+    /// compensation factor — this is what the user's EQ "should" look
+    /// like if they were tracking the audiogram cleanly. Empty when the
+    /// audiogram is flat (no derived bands) so the canvas hides the layer.
+    private func targetBands(for profile: HearingProfile) -> [EQBand] {
+        let thresholds = tab == .left ? profile.leftEar.thresholds : profile.rightEar.thresholds
+        return AudiogramConversion.bands(
+            for: thresholds,
+            compensationFactor: profile.compensationFactor
+        )
     }
 
     private func bandsBinding(for profile: HearingProfile) -> Binding<[EQBand]> {

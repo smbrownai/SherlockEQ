@@ -78,12 +78,12 @@ struct SimpleEQView: View {
 
     @ViewBuilder
     private func previewCanvas(_ profile: HearingProfile) -> some View {
-        ParametricCanvasView(
+        LiveParametricCanvas(
+            spectrum: audioState.spectrum,
+            preSpectrum: nil,
             bands: .constant(profile.leftEar.bands),
             shadowBands: profile.rightEar.bands,
             notch: profile.notch,
-            spectrumBinsDB: audioState.spectrum.logSpectrumDB,
-            spectrumPeakHoldDB: audioState.spectrum.logSpectrumPeakHoldDB,
             spectrumSampleRate: audioState.audio.outputSampleRate ?? 48_000,
             earColor: audioState.leftEarColor,
             shadowColor: audioState.rightEarColor,

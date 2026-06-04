@@ -50,7 +50,41 @@ final class StereoMonitor: ObservableObject {
             repeating: SamplePair(l: 0, r: 0),
             count: Self.scopeSampleCount
         )
-        startDisplayLoop()
+        // No auto-start. The 60 Hz display loop only runs while a Meters
+        // view is actually on screen — see `subscribe()` / `unsubscribe()`.
+        // Audio ingestion (`ingest`) keeps running regardless so the staging
+        // buffer is always fresh when a Meters view appears.
+    }
+
+    /// Number of currently-attached views. Each `subscribe()` increments;
+    /// each matching `unsubscribe()` decrements. The display loop runs iff
+    /// this is > 0. Touched only from the main thread (SwiftUI lifecycle).
+    private var subscriberCount: Int = 0
+
+    /// Called from a Meters view's `.onAppear`. Spins up the 60 Hz display
+    /// loop on first subscriber. Idempotent for additional subscribers.
+    @MainActor
+    func subscribe() {
+        subscriberCount += 1
+        if subscriberCount == 1, displayTimer == nil {
+            startDisplayLoop()
+        }
+    }
+
+    /// Called from a Meters view's `.onDisappear`. Tears down the display
+    /// loop when the last subscriber leaves. Resets needle / peak state
+    /// so a fresh attach starts from zero rather than stale values.
+    @MainActor
+    func unsubscribe() {
+        guard subscriberCount > 0 else { return }
+        subscriberCount -= 1
+        if subscriberCount == 0 {
+            displayTimer?.invalidate()
+            displayTimer = nil
+            // Clear physics state so the next attach starts cold.
+            leftNeedleVelocity = 0
+            rightNeedleVelocity = 0
+        }
     }
 
     /// Called from the audio tap callback. Realtime-safe — bounded
