@@ -13,7 +13,10 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     var notch: TinnitusNotch
     var globalTrimDB: Double                    // -12 to +12 — guards against post-boost clipping
     var balance: Double                         // -1 (full L) … 0 (centered) … +1 (full R)
-    var autoEQCurveURL: URL?                    // optional headphone correction file
+    var autoEQCurveURL: URL?                    // legacy — kept for decoder compat, no longer read
+    var autoEQName: String?                     // display label for the loaded AutoEQ correction
+    var autoEQBands: [EQBand]?                  // parsed AutoEQ bands; applied per-ear upstream of profile EQ
+    var autoEQPreampDB: Double?                 // headroom adjustment baked into the AutoEQ file
     var safeListeningCeilingDB: Double          // user-set, default 85.0
     var compensationFactor: Double              // 0.25–1.0 — audiogram→EQ strength
     var isBuiltIn: Bool                         // true for curated presets (Default, Voice Clarity) — UI blocks edits and offers Duplicate
@@ -35,6 +38,9 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.globalTrimDB           = try c.decode(Double.self, forKey: .globalTrimDB)
         self.balance                = try c.decodeIfPresent(Double.self, forKey: .balance) ?? 0
         self.autoEQCurveURL         = try c.decodeIfPresent(URL.self, forKey: .autoEQCurveURL)
+        self.autoEQName             = try c.decodeIfPresent(String.self, forKey: .autoEQName)
+        self.autoEQBands            = try c.decodeIfPresent([EQBand].self, forKey: .autoEQBands)
+        self.autoEQPreampDB         = try c.decodeIfPresent(Double.self, forKey: .autoEQPreampDB)
         self.safeListeningCeilingDB = try c.decode(Double.self, forKey: .safeListeningCeilingDB)
         self.compensationFactor     = try c.decode(Double.self, forKey: .compensationFactor)
         self.isBuiltIn              = try c.decodeIfPresent(Bool.self, forKey: .isBuiltIn) ?? false
@@ -46,6 +52,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         id: UUID, name: String, symbol: String, linkedDeviceUID: String?,
         leftEar: EarProfile, rightEar: EarProfile, notch: TinnitusNotch,
         globalTrimDB: Double, balance: Double = 0, autoEQCurveURL: URL?,
+        autoEQName: String? = nil, autoEQBands: [EQBand]? = nil, autoEQPreampDB: Double? = nil,
         safeListeningCeilingDB: Double, compensationFactor: Double,
         isBuiltIn: Bool = false,
         createdAt: Date, modifiedAt: Date
@@ -55,6 +62,9 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.leftEar = leftEar; self.rightEar = rightEar; self.notch = notch
         self.globalTrimDB = globalTrimDB; self.balance = balance
         self.autoEQCurveURL = autoEQCurveURL
+        self.autoEQName = autoEQName
+        self.autoEQBands = autoEQBands
+        self.autoEQPreampDB = autoEQPreampDB
         self.safeListeningCeilingDB = safeListeningCeilingDB
         self.compensationFactor = compensationFactor
         self.isBuiltIn = isBuiltIn

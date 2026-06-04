@@ -24,6 +24,13 @@ final class AuditumEQAudioEngine: ObservableObject {
 
     private var leftEQ: AVAudioUnitEQ?
     private var rightEQ: AVAudioUnitEQ?
+    /// AutoEQ headphone-correction stages, one per ear, upstream of the
+    /// user's profile EQ. AutoEQ files describe ear-pad/transducer
+    /// imperfections, not the user's hearing — keeping them on their own
+    /// nodes means profile EQ stays uncontaminated. 16 bands per ear
+    /// matches the high end of AutoEq-project output for headphones.
+    private var leftAutoEQ: AVAudioUnitEQ?
+    private var rightAutoEQ: AVAudioUnitEQ?
     private var leftSource: AVAudioSourceNode?
     private var rightSource: AVAudioSourceNode?
 
@@ -70,13 +77,22 @@ final class AuditumEQAudioEngine: ObservableObject {
         Self.flatten(leq)
         Self.flatten(req)
 
+        let lAuto = AVAudioUnitEQ(numberOfBands: 16)
+        let rAuto = AVAudioUnitEQ(numberOfBands: 16)
+        Self.flatten(lAuto)
+        Self.flatten(rAuto)
+
         engine.attach(leftSource)
         engine.attach(rightSource)
+        engine.attach(lAuto)
+        engine.attach(rAuto)
         engine.attach(leq)
         engine.attach(req)
 
-        engine.connect(leftSource, to: leq, format: tapFormat)
-        engine.connect(rightSource, to: req, format: tapFormat)
+        engine.connect(leftSource, to: lAuto, format: tapFormat)
+        engine.connect(rightSource, to: rAuto, format: tapFormat)
+        engine.connect(lAuto, to: leq, format: tapFormat)
+        engine.connect(rAuto, to: req, format: tapFormat)
 
         // Sine tone generator — direct path to mainMixer, no EQ.
         if let toneNode = toneGenerator.makeSourceNode(sampleRate: sampleRate) {
@@ -141,9 +157,14 @@ final class AuditumEQAudioEngine: ObservableObject {
         self.rightSource = rightSource
         self.leftEQ = leq
         self.rightEQ = req
+        self.leftAutoEQ = lAuto
+        self.rightAutoEQ = rAuto
 
         leq.bypass = referenceMode
         req.bypass = referenceMode
+        // AutoEQ stages also bypass when the user wants to hear raw signal.
+        lAuto.bypass = referenceMode
+        rAuto.bypass = referenceMode
     }
 
     func start() {
@@ -235,6 +256,8 @@ final class AuditumEQAudioEngine: ObservableObject {
         if let b = sampleRateBridge { engine.detach(b); sampleRateBridge = nil }
         if let l = limiter { engine.detach(l); limiter = nil }
         if let g = masterGainStage { engine.detach(g); masterGainStage = nil }
+        if let la = leftAutoEQ { engine.detach(la); leftAutoEQ = nil }
+        if let ra = rightAutoEQ { engine.detach(ra); rightAutoEQ = nil }
         if let t = toneSourceNode { engine.detach(t); toneSourceNode = nil }
     }
 
@@ -244,6 +267,10 @@ final class AuditumEQAudioEngine: ObservableObject {
         referenceMode = on
         leftEQ?.bypass = on
         rightEQ?.bypass = on
+        // Reference Mode also bypasses headphone correction so the user
+        // hears the truly-unprocessed source signal.
+        leftAutoEQ?.bypass = on
+        rightAutoEQ?.bypass = on
     }
 
     /// Master output gain applied post-limiter via a dedicated AVAudioUnitEQ
@@ -321,7 +348,24 @@ final class AuditumEQAudioEngine: ObservableObject {
         leq.bypass = referenceMode
         req.bypass = referenceMode
 
-        log.info("Applied profile \(profile.name, privacy: .public) — L:\(leftBands.count) bands, R:\(rightBands.count) bands, trim:\(profile.globalTrimDB) dB, balance:\(profile.balance, format: .fixed(precision: 2)), notch:\(profile.notch.enabled ? "on" : "off")")
+        // AutoEQ correction (headphone-level) — applied identically to
+        // both ears since AutoEQ files describe a stereo pair, not per-cup.
+        if let auto = profile.autoEQBands, !auto.isEmpty {
+            Self.apply(bands: auto, to: leftAutoEQ)
+            Self.apply(bands: auto, to: rightAutoEQ)
+            let preamp = Float(profile.autoEQPreampDB ?? 0)
+            leftAutoEQ?.globalGain = preamp
+            rightAutoEQ?.globalGain = preamp
+            leftAutoEQ?.bypass = referenceMode
+            rightAutoEQ?.bypass = referenceMode
+        } else {
+            leftAutoEQ.map(Self.flatten)
+            rightAutoEQ.map(Self.flatten)
+            leftAutoEQ?.bypass = true
+            rightAutoEQ?.bypass = true
+        }
+
+        log.info("Applied profile \(profile.name, privacy: .public) — L:\(leftBands.count) bands, R:\(rightBands.count) bands, trim:\(profile.globalTrimDB) dB, balance:\(profile.balance, format: .fixed(precision: 2)), notch:\(profile.notch.enabled ? "on" : "off"), autoEQ:\(profile.autoEQName ?? "none", privacy: .public)")
     }
 
     /// Linear-pan attenuation converted to dB so it can ride along with the
@@ -349,7 +393,8 @@ final class AuditumEQAudioEngine: ObservableObject {
         ]
     }
 
-    private static func apply(bands profileBands: [EQBand], to eq: AVAudioUnitEQ) {
+    private static func apply(bands profileBands: [EQBand], to eq: AVAudioUnitEQ?) {
+        guard let eq else { return }
         let slots = eq.bands.count
         for i in 0..<slots {
             let node = eq.bands[i]

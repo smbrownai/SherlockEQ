@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 /// Editor panel for one `HearingProfile`. All edits route through
 /// `ProfileStore.save(_:)`. Plain scrolling layout instead of `Form` so we get
@@ -41,6 +43,7 @@ struct ProfileDetailView: View {
                     Group {
                         identitySection(profile)
                         deviceSection(profile)
+                        autoEQSection(profile)
                         tuningSection(profile)
                         safetySection(profile)
                     }
@@ -117,6 +120,49 @@ struct ProfileDetailView: View {
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .padding(.vertical, 4)
+        }
+    }
+
+    @ViewBuilder private func autoEQSection(_ profile: HearingProfile) -> some View {
+        sectionHeader("Headphone correction")
+        sectionBox {
+            if let name = profile.autoEQName, let bands = profile.autoEQBands {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(name).font(.callout.weight(.medium))
+                        let preamp = profile.autoEQPreampDB ?? 0
+                        Text("\(bands.count) bands · preamp \(String(format: "%+.1f", preamp)) dB")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Replace…") { importAutoEQ(into: profile) }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    Button(role: .destructive) { clearAutoEQ(on: profile) } label: {
+                        Image(systemName: "xmark.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Remove headphone correction")
+                }
+            } else {
+                HStack(spacing: 10) {
+                    Image(systemName: "headphones")
+                        .foregroundStyle(.tint)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("No correction loaded").font(.callout)
+                        Text("Import an AutoEQ .txt file to correct for your headphones' frequency response.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Import…") { importAutoEQ(into: profile) }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+            }
         }
     }
 
@@ -347,5 +393,34 @@ struct ProfileDetailView: View {
         var i = 2
         while existing.contains("\(base) \(i)") { i += 1 }
         return "\(base) \(i)"
+    }
+
+    // MARK: - AutoEQ import / clear
+
+    private func importAutoEQ(into profile: HearingProfile) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.plainText, .text]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.title = "Import AutoEQ correction"
+        panel.prompt = "Import"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let text = try? String(contentsOf: url, encoding: .utf8),
+              let parsed = AutoEQParser.parse(text) else {
+            return
+        }
+        update(profile) {
+            $0.autoEQName = url.deletingPathExtension().lastPathComponent
+            $0.autoEQBands = parsed.bands
+            $0.autoEQPreampDB = parsed.preampDB
+        }
+    }
+
+    private func clearAutoEQ(on profile: HearingProfile) {
+        update(profile) {
+            $0.autoEQName = nil
+            $0.autoEQBands = nil
+            $0.autoEQPreampDB = nil
+        }
     }
 }
