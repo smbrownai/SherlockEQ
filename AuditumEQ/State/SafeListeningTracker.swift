@@ -47,6 +47,27 @@ final class SafeListeningTracker: ObservableObject {
     private var currentResetDay: Date = Calendar.current.startOfDay(for: Date())
     private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "SafeListening")
 
+    /// Power-domain rolling average of A-weighted level over the last
+    /// ~minute (linear units, 10^(dBA/10)). Used to estimate "remaining
+    /// time" off a stable equivalent-continuous level rather than the
+    /// instantaneous reading, which would otherwise twitch every audio
+    /// sample. NIOSH math is logarithmic, so averaging must be done in
+    /// power-domain — arithmetic averaging of dBA is wrong by ~3 dB per
+    /// 6 dB of peak-to-mean.
+    private var avgPower: Double = 0
+    /// Time constant for the level average. ~60 s reaches 63 % of a
+    /// step; 3·τ = 180 s reaches 95 %. Slow enough that brief peaks
+    /// don't distort the estimate but fast enough that a real volume
+    /// change is reflected within a couple of minutes.
+    private let averagingTau: TimeInterval = 60
+    /// Wall-clock timestamp of the last `remainingMinutes` republish.
+    /// `nil` until the first valid estimate has been emitted.
+    private var lastEstimatePublish: Date?
+    /// How often we let the public `remainingMinutes` value change.
+    /// Once per minute so the user reads a stable number, not a
+    /// per-sample jitter.
+    private let estimatePublishInterval: TimeInterval = 60
+
     /// Permissible exposure duration in seconds at a given dBA level.
     static func permissibleDuration(at dBA: Double) -> TimeInterval {
         nioshReferenceDuration / pow(
@@ -98,17 +119,45 @@ final class SafeListeningTracker: ObservableObject {
             }
         }
 
-        // Remaining minutes only meaningful when we're at a listening level.
-        if clamped >= quietThresholdDBA {
-            let permNow = Self.permissibleDuration(at: clamped)
-            if permNow.isFinite, permNow > 0 {
-                let remainingSeconds = (1.0 - sessionDose) * permNow
-                remainingMinutes = max(0, remainingSeconds / 60)
-            } else {
-                remainingMinutes = nil
+        // Power-domain rolling average of A-weighted level. Update on
+        // every sample so the average stays current; we still gate the
+        // PUBLISH of the user-visible `remainingMinutes` to a 60 s
+        // cadence below.
+        if clamped > 0 {
+            let powerNow = pow(10.0, clamped / 10.0)
+            if avgPower == 0 {
+                avgPower = powerNow
+            } else if elapsed > 0 {
+                let alpha = 1.0 - exp(-elapsed / averagingTau)
+                avgPower += (powerNow - avgPower) * alpha
             }
+        }
+
+        // Below threshold → "not listening." Surface immediately rather
+        // than waiting for the 60 s republish boundary; the user
+        // expects the readout to disappear as soon as they pause.
+        if clamped < quietThresholdDBA {
+            remainingMinutes = nil
+            lastEstimatePublish = nil
         } else {
-            remainingMinutes = nil   // effectively unlimited / not listening
+            // At a listening level. Recompute the estimate either on
+            // the first sample of a new listening burst or after a
+            // full publish interval has elapsed.
+            let shouldPublish: Bool = {
+                guard let last = lastEstimatePublish else { return true }
+                return now.timeIntervalSince(last) >= estimatePublishInterval
+            }()
+            if shouldPublish, avgPower > 0 {
+                let avgDBA = 10 * log10(avgPower)
+                let permAvg = Self.permissibleDuration(at: avgDBA)
+                if permAvg.isFinite, permAvg > 0 {
+                    let remainingSeconds = (1.0 - sessionDose) * permAvg
+                    remainingMinutes = max(0, remainingSeconds / 60)
+                } else {
+                    remainingMinutes = nil
+                }
+                lastEstimatePublish = now
+            }
         }
 
         // Threshold crossings → notifications (only fire once per day).
@@ -166,5 +215,11 @@ final class SafeListeningTracker: ObservableObject {
         quietStartTime = nil
         didCrossAmberToday = false
         didCrossRedToday = false
+        // Clear the rolling-level state too so the next listening
+        // burst gets a fresh estimate rather than carrying the prior
+        // session's average across a break.
+        avgPower = 0
+        lastEstimatePublish = nil
+        remainingMinutes = nil
     }
 }

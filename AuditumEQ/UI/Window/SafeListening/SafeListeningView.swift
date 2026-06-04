@@ -323,6 +323,9 @@ struct SafeListeningView: View {
     }
 
     private func formatRemaining(_ minutes: Double) -> String {
+        // Past 24 hours the exact number stops being meaningful — the
+        // user has all day at this level. Collapse to a plain label.
+        if minutes >= 24 * 60 { return "All day remaining" }
         if minutes >= 60 {
             let h = Int(minutes) / 60
             let m = Int(minutes) % 60

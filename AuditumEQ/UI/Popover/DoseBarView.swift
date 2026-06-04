@@ -41,12 +41,14 @@ struct DoseBarView: View {
             Text(remainingLabel)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-                .frame(width: 56, alignment: .trailing)
+                .lineLimit(1)
+                .frame(width: 64, alignment: .trailing)
         }
     }
 
     private var remainingLabel: String {
         guard let minutes = remainingMinutes, minutes.isFinite else { return "—" }
+        if minutes >= 24 * 60 { return "all day" }
         if minutes >= 60 {
             let h = Int(minutes) / 60
             let m = Int(minutes) % 60
