@@ -18,6 +18,10 @@ struct MainPopoverView: View {
                 percent: audioState.sessionDosePercent,
                 remainingMinutes: audioState.remainingMinutes
             )
+            PopoverLevelStrip(
+                monitor: audioState.stereoMonitor,
+                calibrationOffsetDBA: audioState.calibrationOffsetDBA
+            )
             if let warning = audioState.audio.sampleRateMismatchWarning {
                 sampleRateBanner(warning)
             }

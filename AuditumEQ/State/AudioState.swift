@@ -320,9 +320,21 @@ final class AudioState: ObservableObject {
         _ = spectrum
         _ = preSpectrum
         _ = stereoMonitor
-        trackerObserver = tracker.objectWillChange.sink { [weak self] _ in
-            Task { @MainActor in self?.mirrorTrackerState() }
-        }
+        // Throttle to 1 Hz: the tracker publishes objectWillChange on
+        // every audio sample (10 Hz, via `currentLevelDBA`), but the
+        // popover/sidebar mirror surfaces are slow-moving (whole-
+        // percent dose bar, once-per-minute remaining estimate).
+        // Rebuilding the popover 10x/sec caused the "all day" label
+        // and other Texts to re-rasterize and visibly twitch from
+        // sub-pixel positioning differences. `latest: true` keeps the
+        // most recent value so we never lose a tick to the throttle.
+        // Views needing finer cadence (Safe Listening's live level
+        // meter) read `safeListening` directly, bypassing this mirror.
+        trackerObserver = tracker.objectWillChange
+            .throttle(for: .seconds(1), scheduler: DispatchQueue.main, latest: true)
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.mirrorTrackerState() }
+            }
 
         installSleepWakeObservers()
     }
@@ -380,10 +392,19 @@ final class AudioState: ObservableObject {
 
     /// Mirror the tracker's published values onto the legacy AudioState
     /// properties the popover already binds to (sessionDosePercent etc).
+    ///
+    /// Each assignment is guarded by an equality check — Swift's
+    /// `@Published` fires `objectWillChange` on every assignment
+    /// regardless of whether the value changed, which would otherwise
+    /// re-render the popover even when nothing observable moved.
+    /// Skipping the no-op write keeps SwiftUI quiet on unchanged data.
     private func mirrorTrackerState() {
-        sessionDosePercent = safeListening.sessionDose
-        remainingMinutes = safeListening.remainingMinutes
-        currentLeveldBSPL = safeListening.currentLevelDBA
+        let newDose = safeListening.sessionDose
+        if sessionDosePercent != newDose { sessionDosePercent = newDose }
+        let newRemaining = safeListening.remainingMinutes
+        if remainingMinutes != newRemaining { remainingMinutes = newRemaining }
+        let newLevel = safeListening.currentLevelDBA
+        if currentLeveldBSPL != newLevel { currentLeveldBSPL = newLevel }
     }
 
     func startAll() async {
