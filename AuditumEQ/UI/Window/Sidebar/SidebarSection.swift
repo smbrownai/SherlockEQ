@@ -9,6 +9,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
     case equalizer
     case toneFinder
     case safeListening
+    case meters
     case settings
     case debug
 
@@ -21,6 +22,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
         case .equalizer:     return "Equalizer"
         case .toneFinder:    return "Tone Finder"
         case .safeListening: return "Safe Listening"
+        case .meters:        return "Meters"
         case .settings:      return "Settings"
         case .debug:         return "Debug"
         }
@@ -33,6 +35,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
         case .equalizer:     return "slider.horizontal.3"
         case .toneFinder:    return "tuningfork"
         case .safeListening: return "shield.lefthalf.filled"
+        case .meters:        return "gauge.with.dots.needle.50percent"
         case .settings:      return "gearshape"
         case .debug:         return "wrench.and.screwdriver"
         }
@@ -41,6 +44,6 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
     /// Sections shown under the "Library" header. Debug lives on its own
     /// below so it's visually separated from the primary navigation.
     static var librarySections: [SidebarSection] {
-        [.profiles, .audiogram, .equalizer, .toneFinder, .safeListening, .settings]
+        [.profiles, .audiogram, .equalizer, .toneFinder, .safeListening, .meters, .settings]
     }
 }

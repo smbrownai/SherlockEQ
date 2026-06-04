@@ -28,6 +28,7 @@ struct MainWindowView: View {
         case .equalizer:     EqualizerView()
         case .toneFinder:    ToneFinderView()
         case .safeListening: SafeListeningView()
+        case .meters:        MetersView()
         case .settings:      SettingsView()
         case .debug:         DebugView()
         }

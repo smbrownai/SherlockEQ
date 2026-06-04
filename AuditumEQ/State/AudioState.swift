@@ -18,6 +18,7 @@ final class AudioState: ObservableObject {
     @Published private(set) var audio: AuditumEQAudioEngine
     @Published private(set) var spectrum: SpectrumAnalyzer
     @Published private(set) var preSpectrum: SpectrumAnalyzer
+    @Published private(set) var stereoMonitor: StereoMonitor
     @Published private(set) var safeListening: SafeListeningTracker
 
     @Published var referenceMode: Bool = false {
@@ -235,11 +236,13 @@ final class AudioState: ObservableObject {
         let audio = AuditumEQAudioEngine()
         let spectrum = SpectrumAnalyzer()
         let preSpectrum = SpectrumAnalyzer()
+        let stereoMonitor = StereoMonitor()
         let tracker = SafeListeningTracker()
         self.tap = tap
         self.audio = audio
         self.spectrum = spectrum
         self.preSpectrum = preSpectrum
+        self.stereoMonitor = stereoMonitor
         self.safeListening = tracker
 
         tap.onOutputDeviceChanged = { [weak self] deviceID in
@@ -265,6 +268,11 @@ final class AudioState: ObservableObject {
         spectrumObserver = spectrum.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
+        // Intentionally NOT rebroadcast — stereoMonitor publishes at the
+        // display-loop rate (60 Hz) and would re-evaluate every view
+        // observing AudioState. Meters views observe stereoMonitor
+        // directly via @ObservedObject so only that section pays the cost.
+        _ = stereoMonitor  // keep the property used so the compiler doesn't elide
         trackerObserver = tracker.objectWillChange.sink { [weak self] _ in
             Task { @MainActor in self?.mirrorTrackerState() }
         }
@@ -379,8 +387,13 @@ final class AudioState: ObservableObject {
 
     private func installSpectrumTap() {
         spectrum.configureForSampleRate(audio.outputSampleRate ?? 48000)
-        audio.installSpectrumTap { [weak spectrum] buffer, _ in
+        audio.installSpectrumTap { [weak spectrum, weak stereoMonitor] buffer, _ in
+            // Same buffer, two consumers — the spectrum analyzer mixes to
+            // mono, the stereo monitor keeps L/R separate for the
+            // vectorscope + VU. Closures inherit @MainActor here so both
+            // calls auto-hop synchronously off the render thread.
             spectrum?.ingest(buffer)
+            stereoMonitor?.ingest(buffer)
         }
     }
 
