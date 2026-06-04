@@ -1617,8 +1617,15 @@ struct ParametricCanvasView: View {
         }
 
         // Bottom label row: plain-English group names with a tiny color
-        // swatch matching the bar gradient. Spans the bars in each group.
-        drawSemanticGroupLabels(context, size: size)
+        // swatch matching the bar gradient. Each label is anchored to
+        // the left edge of the first bar in its group so the eye reads
+        // the label as "this group starts here."
+        drawSemanticGroupLabels(
+            context, size: size,
+            visibleCenters: visibleCenters,
+            firstX: firstX,
+            stepPx: stepPx
+        )
     }
 
     // MARK: - Semantic group labelling (Bars mode)
@@ -1718,7 +1725,13 @@ struct ParametricCanvasView: View {
         return semanticGroups.last!
     }
 
-    private func drawSemanticGroupLabels(_ context: GraphicsContext, size: CGSize) {
+    private func drawSemanticGroupLabels(
+        _ context: GraphicsContext,
+        size: CGSize,
+        visibleCenters: [Double],
+        firstX: CGFloat,
+        stepPx: CGFloat
+    ) {
         // Place labels at the very bottom of the canvas. The frequency
         // tick labels still draw at y = size.height − 14; group labels
         // sit a row above them so both are readable without overlap.
@@ -1729,21 +1742,28 @@ struct ParametricCanvasView: View {
         let logRange = logMax - logMin
 
         for group in Self.semanticGroups {
-            // Group center in log space → canvas x.
-            let centerLogHz = (log10(group.lowHz) + log10(min(group.highHz, maxHz))) / 2
-            let frac = (centerLogHz - logMin) / logRange
-            let x = CGFloat(frac) * size.width
+            // Anchor the label to the LEFT EDGE of the first bar whose
+            // centre falls in this group's range. Reads as "the group
+            // starts here" rather than the older "group spans this
+            // region" centred layout. Falls back to a log-space
+            // projection if no bar centre lands in the group (e.g. the
+            // axis was zoomed so this group has no visible bars).
+            let startX: CGFloat
+            if let firstIdx = visibleCenters.firstIndex(where: { $0 >= group.lowHz && $0 < group.highHz }) {
+                startX = firstX + CGFloat(firstIdx) * stepPx
+            } else {
+                let frac = (log10(group.lowHz) - logMin) / logRange
+                startX = CGFloat(frac) * size.width
+            }
 
             // Small color swatch + label, side by side.
             let labelText = Text(group.label)
                 .font(.caption2.weight(.semibold))
                 .foregroundColor(.white.opacity(a11yOpacity(0.85, reduceFactor: 1.2)))
             let labelResolved = context.resolve(labelText)
-            let textSize = labelResolved.measure(in: CGSize(width: 200, height: 30))
-            let combinedWidth = swatchSize + 4 + textSize.width
-            let startX = x - combinedWidth / 2
 
-            // Swatch (small rounded rect in the group hue).
+            // Swatch (small rounded rect in the group hue) at the
+            // first-bar's left edge, clamped to stay inside the canvas.
             let swatchRect = CGRect(
                 x: max(2, startX),
                 y: labelY - swatchSize / 2,
