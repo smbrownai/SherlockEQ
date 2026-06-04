@@ -365,8 +365,8 @@ struct ExpertEQView: View {
         return tab == .left ? profile.leftEar.bands : profile.rightEar.bands
     }
 
-    private var earColor: Color { tab == .left ? .blue : .red }
-    private var shadowColor: Color { tab == .left ? .red : .blue }
+    private var earColor: Color { tab == .left ? audioState.leftEarColor : audioState.rightEarColor }
+    private var shadowColor: Color { tab == .left ? audioState.rightEarColor : audioState.leftEarColor }
 
     private func shadowBands(for profile: HearingProfile) -> [EQBand] {
         tab == .left ? profile.rightEar.bands : profile.leftEar.bands

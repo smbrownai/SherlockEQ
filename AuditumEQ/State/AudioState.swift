@@ -4,6 +4,7 @@ import AVFoundation
 import Combine
 import CoreAudio
 import OSLog
+import SwiftUI
 
 /// Single source of truth for audio lifecycle, injected as `@EnvironmentObject`
 /// into both popover and main-window hierarchies (Session 4+). Currently wires
@@ -69,14 +70,35 @@ final class AudioState: ObservableObject {
         }
     }
 
+    /// Per-ear colors — used everywhere a stereo curve / band / chart is
+    /// drawn so users with colorblindness can dial in a palette they can
+    /// distinguish. Persisted as #RRGGBB hex via UserDefaults.
+    @Published var leftEarColor: Color = AudioState.loadColor(key: AudioState.leftEarColorKey, default: .blue) {
+        didSet { UserDefaults.standard.set(leftEarColor.hexString, forKey: Self.leftEarColorKey) }
+    }
+    @Published var rightEarColor: Color = AudioState.loadColor(key: AudioState.rightEarColorKey, default: .red) {
+        didSet { UserDefaults.standard.set(rightEarColor.hexString, forKey: Self.rightEarColorKey) }
+    }
+
+    static let defaultLeftEarColor: Color = .blue
+    static let defaultRightEarColor: Color = .red
+
     private static let masterGainKey = "auditumeq.masterGainDB"
     private static let limiterAttackKey = "auditumeq.limiterAttackMs"
     private static let limiterDecayKey = "auditumeq.limiterDecayMs"
     private static let limiterPreGainKey = "auditumeq.limiterPreGainDB"
+    private static let leftEarColorKey = "auditumeq.leftEarColorHex"
+    private static let rightEarColorKey = "auditumeq.rightEarColorHex"
 
     private static func loadDouble(key: String, default defaultValue: Double) -> Double {
         let raw = UserDefaults.standard.object(forKey: key) as? Double
         return raw ?? defaultValue
+    }
+
+    private static func loadColor(key: String, default defaultValue: Color) -> Color {
+        guard let hex = UserDefaults.standard.string(forKey: key),
+              let color = Color(hexString: hex) else { return defaultValue }
+        return color
     }
 
     /// ID of the currently-active hearing profile. The profile itself lives in

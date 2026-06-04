@@ -61,8 +61,8 @@ struct AdvancedEQView: View {
             spectrumBinsDB: audioState.spectrum.logSpectrumDB,
             spectrumPeakHoldDB: audioState.spectrum.logSpectrumPeakHoldDB,
             spectrumSampleRate: audioState.audio.outputSampleRate ?? 48_000,
-            earColor: .blue,
-            shadowColor: .red,
+            earColor: audioState.leftEarColor,
+            shadowColor: audioState.rightEarColor,
             readOnly: true,
             selectedBandID: $dummySelection
         )
@@ -100,20 +100,20 @@ struct AdvancedEQView: View {
                     VerticalGainSlider(
                         value: gainBinding(profile: profile, frequency: frequency, channel: .left),
                         range: -12...12,
-                        tint: .blue
+                        tint: audioState.leftEarColor
                     )
                     .frame(width: 40)
                 } else {
                     VerticalGainSlider(
                         value: gainBinding(profile: profile, frequency: frequency, channel: .left),
                         range: -12...12,
-                        tint: .blue
+                        tint: audioState.leftEarColor
                     )
                     .frame(width: 26)
                     VerticalGainSlider(
                         value: gainBinding(profile: profile, frequency: frequency, channel: .right),
                         range: -12...12,
-                        tint: .red
+                        tint: audioState.rightEarColor
                     )
                     .frame(width: 26)
                 }

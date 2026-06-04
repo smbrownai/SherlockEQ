@@ -50,8 +50,8 @@ struct SimpleEQView: View {
                     bandColumn(for: profile, ear: .left, color: .accentColor, title: "Both ears")
                 } else {
                     HStack(alignment: .top, spacing: 16) {
-                        bandColumn(for: profile, ear: .left, color: .blue, title: "Left ear")
-                        bandColumn(for: profile, ear: .right, color: .red, title: "Right ear")
+                        bandColumn(for: profile, ear: .left, color: audioState.leftEarColor, title: "Left ear")
+                        bandColumn(for: profile, ear: .right, color: audioState.rightEarColor, title: "Right ear")
                     }
                 }
                 resetButton(profile)
@@ -85,8 +85,8 @@ struct SimpleEQView: View {
             spectrumBinsDB: audioState.spectrum.logSpectrumDB,
             spectrumPeakHoldDB: audioState.spectrum.logSpectrumPeakHoldDB,
             spectrumSampleRate: audioState.audio.outputSampleRate ?? 48_000,
-            earColor: .blue,
-            shadowColor: .red,
+            earColor: audioState.leftEarColor,
+            shadowColor: audioState.rightEarColor,
             readOnly: true,
             selectedBandID: $dummySelection
         )

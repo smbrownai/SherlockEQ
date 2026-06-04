@@ -12,6 +12,7 @@ struct SettingsView: View {
                 header
                 outputSection
                 limiterSection
+                appearanceSection
                 placeholderSection
             }
             .padding(28)
@@ -152,6 +153,56 @@ struct SettingsView: View {
             }
             .buttonStyle(.borderless)
             .help("Reset \(label.lowercased()) to default")
+            .disabled(isDefault)
+            .opacity(isDefault ? 0.35 : 1)
+        }
+    }
+
+    private var appearanceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Appearance").font(.headline)
+            sectionBox {
+                colorRow(
+                    label: "Left ear",
+                    binding: $audioState.leftEarColor,
+                    defaultColor: AudioState.defaultLeftEarColor
+                )
+                Divider()
+                colorRow(
+                    label: "Right ear",
+                    binding: $audioState.rightEarColor,
+                    defaultColor: AudioState.defaultRightEarColor
+                )
+                Divider()
+                Text("Colors used for the left/right curves, audiogram thresholds, and EQ band sliders. Helpful for users who can't distinguish the default blue/red.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding(.vertical, 4)
+            }
+        }
+    }
+
+    private func colorRow(label: String, binding: Binding<Color>, defaultColor: Color) -> some View {
+        let isDefault = binding.wrappedValue.hexString == defaultColor.hexString
+        return HStack {
+            Text(label)
+                .foregroundStyle(.secondary)
+                .frame(width: 120, alignment: .leading)
+            ColorPicker("", selection: binding, supportsOpacity: false)
+                .labelsHidden()
+                .frame(width: 44)
+            Text(binding.wrappedValue.hexString)
+                .font(.callout.monospaced())
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button {
+                binding.wrappedValue = defaultColor
+            } label: {
+                Image(systemName: "arrow.counterclockwise")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(.borderless)
+            .help("Reset \(label.lowercased()) color to default")
             .disabled(isDefault)
             .opacity(isDefault ? 0.35 : 1)
         }

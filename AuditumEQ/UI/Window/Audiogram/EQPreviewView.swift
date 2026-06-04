@@ -9,6 +9,8 @@ import Charts
 /// drags, all of it — as one smooth curve per ear. Same math the
 /// Equalizer canvas uses.
 struct EQPreviewView: View {
+    @EnvironmentObject private var audioState: AudioState
+
     let leftBands: [EQBand]
     let rightBands: [EQBand]
     let compensationFactor: Double
@@ -66,7 +68,7 @@ struct EQPreviewView: View {
                     y: .value("Gain dB", p.dB),
                     series: .value("Ear", p.ear)
                 )
-                .foregroundStyle(.blue)
+                .foregroundStyle(audioState.leftEarColor)
             }
             ForEach(rightSamples, id: \.self) { p in
                 LineMark(
@@ -74,7 +76,7 @@ struct EQPreviewView: View {
                     y: .value("Gain dB", p.dB),
                     series: .value("Ear", p.ear)
                 )
-                .foregroundStyle(.red)
+                .foregroundStyle(audioState.rightEarColor)
             }
         }
         .chartXScale(domain: minHz...maxHz, type: .log)
@@ -107,8 +109,8 @@ struct EQPreviewView: View {
 
     private var footnote: some View {
         HStack(spacing: 14) {
-            legendDot(.blue, label: "Left")
-            legendDot(.red, label: "Right")
+            legendDot(audioState.leftEarColor, label: "Left")
+            legendDot(audioState.rightEarColor, label: "Right")
             Spacer()
             Text("Per-band ceiling: \(Int(AudiogramConversion.perBandCeilingDB)) dB")
                 .font(.caption2)
