@@ -19,8 +19,11 @@ struct AuditumEQApp: App {
                     await NotificationManager.shared.requestAuthorization()
                 }
                 .onDisappear {
-                    // Window closed → back to menu-bar-only.
-                    NSApp.setActivationPolicy(.accessory)
+                    // Window closed → back to menu-bar-only, unless the
+                    // user has opted to keep the Dock icon visible.
+                    if audioState.hideFromDockEnabled {
+                        NSApp.setActivationPolicy(.accessory)
+                    }
                 }
         }
         .commands {

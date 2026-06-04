@@ -47,8 +47,18 @@ struct SettingsView: View {
                         .controlSize(.small)
                     Spacer()
                 }
-                Divider()
                 Text("When enabled, AuditumEQ starts automatically when you log in and runs in the menu bar. You can revoke this in System Settings → General → Login Items.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding(.vertical, 4)
+                Divider()
+                HStack {
+                    Toggle("Hide from Dock when window is closed", isOn: $audioState.hideFromDockEnabled)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                    Spacer()
+                }
+                Text("When enabled, the Dock icon disappears after you close the main window — AuditumEQ keeps running in the menu bar. Turn this off if the macOS menu bar fails to redraw when you reopen the window; you'll get a permanent Dock icon in exchange.")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .padding(.vertical, 4)

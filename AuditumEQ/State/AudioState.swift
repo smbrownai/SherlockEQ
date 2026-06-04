@@ -88,6 +88,24 @@ final class AudioState: ObservableObject {
     /// calls `register()` / `unregister()`; if the OS rejects (Login Items
     /// permission denied or similar) the value reverts and the error is
     /// logged so the UI stays in sync with reality.
+    /// When true, the app reverts to `.accessory` activation policy on
+    /// window close (menu-bar-only, no Dock icon). When false, the Dock
+    /// icon persists once the main window has been opened. Trade-off:
+    /// `.accessory` keeps the app feeling like a menu-bar utility but
+    /// macOS doesn't always redraw the system menu bar reliably on the
+    /// `.accessory → .regular` swap; `.regular` permanently avoids that
+    /// at the cost of a permanent Dock icon.
+    @Published var hideFromDockEnabled: Bool = AudioState.loadBool(key: AudioState.hideFromDockKey, default: true) {
+        didSet {
+            UserDefaults.standard.set(hideFromDockEnabled, forKey: Self.hideFromDockKey)
+            // Turning the toggle off (show in Dock) takes effect right
+            // away. Turning it on only kicks in on next window close.
+            if !hideFromDockEnabled {
+                NSApp.setActivationPolicy(.regular)
+            }
+        }
+    }
+
     @Published var launchAtLoginEnabled: Bool = (SMAppService.mainApp.status == .enabled) {
         didSet {
             guard launchAtLoginEnabled != oldValue else { return }
@@ -115,9 +133,15 @@ final class AudioState: ObservableObject {
     private static let limiterPreGainKey = "auditumeq.limiterPreGainDB"
     private static let leftEarColorKey = "auditumeq.leftEarColorHex"
     private static let rightEarColorKey = "auditumeq.rightEarColorHex"
+    private static let hideFromDockKey = "auditumeq.hideFromDock"
 
     private static func loadDouble(key: String, default defaultValue: Double) -> Double {
         let raw = UserDefaults.standard.object(forKey: key) as? Double
+        return raw ?? defaultValue
+    }
+
+    private static func loadBool(key: String, default defaultValue: Bool) -> Bool {
+        let raw = UserDefaults.standard.object(forKey: key) as? Bool
         return raw ?? defaultValue
     }
 
