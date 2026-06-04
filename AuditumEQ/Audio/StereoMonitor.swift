@@ -87,6 +87,14 @@ final class StereoMonitor: ObservableObject {
         }
     }
 
+    /// Last logged channel count from the audio tap. Logged once on change
+    /// so the system Console shows whether the tap is delivering stereo
+    /// (expected) or mono (would explain L≈R on the VU even when balance
+    /// is offset). Touched only from the audio thread, no synchronisation
+    /// needed since it's a single-writer Bool-like value.
+    nonisolated(unsafe) private static var lastLoggedChannelCount: Int = 0
+    private static let monitorLog = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "StereoMonitor")
+
     /// Called from the audio tap callback. Realtime-safe — bounded
     /// memcpy + one lock release. No `@Published` mutation here, so we
     /// don't trip Combine's "publishing from background thread" gate.
@@ -95,6 +103,15 @@ final class StereoMonitor: ObservableObject {
         let frames = Int(buffer.frameLength)
         let chCount = Int(buffer.format.channelCount)
         if frames == 0 || chCount == 0 { return }
+
+        // Diagnostic: log the channel count whenever it changes. If this
+        // shows `1`, the mainMixer's output is mono and both VU bars
+        // would necessarily read the same data — that's the most likely
+        // explanation for L≈R on the meter regardless of balance.
+        if chCount != Self.lastLoggedChannelCount {
+            Self.lastLoggedChannelCount = chCount
+            Self.monitorLog.info("StereoMonitor tap channel count = \(chCount)")
+        }
 
         let left = channels[0]
         let right = chCount >= 2 ? channels[1] : channels[0]

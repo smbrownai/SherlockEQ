@@ -5,24 +5,57 @@ import SwiftUI
 /// in Session 6; Sessions 7–17 fill them in incrementally.
 struct MainWindowView: View {
     @State private var selection: SidebarSection? = .profiles
+    /// Visibility of the right-hand monitoring sidebar. Persistent across
+    /// launches via @AppStorage — users who dismiss it stay dismissed
+    /// until they re-open it from the toolbar. Defaults to visible so
+    /// first-launch users discover the level / volume / balance / dose
+    /// monitoring panel without having to find a hidden toggle.
+    @AppStorage("auditumeq.monitorSidebarVisible") private var monitorSidebarVisible: Bool = true
 
     var body: some View {
         NavigationSplitView {
             SidebarView(selection: $selection)
                 .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 300)
         } detail: {
-            detail
-                .navigationSplitViewColumnWidth(min: 760, ideal: 820)
+            HStack(spacing: 0) {
+                detail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if monitorSidebarVisible {
+                    Divider()
+                    MonitorSidebar()
+                        .frame(width: 220)
+                        // Slide in / out smoothly when the toolbar toggle
+                        // flips. The transition is purely visual; the
+                        // underlying StereoMonitor subscription is keyed
+                        // on the view's lifecycle (onAppear/onDisappear).
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+            .animation(.easeInOut(duration: 0.22), value: monitorSidebarVisible)
+            .navigationSplitViewColumnWidth(min: 760, ideal: 820)
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    monitorSidebarVisible.toggle()
+                } label: {
+                    Image(systemName: monitorSidebarVisible
+                          ? "sidebar.right"
+                          : "sidebar.squares.right")
+                }
+                .help(monitorSidebarVisible ? "Hide monitor panel" : "Show monitor panel")
+                .accessibilityLabel(monitorSidebarVisible ? "Hide monitor panel" : "Show monitor panel")
+            }
         }
         // Sized so the Expert layer-chip strip (Lens + 6 chips: Output /
         // Input / EQ / Audiogram / Safety / Peaks) fits on one row at the
         // default Dynamic Type size, with the existing top header bar
         // (ear picker + viz picker + bands badge + Q/Oct + Link L+R + Add
-        // band) above it — and a sidebar wide enough that section labels
-        // never truncate. Height accommodates the chip strip plus a
-        // comfortable canvas plus the controls bar + Tinnitus notch
-        // section without forcing a scroll on default-size windows.
-        .frame(minWidth: 1180, idealWidth: 1240, minHeight: 740, idealHeight: 820)
+        // band) above it, the main sidebar at left, AND the persistent
+        // 220pt monitor sidebar at right. Width bumped 1180 → 1400 to
+        // accommodate the new right column without compressing the
+        // detail content.
+        .frame(minWidth: 1400, idealWidth: 1480, minHeight: 740, idealHeight: 820)
         .linkUndoManagerToProfileStore()
     }
 
@@ -33,7 +66,6 @@ struct MainWindowView: View {
         case .equalizer:     EqualizerView()
         case .toneFinder:    ToneFinderView()
         case .safeListening: SafeListeningView()
-        case .meters:        MetersView()
         case .settings:      SettingsView()
         case .debug:         DebugView()
         }

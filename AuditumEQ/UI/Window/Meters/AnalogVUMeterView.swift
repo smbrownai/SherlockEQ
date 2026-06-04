@@ -5,11 +5,23 @@ import SwiftUI
 /// Safe Listening. Surfaced as an easter-egg toggle on MetersView.
 struct AnalogVUMeterView: View {
     @ObservedObject var monitor: StereoMonitor
+    /// Stack the L and R dials vertically rather than side-by-side. Set
+    /// `true` when the host view is too narrow for two dials in a row
+    /// (e.g. the right-hand `MonitorSidebar` at ~190pt usable width).
+    /// The dial markings shrink to fit either layout naturally.
+    var vertical: Bool = false
 
     var body: some View {
-        HStack(spacing: 24) {
-            meter(label: "L", needle: monitor.leftNeedle)
-            meter(label: "R", needle: monitor.rightNeedle)
+        if vertical {
+            VStack(spacing: 10) {
+                meter(label: "L", needle: monitor.leftNeedle)
+                meter(label: "R", needle: monitor.rightNeedle)
+            }
+        } else {
+            HStack(spacing: 24) {
+                meter(label: "L", needle: monitor.leftNeedle)
+                meter(label: "R", needle: monitor.rightNeedle)
+            }
         }
     }
 

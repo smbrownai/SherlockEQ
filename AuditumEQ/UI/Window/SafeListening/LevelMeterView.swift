@@ -23,39 +23,49 @@ struct LevelMeterView: View {
                     .foregroundStyle(zoneColor)
             }
 
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.quaternary)
+            // Canvas-based rendering — more reliable than ZStack with
+            // conditional Rectangle + .offset for absolute-positioned
+            // bars. Each zone is its own filled rectangle at fixed
+            // pixel coordinates, drawn left to right in order. The
+            // capsule clip is applied to the whole canvas after drawing.
+            Canvas { ctx, size in
+                // Background capsule fill.
+                let bgPath = Path(roundedRect: CGRect(origin: .zero, size: size),
+                                  cornerRadius: size.height / 2)
+                ctx.fill(bgPath, with: .color(.secondary.opacity(0.18)))
 
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: .green,  location: 0),
-                                    .init(color: .green,  location: locationFor(70)),
-                                    .init(color: .yellow, location: locationFor(70.01)),
-                                    .init(color: .yellow, location: locationFor(85)),
-                                    .init(color: .orange, location: locationFor(85.01)),
-                                    .init(color: .orange, location: locationFor(95)),
-                                    .init(color: .red,    location: locationFor(95.01)),
-                                    .init(color: .red,    location: 1),
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: max(0, geo.size.width * fillFraction))
-                        .animation(.easeOut(duration: 0.15), value: fillFraction)
+                // Each zone: only draws when the level has reached into
+                // it. A 60 dBA reading shows ONLY the green segment;
+                // 90 dBA adds yellow and the start of orange; 105 dBA
+                // (the user's screenshot) adds the red section at the
+                // far right.
+                for zone in Self.zones {
+                    guard levelDBA > zone.startDB else { continue }
+                    let zoneEnd = min(levelDBA, zone.endDB)
+                    let leftFrac = CGFloat((zone.startDB - minDB) / (maxDB - minDB))
+                    let rightFrac = CGFloat((zoneEnd - minDB) / (maxDB - minDB))
+                    let rect = CGRect(
+                        x: size.width * leftFrac,
+                        y: 0,
+                        width: size.width * (rightFrac - leftFrac),
+                        height: size.height
+                    )
+                    ctx.fill(Path(rect), with: .color(zone.color))
+                }
 
-                    ForEach([70, 85, 95], id: \.self) { marker in
-                        Rectangle()
-                            .fill(Color.primary.opacity(0.25))
-                            .frame(width: 1)
-                            .offset(x: geo.size.width * locationFor(Double(marker)))
-                    }
+                // Tick markers at the dBA zone boundaries (70 caution,
+                // 85 limit). With the orange zone removed, 95 no longer
+                // separates two visible regions and doesn't get its own
+                // tick.
+                for marker in [70.0, 85.0] {
+                    let frac = CGFloat((marker - minDB) / (maxDB - minDB))
+                    let tick = CGRect(x: size.width * frac, y: 0, width: 1, height: size.height)
+                    ctx.fill(Path(tick), with: .color(.primary.opacity(0.30)))
                 }
             }
             .frame(height: 14)
+            .clipShape(Capsule())
+            .animation(.easeOut(duration: 0.15), value: levelDBA)
 
             HStack {
                 Text("\(Int(minDB))")
@@ -63,8 +73,6 @@ struct LevelMeterView: View {
                 Text("70")
                 Spacer()
                 Text("85")
-                Spacer()
-                Text("95")
                 Spacer()
                 Text("\(Int(maxDB))")
             }
@@ -91,17 +99,15 @@ struct LevelMeterView: View {
     private var zoneLabel: String {
         switch levelDBA {
         case ..<70:  return "Safe"
-        case ..<85:  return "Moderate"
-        case ..<95:  return "Loud"
-        default:     return "Very loud"
+        case ..<85:  return "Caution"
+        default:     return "Loud"
         }
     }
 
     private var zoneSymbol: String {
         switch levelDBA {
         case ..<70:  return "checkmark.shield.fill"
-        case ..<85:  return "ear"
-        case ..<95:  return "exclamationmark.triangle.fill"
+        case ..<85:  return "exclamationmark.triangle.fill"
         default:     return "exclamationmark.octagon.fill"
         }
     }
@@ -110,8 +116,24 @@ struct LevelMeterView: View {
         switch levelDBA {
         case ..<70:  return .green
         case ..<85:  return .yellow
-        case ..<95:  return .orange
         default:     return .red
         }
     }
+
+    /// Per-zone definitions used by the per-segment fill. Three zones —
+    /// safe (green) below 70 dBA, caution (yellow) up to the NIOSH 85 dBA
+    /// limit, danger (red) at or above the limit. Aligns red with the
+    /// profile's safety ceiling rather than gating it behind an
+    /// intermediate orange step.
+    private struct Zone {
+        let label: String
+        let startDB: Double
+        let endDB: Double
+        let color: Color
+    }
+    private static let zones: [Zone] = [
+        Zone(label: "safe",    startDB: 30,  endDB: 70,  color: .green),
+        Zone(label: "caution", startDB: 70,  endDB: 85,  color: .yellow),
+        Zone(label: "loud",    startDB: 85,  endDB: 110, color: .red),
+    ]
 }

@@ -1,5 +1,22 @@
 import SwiftUI
 
+// MARK: - Dormant feature
+//
+// MetersView is no longer wired into the user-facing sidebar navigation
+// (see SidebarSection — the `.meters` case has been removed). Level
+// monitoring + the L/R VU lives in `MonitorSidebar` on the right-hand
+// side of the main window now, and that sidebar's triple-tap easter egg
+// uses the same VectorscopeView / AnalogVUMeterView / WaveformView
+// components that used to be hosted here.
+//
+// Both the view code and the surrounding component files (Vectorscope,
+// AnalogVUMeter, Waveform) are kept in the project for two reasons:
+//   1. `MonitorSidebar` reuses them directly for its easter-egg modes.
+//   2. If the dedicated Meters page is ever revived as its own sidebar
+//      destination, restoring it is one enum-case + one switch-case.
+//
+// Don't delete this file — its subviews are still active code paths.
+
 /// Stereo meters page. Vectorscope is the default; triple-tapping the
 /// section title cycles through Vectorscope → Analog VU → Waveform →
 /// back to Vectorscope. The latter two are easter eggs / fun bonuses

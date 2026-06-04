@@ -353,9 +353,22 @@ final class AuditumEQAudioEngine: ObservableObject {
         Self.apply(bands: leftBands, to: leq)
         Self.apply(bands: rightBands, to: req)
 
+        // NOTE: balance is currently applied via `globalGain` on the per-
+        // ear AVAudioUnitEQ. Logs confirm the AU accepts the full −60 dB
+        // at full pan, but the channel separation seen at the mainMixer
+        // tap is only ~15 dB. That suggests some cross-channel mixing is
+        // happening downstream of leq/req — likely in AVAudioMixerNode's
+        // default stereo handling.
+        //
+        // Tried `leq.volume = leftLinear` (the AVAudioMixing protocol's
+        // bus-volume property) but AVAudioUnitEQ doesn't conform to
+        // AVAudioMixing — that path isn't available without inserting
+        // dedicated per-ear AVAudioMixerNode stages between leq/req and
+        // sumMixer (a future refactor; tracked in the follow-up task).
         let (leftPanDB, rightPanDB) = Self.balanceDeltaDB(profile.balance)
         leq.globalGain = Float(profile.globalTrimDB + leftPanDB)
         req.globalGain = Float(profile.globalTrimDB + rightPanDB)
+        log.info("Balance — leq.globalGain \(leq.globalGain, format: .fixed(precision: 2)) dB, req.globalGain \(req.globalGain, format: .fixed(precision: 2)) dB; trim \(profile.globalTrimDB, format: .fixed(precision: 2)) dB; balance \(profile.balance, format: .fixed(precision: 2))")
 
         leq.bypass = referenceMode
         req.bypass = referenceMode
@@ -390,6 +403,21 @@ final class AuditumEQAudioEngine: ObservableObject {
         let leftLinear  = b <= 0 ? 1.0 : max(0.001, 1.0 - b)
         let rightLinear = b >= 0 ? 1.0 : max(0.001, 1.0 + b)
         return (20 * log10(leftLinear), 20 * log10(rightLinear))
+    }
+
+    /// Linear-domain version of the balance attenuation — fed directly to
+    /// `AVAudioMixing.volume` rather than converted to dB then applied via
+    /// `globalGain`. Going through the mixer's bus-volume is more reliable
+    /// for getting clean ~60 dB channel separation; `globalGain` at large
+    /// negative values appears to leak channel content through whatever
+    /// stereo-handling AVAudioMixerNode does at its outputs.
+    static func balanceLinear(_ balance: Double) -> (left: Double, right: Double) {
+        let b = max(-1, min(1, balance))
+        // Volume snaps cleanly to 0 at the extremes — no need for the 0.001
+        // floor that `globalGain` required to avoid log10(0).
+        let leftLinear  = b <= 0 ? 1.0 : max(0.0, 1.0 - b)
+        let rightLinear = b >= 0 ? 1.0 : max(0.0, 1.0 + b)
+        return (leftLinear, rightLinear)
     }
 
     private static func notchAsBand(_ notch: TinnitusNotch) -> [EQBand] {
