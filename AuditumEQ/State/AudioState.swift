@@ -210,7 +210,6 @@ final class AudioState: ObservableObject {
     /// when that lands in Session 10; until then it stays at zero.
     @Published var sessionDosePercent: Double = 0
     @Published var remainingMinutes: Double?
-    @Published var currentLeveldBSPL: Double = 0
 
     /// SPL calibration in dB: the dB SPL the user actually hears when a
     /// 0 dBFS signal plays through the current output device at their
@@ -455,8 +454,6 @@ final class AudioState: ObservableObject {
         if sessionDosePercent != newDose { sessionDosePercent = newDose }
         let newRemaining = safeListening.remainingMinutes
         if remainingMinutes != newRemaining { remainingMinutes = newRemaining }
-        let newLevel = safeListening.currentLevelDBA
-        if currentLeveldBSPL != newLevel { currentLeveldBSPL = newLevel }
     }
 
     func startAll() async {

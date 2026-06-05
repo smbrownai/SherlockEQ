@@ -46,11 +46,10 @@ final class AuditumEQAudioEngine: ObservableObject {
     private var rightSource: AVAudioSourceNode?
 
     private var tonePlayer: AVAudioPlayerNode?
-    private var toneBuffer: AVAudioPCMBuffer?
     @Published private(set) var toneEnabled: Bool = false
     @Published private(set) var outputFormatDescription: String = "—"
 
-    private var sampleRateBridge: AVAudioMixerNode?
+    private var sumMixer: AVAudioMixerNode?
     private var limiter: AVAudioUnitEffect?
     /// 1-band-bypassed AVAudioUnitEQ used purely as a gain stage. Its
     /// `globalGain` (-96…+24 dB range) gives reliable dB control where
@@ -124,9 +123,13 @@ final class AuditumEQAudioEngine: ObservableObject {
             // nominal rate (in `CATapEngine.buildTapAndAggregate`), and the
             // aggregate's drift comp delivers that same rate to the IOProc
             // — so this branch shouldn't be reachable in normal operation.
-            // Logging if it ever fires would catch a regression (e.g. tap
-            // built before output device changed without rebuild).
+            // Bail without wiring rather than connect nodes at a rate that
+            // disagrees with the output: catches a regression (e.g. tap
+            // built before output device changed without rebuild) instead
+            // of silently producing wrong-rate audio.
+            lastError = "Unexpected SR mismatch: source \(Int(sampleRate)) Hz vs output \(Int(outRate)) Hz"
             log.error("Unexpected SR mismatch: source \(Int(sampleRate)) Hz vs output \(Int(outRate)) Hz — graph rebuild needed")
+            return
         }
 
         // AUPeakLimiter has a single input bus, so we
@@ -152,16 +155,16 @@ final class AuditumEQAudioEngine: ObservableObject {
         self.leftBalanceMixer = lBal
         self.rightBalanceMixer = rBal
 
-        let sumMixer = AVAudioMixerNode()
-        engine.attach(sumMixer)
+        let sum = AVAudioMixerNode()
+        engine.attach(sum)
         engine.connect(leftSource, to: lBal, format: tapFormat)
         engine.connect(rightSource, to: rBal, format: tapFormat)
-        engine.connect(lBal, to: sumMixer, format: tapFormat)
-        engine.connect(rBal, to: sumMixer, format: tapFormat)
-        engine.connect(sumMixer, to: lim, format: tapFormat)
+        engine.connect(lBal, to: sum, format: tapFormat)
+        engine.connect(rBal, to: sum, format: tapFormat)
+        engine.connect(sum, to: lim, format: tapFormat)
         engine.connect(lim, to: gainStage, format: tapFormat)
         engine.connect(gainStage, to: mixer, format: tapFormat)
-        self.sampleRateBridge = sumMixer
+        self.sumMixer = sum
         log.info("Graph attached @ \(Int(sampleRate)) Hz end-to-end")
 
         self.leftSource = leftSource
@@ -270,7 +273,7 @@ final class AuditumEQAudioEngine: ObservableObject {
         if let rs = rightSource { engine.detach(rs); rightSource = nil }
         if let lb = leftBalanceMixer { engine.detach(lb); leftBalanceMixer = nil }
         if let rb = rightBalanceMixer { engine.detach(rb); rightBalanceMixer = nil }
-        if let b = sampleRateBridge { engine.detach(b); sampleRateBridge = nil }
+        if let s = sumMixer { engine.detach(s); sumMixer = nil }
         if let l = limiter { engine.detach(l); limiter = nil }
         if let g = masterGainStage { engine.detach(g); masterGainStage = nil }
         // EQ cascades are owned by CATapEngine — clear them to
@@ -442,37 +445,6 @@ final class AuditumEQAudioEngine: ObservableObject {
         ]
     }
 
-    private static func apply(bands profileBands: [EQBand], to eq: AVAudioUnitEQ?) {
-        guard let eq else { return }
-        let slots = eq.bands.count
-        for i in 0..<slots {
-            let node = eq.bands[i]
-            if i < profileBands.count {
-                let b = profileBands[i]
-                node.filterType = avFilterType(from: b.filterType)
-                node.frequency = Float(b.frequencyHz)
-                node.gain = Float(b.gaindB)
-                node.bandwidth = Float(b.bandwidth)
-                node.bypass = !b.enabled
-            } else {
-                node.bypass = true
-                node.gain = 0
-            }
-        }
-    }
-
-    private static func avFilterType(from t: EQFilterType) -> AVAudioUnitEQFilterType {
-        switch t {
-        case .parametric: return .parametric
-        case .lowShelf:   return .lowShelf
-        case .highShelf:  return .highShelf
-        case .notch:      return .bandStop
-        case .bandPass:   return .bandPass
-        case .lowPass:    return .lowPass
-        case .highPass:   return .highPass
-        }
-    }
-
     /// 1 kHz reference tone for the dB-SPL calibration workflow. Routed
     /// straight into `mainMixerNode` so it bypasses the user's EQ chain
     /// (the calibration tone must not be coloured by the user's curve).
@@ -481,7 +453,6 @@ final class AuditumEQAudioEngine: ObservableObject {
     /// without triggering compression.
     static let calibrationToneDBFS: Float = -12
     private var calibrationTonePlayer: AVAudioPlayerNode?
-    private var calibrationToneBuffer: AVAudioPCMBuffer?
     @Published private(set) var calibrationToneEnabled: Bool = false
 
     func setCalibrationTone(_ on: Bool) {
@@ -514,7 +485,6 @@ final class AuditumEQAudioEngine: ObservableObject {
             player.scheduleBuffer(buffer, at: nil, options: .loops)
             player.play()
             calibrationTonePlayer = player
-            calibrationToneBuffer = buffer
             calibrationToneEnabled = true
             log.info("Calibration tone: 1 kHz @ \(Self.calibrationToneDBFS) dBFS, \(Int(sr)) Hz output")
         } else {
@@ -523,7 +493,6 @@ final class AuditumEQAudioEngine: ObservableObject {
                 engine.detach(player)
             }
             calibrationTonePlayer = nil
-            calibrationToneBuffer = nil
             calibrationToneEnabled = false
             log.info("Calibration tone stopped")
         }
@@ -559,7 +528,6 @@ final class AuditumEQAudioEngine: ObservableObject {
             player.scheduleBuffer(buffer, at: nil, options: .loops)
             player.play()
             tonePlayer = player
-            toneBuffer = buffer
             toneEnabled = true
             log.info("Test tone enabled @ \(Int(sr)) Hz")
         } else {
@@ -568,19 +536,9 @@ final class AuditumEQAudioEngine: ObservableObject {
                 engine.detach(player)
             }
             tonePlayer = nil
-            toneBuffer = nil
             toneEnabled = false
             log.info("Test tone disabled")
         }
     }
 
-    // MARK: - Helpers
-
-    private static func flatten(_ eq: AVAudioUnitEQ) {
-        eq.globalGain = 0
-        for band in eq.bands {
-            band.bypass = true
-            band.gain = 0
-        }
-    }
 }

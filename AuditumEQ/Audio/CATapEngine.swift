@@ -5,7 +5,6 @@ import CoreAudio
 import CoreGraphics
 import OSLog
 
-@available(macOS 14.2, *)
 @MainActor
 final class CATapEngine: ObservableObject {
 
@@ -628,7 +627,6 @@ final class CATapEngine: ObservableObject {
 
 // MARK: - Core Audio property helpers
 
-@available(macOS 14.2, *)
 extension CATapEngine {
 
     /// `nonisolated` because the body only does CoreAudio C calls and
