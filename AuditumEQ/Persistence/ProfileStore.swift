@@ -15,14 +15,21 @@ final class ProfileStore: ObservableObject {
     @Published private(set) var profiles: [HearingProfile] = []
     @Published private(set) var lastError: String?
 
+    /// Current on-disk location. Set at init (from UserDefaults override,
+    /// or the default Application Support path) and mutated by
+    /// `relocate(to:moveExisting:)`. Published so Settings can show
+    /// the live path and react when it changes.
+    @Published private(set) var directory: URL
+
     /// Set by views via the SwiftUI environment so save/delete can register
     /// undo. nil while no main window is up.
     var undoManager: UndoManager?
 
     private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "ProfileStore")
-    private let directory: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+
+    private static let directoryOverrideKey = "auditumeq.profilesDirectory"
 
     /// Per-profile timestamp of the most recent save. Saves of the same
     /// profile within `coalesceWindow` are treated as one undo step, so a
@@ -31,7 +38,7 @@ final class ProfileStore: ObservableObject {
     private let coalesceWindow: TimeInterval = 0.5
 
     init(directory: URL? = nil) {
-        self.directory = directory ?? Self.defaultDirectory()
+        self.directory = directory ?? Self.bootDirectory()
         self.encoder = {
             let e = JSONEncoder()
             e.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -202,7 +209,7 @@ final class ProfileStore: ObservableObject {
         }
     }
 
-    private static func defaultDirectory() -> URL {
+    static func defaultDirectory() -> URL {
         let base = (try? FileManager.default.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
@@ -212,5 +219,71 @@ final class ProfileStore: ObservableObject {
         return base
             .appendingPathComponent("AuditumEQ", isDirectory: true)
             .appendingPathComponent("profiles", isDirectory: true)
+    }
+
+    /// Directory the store should use at boot. Honors a UserDefaults override
+    /// (set via `relocate(to:moveExisting:)`) so a user who points the store
+    /// at iCloud Drive / Dropbox / an external disk keeps that across
+    /// launches. Falls back to the default Application Support path.
+    static func bootDirectory() -> URL {
+        if let path = UserDefaults.standard.string(forKey: directoryOverrideKey),
+           !path.isEmpty {
+            return URL(fileURLWithPath: path)
+        }
+        return defaultDirectory()
+    }
+
+    // MARK: - Relocation
+
+    enum RelocationError: Error, LocalizedError {
+        case sourceIsDestination
+        case moveFailed(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .sourceIsDestination: return "The new folder is the same as the current folder."
+            case .moveFailed(let s): return "Move failed: \(s)"
+            }
+        }
+    }
+
+    /// Switch the persistence directory at runtime. If `moveExisting` is true,
+    /// every `<uuid>.json` currently in the old folder is moved into the new
+    /// one (overwriting on collision — the in-memory store is the truth).
+    /// Either way, the override is persisted and `loadAll()` is called so
+    /// the in-memory profile list reflects whatever's in the new folder.
+    func relocate(to newDirectory: URL, moveExisting: Bool) throws {
+        let oldDirectory = directory
+        if newDirectory.standardizedFileURL == oldDirectory.standardizedFileURL {
+            throw RelocationError.sourceIsDestination
+        }
+
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: newDirectory.path) {
+            try fm.createDirectory(at: newDirectory, withIntermediateDirectories: true)
+        }
+
+        if moveExisting, fm.fileExists(atPath: oldDirectory.path) {
+            let oldURLs = (try? fm.contentsOfDirectory(at: oldDirectory, includingPropertiesForKeys: nil)) ?? []
+            for src in oldURLs where src.pathExtension == "json" {
+                let dst = newDirectory.appendingPathComponent(src.lastPathComponent)
+                if fm.fileExists(atPath: dst.path) {
+                    try? fm.removeItem(at: dst)
+                }
+                do {
+                    try fm.moveItem(at: src, to: dst)
+                } catch {
+                    throw RelocationError.moveFailed(error.localizedDescription)
+                }
+            }
+        }
+
+        directory = newDirectory
+        if newDirectory.standardizedFileURL == Self.defaultDirectory().standardizedFileURL {
+            UserDefaults.standard.removeObject(forKey: Self.directoryOverrideKey)
+        } else {
+            UserDefaults.standard.set(newDirectory.path, forKey: Self.directoryOverrideKey)
+        }
+        loadAll()
     }
 }

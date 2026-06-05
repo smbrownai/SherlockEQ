@@ -1,11 +1,13 @@
 import SwiftUI
 
-/// App-wide settings. Today: master output gain. Future (Session 17):
-/// launch-at-login, global Reference Mode shortcut, device auto-switching,
-/// AutoEQ library, profile backup location, acknowledgments.
+/// App-wide settings. Sections: Startup, Output (master gain), Peak
+/// limiter, Appearance (per-ear colors), AutoEQ library folder, Profile
+/// backup location, Reference Mode global shortcut, About.
 struct SettingsView: View {
     @EnvironmentObject private var audioState: AudioState
+    @EnvironmentObject private var profileStore: ProfileStore
     @State private var acknowledgmentsShown = false
+    @State private var relocationAlert: RelocationPrompt?
 
     var body: some View {
         ScrollView {
@@ -15,6 +17,9 @@ struct SettingsView: View {
                 outputSection
                 limiterSection
                 appearanceSection
+                shortcutsSection
+                autoEQLibrarySection
+                profilesFolderSection
                 aboutSection
             }
             .padding(28)
@@ -24,6 +29,23 @@ struct SettingsView: View {
         .sheet(isPresented: $acknowledgmentsShown) {
             AcknowledgmentsView()
         }
+        .alert(item: $relocationAlert) { prompt in
+            Alert(
+                title: Text("Use \(prompt.url.lastPathComponent) for profiles?"),
+                message: Text("Existing profiles can either move with you to the new folder, or stay at the current location while the store switches to whatever's already in the new one."),
+                primaryButton: .default(Text("Move existing")) {
+                    performRelocate(to: prompt.url, moveExisting: true)
+                },
+                secondaryButton: .default(Text("Switch only")) {
+                    performRelocate(to: prompt.url, moveExisting: false)
+                }
+            )
+        }
+    }
+
+    private struct RelocationPrompt: Identifiable {
+        let url: URL
+        var id: URL { url }
     }
 
     private var header: some View {
@@ -272,5 +294,158 @@ struct SettingsView: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color.secondary.opacity(0.06))
         )
+    }
+
+    // MARK: - Reference Mode shortcut
+
+    private var shortcutsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Reference Mode").font(.headline)
+            sectionBox {
+                HStack {
+                    Toggle("Global ⌘⇧B toggles Reference Mode", isOn: $audioState.globalReferenceShortcutEnabled)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                    Spacer()
+                }
+                Text("When enabled, ⌘⇧B toggles bypass even when AuditumEQ is in the background. The local ⌘B menu item in Audio → Toggle Reference Mode keeps working when the main window is key. Off by default because system-wide shortcuts can collide with whatever app is in front.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
+            }
+        }
+    }
+
+    // MARK: - AutoEQ library folder
+
+    private var autoEQLibrarySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Headphone correction library").font(.headline)
+            sectionBox {
+                HStack(spacing: 10) {
+                    Image(systemName: "folder")
+                        .foregroundStyle(.tint)
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let folder = audioState.autoEQLibraryFolder {
+                            Text(folder.path)
+                                .font(.callout.monospaced())
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            let count = AutoEQLibrary.entries(in: folder).count
+                            Text("\(count) .txt file\(count == 1 ? "" : "s") found")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("No library folder set")
+                                .font(.callout)
+                            Text("Profile Detail's headphone-correction picker falls back to a file picker each time.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Button("Choose…") { chooseAutoEQLibrary() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    if audioState.autoEQLibraryFolder != nil {
+                        Button(role: .destructive) { audioState.autoEQLibraryFolder = nil } label: {
+                            Image(systemName: "xmark.circle")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Clear library folder")
+                    }
+                }
+                Text("Point this at a folder of AutoEQ .txt files (one per headphone). Profile Detail's headphone-correction button becomes a menu listing each file by name.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
+            }
+        }
+    }
+
+    private func chooseAutoEQLibrary() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose AutoEQ library folder"
+        panel.prompt = "Use folder"
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        if let current = audioState.autoEQLibraryFolder {
+            panel.directoryURL = current
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        audioState.autoEQLibraryFolder = url
+    }
+
+    // MARK: - Profiles folder
+
+    private var profilesFolderSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Profiles folder").font(.headline)
+            sectionBox {
+                HStack(spacing: 10) {
+                    Image(systemName: "tray.full")
+                        .foregroundStyle(.tint)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(profileStore.directory.path)
+                            .font(.callout.monospaced())
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        if profileStore.directory.standardizedFileURL == ProfileStore.defaultDirectory().standardizedFileURL {
+                            Text("Default (Application Support)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Custom location")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Button("Choose…") { chooseProfilesFolder() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    if profileStore.directory.standardizedFileURL != ProfileStore.defaultDirectory().standardizedFileURL {
+                        Button("Reset") {
+                            relocationAlert = RelocationPrompt(url: ProfileStore.defaultDirectory())
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .help("Switch back to the default Application Support location")
+                    }
+                }
+                Text("Point this at iCloud Drive / Dropbox / an external disk to back up or sync your profiles. Sandbox is off, so AuditumEQ can read anywhere you have access — no security-scoped bookmark needed.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
+            }
+        }
+    }
+
+    private func chooseProfilesFolder() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose profiles folder"
+        panel.prompt = "Use folder"
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = profileStore.directory
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        relocationAlert = RelocationPrompt(url: url)
+    }
+
+    private func performRelocate(to url: URL, moveExisting: Bool) {
+        do {
+            try profileStore.relocate(to: url, moveExisting: moveExisting)
+        } catch {
+            // Best-effort surfacing via the standard error UI is overkill;
+            // a one-line alert keeps the failure visible without ceremony.
+            let alert = NSAlert()
+            alert.messageText = "Couldn't switch profiles folder"
+            alert.informativeText = error.localizedDescription
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        }
     }
 }

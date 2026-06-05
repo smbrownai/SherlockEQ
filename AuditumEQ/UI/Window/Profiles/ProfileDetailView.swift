@@ -215,9 +215,7 @@ struct ProfileDetailView: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Replace…") { importAutoEQ(into: profile) }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                    autoEQImportControl(for: profile, label: "Replace…")
                     Button(role: .destructive) { clearAutoEQ(on: profile) } label: {
                         Image(systemName: "xmark.circle")
                     }
@@ -230,16 +228,38 @@ struct ProfileDetailView: View {
                         .foregroundStyle(.tint)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("No correction loaded").font(.callout)
-                        Text("Import an AutoEQ .txt file to correct for your headphones' frequency response.")
+                        Text("Import an AutoEQ .txt file to correct for your headphones' frequency response. Set a library folder in Settings to pick from a list instead.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Import…") { importAutoEQ(into: profile) }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                    autoEQImportControl(for: profile, label: "Import…")
                 }
             }
+        }
+    }
+
+    /// "Import…" / "Replace…" — a plain button when there's no library,
+    /// or a Menu listing each `.txt` in the configured AutoEQ folder
+    /// plus a "From file…" escape hatch. The library entries shortcut
+    /// the NSOpenPanel for users who curate a folder of corrections.
+    @ViewBuilder private func autoEQImportControl(for profile: HearingProfile, label: String) -> some View {
+        let entries = AutoEQLibrary.entries(in: audioState.autoEQLibraryFolder)
+        if entries.isEmpty {
+            Button(label) { importAutoEQ(into: profile) }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+        } else {
+            Menu(label) {
+                ForEach(entries) { entry in
+                    Button(entry.name) { applyAutoEQ(at: entry.url, name: entry.name, to: profile) }
+                }
+                Divider()
+                Button("From file…") { importAutoEQ(into: profile) }
+            }
+            .menuStyle(.borderedButton)
+            .controlSize(.small)
+            .fixedSize()
         }
     }
 
@@ -566,12 +586,14 @@ struct ProfileDetailView: View {
         panel.title = "Import AutoEQ correction"
         panel.prompt = "Import"
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        applyAutoEQ(at: url, name: url.deletingPathExtension().lastPathComponent, to: profile)
+    }
+
+    private func applyAutoEQ(at url: URL, name: String, to profile: HearingProfile) {
         guard let text = try? String(contentsOf: url, encoding: .utf8),
-              let parsed = AutoEQParser.parse(text) else {
-            return
-        }
+              let parsed = AutoEQParser.parse(text) else { return }
         update(profile) {
-            $0.autoEQName = url.deletingPathExtension().lastPathComponent
+            $0.autoEQName = name
             $0.autoEQBands = parsed.bands
             $0.autoEQPreampDB = parsed.preampDB
         }

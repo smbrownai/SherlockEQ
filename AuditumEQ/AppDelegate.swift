@@ -1,4 +1,6 @@
 import AppKit
+import Carbon
+import Combine
 import SwiftUI
 
 /// Owns the main NSWindow and the long-lived `AudioState` / `ProfileStore`
@@ -22,10 +24,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static private(set) weak var shared: AppDelegate?
 
     let audioState = AudioState()
-    let profileStore = ProfileStore()
+    let profileStore = ProfileStore(directory: ProfileStore.bootDirectory())
 
     private var mainWindow: NSWindow?
     private let mainWindowUndoManager = UndoManager()
+    private let globalReferenceHotKey = GlobalHotKey()
+    private var cancellables: Set<AnyCancellable> = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.shared = self
@@ -47,9 +51,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         profileStore.seedDefaultsIfEmpty()
         audioState.adoptDefaultProfileIfNeeded(from: profileStore)
         audioState.connect(profileStore: profileStore)
+        applyGlobalReferenceShortcut(enabled: audioState.globalReferenceShortcutEnabled)
+        audioState.$globalReferenceShortcutEnabled
+            .sink { [weak self] enabled in self?.applyGlobalReferenceShortcut(enabled: enabled) }
+            .store(in: &cancellables)
         Task {
             await NotificationManager.shared.requestAuthorization()
             await audioState.startAll()
+        }
+    }
+
+    private func applyGlobalReferenceShortcut(enabled: Bool) {
+        if enabled {
+            // ⌘⇧B — same key as the local Cmd+B from the AppKit Audio menu,
+            // with Shift added to make the global form less collision-prone
+            // with frontmost-app shortcuts.
+            globalReferenceHotKey.register(
+                keyCode: kVK_ANSI_B,
+                modifiers: cmdKey | shiftKey
+            ) { [weak self] in
+                self?.audioState.referenceMode.toggle()
+            }
+        } else {
+            globalReferenceHotKey.unregister()
         }
     }
 

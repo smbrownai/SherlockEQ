@@ -140,6 +140,36 @@ final class AudioState: ObservableObject {
         }
     }
 
+    /// Global ⌘⇧B shortcut to toggle Reference Mode from any app. Off by
+    /// default because system-wide hotkeys can collide with whatever's
+    /// frontmost (Cmd-Shift-B is "Bookmarks bar" in some browsers); users
+    /// who want it opt in from Settings. AppDelegate registers / unregisters
+    /// the actual Carbon hotkey in response to this flag changing.
+    @Published var globalReferenceShortcutEnabled: Bool = AudioState.loadBool(
+        key: AudioState.globalReferenceShortcutKey,
+        default: false
+    ) {
+        didSet {
+            UserDefaults.standard.set(globalReferenceShortcutEnabled, forKey: Self.globalReferenceShortcutKey)
+        }
+    }
+
+    /// User-selected library folder containing AutoEQ correction `.txt`
+    /// files. When set, the Headphone-correction picker on Profile Detail
+    /// offers a menu listing every `.txt` in this folder in addition to
+    /// the "From file…" import. Nil means library disabled; user only sees
+    /// the file picker. Stored as a plain path string in UserDefaults
+    /// (sandbox is OFF, so we don't need security-scoped bookmarks).
+    @Published var autoEQLibraryFolder: URL? = AudioState.loadURL(key: AudioState.autoEQLibraryKey) {
+        didSet {
+            if let url = autoEQLibraryFolder {
+                UserDefaults.standard.set(url.path, forKey: Self.autoEQLibraryKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.autoEQLibraryKey)
+            }
+        }
+    }
+
     private static let masterGainKey = "auditumeq.masterGainDB"
     private static let limiterAttackKey = "auditumeq.limiterAttackMs"
     private static let limiterDecayKey = "auditumeq.limiterDecayMs"
@@ -147,6 +177,8 @@ final class AudioState: ObservableObject {
     private static let leftEarColorKey = "auditumeq.leftEarColorHex"
     private static let rightEarColorKey = "auditumeq.rightEarColorHex"
     private static let hideFromDockKey = "auditumeq.hideFromDock"
+    private static let globalReferenceShortcutKey = "auditumeq.globalReferenceShortcut"
+    private static let autoEQLibraryKey = "auditumeq.autoEQLibraryFolder"
 
     private static func loadDouble(key: String, default defaultValue: Double) -> Double {
         let raw = UserDefaults.standard.object(forKey: key) as? Double
@@ -162,6 +194,11 @@ final class AudioState: ObservableObject {
         guard let hex = UserDefaults.standard.string(forKey: key),
               let color = Color(hexString: hex) else { return defaultValue }
         return color
+    }
+
+    private static func loadURL(key: String) -> URL? {
+        guard let path = UserDefaults.standard.string(forKey: key), !path.isEmpty else { return nil }
+        return URL(fileURLWithPath: path)
     }
 
     /// ID of the currently-active hearing profile. The profile itself lives in
