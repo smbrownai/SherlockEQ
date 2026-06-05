@@ -291,6 +291,14 @@ struct ProfileDetailView: View {
                 }
                 .pickerStyle(.menu)
                 .frame(maxWidth: 220)
+                // Belt-and-braces: the parent `Group { ... }
+                // .disabled(profile.isBuiltIn)` higher up *should*
+                // propagate to this picker too, but `.pickerStyle(.menu)`
+                // has a SwiftUI quirk where the environment-level
+                // disabled state doesn't reliably grey + block the
+                // popup. Mark it explicitly here so built-in profiles
+                // stay genuinely read-only.
+                .disabled(profile.isBuiltIn)
                 Spacer()
             }
             Text(profile.eqMode.tagline)
