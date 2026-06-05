@@ -1,9 +1,13 @@
 import SwiftUI
 
-/// Tone Finder — sweep a pure sine to identify the pitch closest to your
-/// tinnitus, then send that frequency to the active profile's notch.
-/// (spec §5.10: large freq display, log-scale sweep, fine-tune stepper,
-/// non-clinical copy.)
+/// Tinnitus Notch screen — sweep a pure sine to identify the pitch
+/// closest to your ringing (Tone Finder), then dial in the notch
+/// filter that de-emphasises it on the active profile.
+/// (spec §5.3 + §5.10: large freq display, log-scale sweep, fine-tune
+/// stepper, on/off + frequency + depth + width controls, non-clinical
+/// copy. Tone Finder used to live on its own screen and the notch
+/// settings under Expert EQ; consolidated here so they read as one
+/// task — identify, then dial in.)
 struct ToneFinderView: View {
     @EnvironmentObject private var audioState: AudioState
     @EnvironmentObject private var profileStore: ProfileStore
@@ -22,13 +26,35 @@ struct ToneFinderView: View {
                 fineTuneControls
                 volumeRow
                 actionsRow
+                notchSection
                 disclaimer
             }
             .padding(28)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .navigationTitle("Tone Finder")
+        .navigationTitle("Tinnitus Notch")
         .onDisappear { generator.stop() }
+    }
+
+    /// Notch filter controls — frequency / depth / width — bound to the
+    /// active profile. Hidden when no profile is loaded (matches the
+    /// "Set as Notch" button's disabled state, so the screen stays
+    /// coherent at first launch before profile seeding).
+    @ViewBuilder private var notchSection: some View {
+        if let profile = audioState.activeProfile(in: profileStore) {
+            NotchControlView(notch: notchBinding(for: profile))
+        }
+    }
+
+    private func notchBinding(for profile: HearingProfile) -> Binding<TinnitusNotch> {
+        Binding(
+            get: { profile.notch },
+            set: { newValue in
+                var updated = profile
+                updated.notch = newValue
+                try? profileStore.save(updated)
+            }
+        )
     }
 
     private var generator: SineToneGenerator { audioState.audio.toneGenerator }

@@ -141,7 +141,6 @@ struct ExpertEQView: View {
             .onKeyPress { press in handleKey(press, in: profile) }
             .onTapGesture { canvasFocused = true }
             controlsBar(profile)
-            NotchControlView(notch: notchBinding(for: profile))
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -236,17 +235,6 @@ struct ExpertEQView: View {
 
         let next = (idx + (forward ? 1 : sorted.count - 1)) % sorted.count
         selectedBandID = sorted[next].id
-    }
-
-    private func notchBinding(for profile: HearingProfile) -> Binding<TinnitusNotch> {
-        Binding(
-            get: { profile.notch },
-            set: { newValue in
-                var updated = profile
-                updated.notch = newValue
-                try? profileStore.save(updated)
-            }
-        )
     }
 
     // MARK: - Sections
