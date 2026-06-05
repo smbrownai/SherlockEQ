@@ -142,11 +142,10 @@ struct EQPreviewView: View {
         count: Int
     ) -> [SamplePoint] {
         guard count > 1 else { return [] }
-        let logMin = log10(minHz)
-        let logMax = log10(maxHz)
+        let axis = LogFreqAxis(minHz: minHz, maxHz: maxHz)
         return (0..<count).map { i in
             let frac = Double(i) / Double(count - 1)
-            let hz = pow(10, logMin + frac * (logMax - logMin))
+            let hz = axis.hz(forFrac: frac)
             let dB = BiquadResponse.compositeMagnitudeDB(at: hz, bands: bands)
             return SamplePoint(hz: hz, dB: dB, ear: label)
         }

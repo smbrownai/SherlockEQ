@@ -114,6 +114,7 @@ struct ParametricCanvasView: View {
 
     private let minHz: Double = 20
     private let maxHz: Double = 20_000
+    private var freqAxis: LogFreqAxis { LogFreqAxis(minHz: minHz, maxHz: maxHz) }
     /// Y-axis range for the EQ curve (dB gain, around 0). Tightened
     /// from ±24 → ±18 so typical bands (mostly ±6 dB) deflect ~33 %
     /// more pixels and the curve reads as a real shape rather than a
@@ -294,13 +295,11 @@ struct ParametricCanvasView: View {
     private func sampledDB(for bands: [EQBand]) -> [Double] {
         guard !bands.isEmpty else { return [] }
         let n = Self.curveSampleCount
-        let logMin = log10(minHz)
-        let logMax = log10(maxHz)
-        let logRange = logMax - logMin
+        let axis = freqAxis
         var arr = [Double](repeating: 0, count: n)
         for i in 0..<n {
             let frac = Double(i) / Double(n - 1)
-            let hz = pow(10, logMin + frac * logRange)
+            let hz = axis.hz(forFrac: frac)
             arr[i] = BiquadResponse.compositeMagnitudeDB(at: hz, bands: bands)
         }
         return arr
@@ -367,7 +366,7 @@ struct ParametricCanvasView: View {
         }
         let buckets = spectrumBinsDB.count
         let frac = Double(bestIdx) / Double(max(1, buckets - 1))
-        let hz = pow(10, log10(minHz) + frac * (log10(maxHz) - log10(minHz)))
+        let hz = freqAxis.hz(forFrac: frac)
         let hzLabel = hz >= 1000 ? String(format: "%.1f kHz", hz / 1000) : "\(Int(hz)) Hz"
         return "Peak at \(hzLabel), \(Int(bestDB.rounded())) dBFS"
     }
@@ -834,7 +833,7 @@ struct ParametricCanvasView: View {
 
         for (peak, x) in drawList {
             let frac = Double(peak.bucketIdx) / Double(max(1, buckets - 1))
-            let hz = pow(10, log10(minHz) + frac * (log10(maxHz) - log10(minHz)))
+            let hz = freqAxis.hz(forFrac: frac)
             let peakY = spectrumY(dbfs: Double(peak.db), baseline: baselineY, top: topY)
 
             // Liveness — 1.0 while the peak is matching fresh data, ramps
@@ -948,12 +947,10 @@ struct ParametricCanvasView: View {
         var thresholdPoints: [CGPoint] = []
         spectrumPoints.reserveCapacity(buckets)
         thresholdPoints.reserveCapacity(buckets)
-        let logMin = log10(minHz)
-        let logMax = log10(maxHz)
-        let logRange = logMax - logMin
+        let axis = freqAxis
         for b in 0..<buckets {
             let frac = Double(b) / Double(max(1, buckets - 1))
-            let hz = pow(10, logMin + frac * logRange)
+            let hz = axis.hz(forFrac: frac)
             let x = size.width * CGFloat(b) / CGFloat(max(1, buckets - 1))
             let specY = spectrumY(
                 dbfs: Double(spectrumBinsDB[b]),
@@ -1165,11 +1162,10 @@ struct ParametricCanvasView: View {
     private func drawFrequencyRegionLabels(_ context: GraphicsContext, size: CGSize) {
         let baselineY = size.height
         let topY = size.height * (1 - spectrumHeightFraction)
+        let axis = freqAxis
         for (label, hz) in Self.frequencyRegions {
             // Spectrogram maps low → bottom, high → top (matches drawSpectrogram).
-            let logMin = log10(minHz)
-            let logMax = log10(maxHz)
-            let frac = (log10(hz) - logMin) / (logMax - logMin)
+            let frac = axis.frac(forHz: hz)
             let y = baselineY - CGFloat(frac) * (baselineY - topY)
             let text = Text(label)
                 .font(.caption2.weight(.semibold))
@@ -1221,9 +1217,7 @@ struct ParametricCanvasView: View {
         guard let notch, notch.enabled else { return }
         let baselineY = size.height
         let topY = size.height * (1 - spectrumHeightFraction)
-        let logMin = log10(minHz)
-        let logMax = log10(maxHz)
-        let frac = (log10(notch.frequencyHz) - logMin) / (logMax - logMin)
+        let frac = freqAxis.frac(forHz: notch.frequencyHz)
         let y = baselineY - CGFloat(frac) * (baselineY - topY)
         var line = Path()
         line.move(to: CGPoint(x: 0, y: y))
@@ -1483,9 +1477,7 @@ struct ParametricCanvasView: View {
         }
 
         let bins = spectrumBinsDB.count
-        let logMin = log10(minHz)
-        let logMax = log10(maxHz)
-        let logRange = logMax - logMin
+        let axis = freqAxis
 
         let barFactor = pow(2.0, 1.0 / 6.0)         // half-width of 1/3 octave
         let gap: CGFloat = 2
@@ -1529,8 +1521,8 @@ struct ParametricCanvasView: View {
         for (i, centerHz) in visibleCenters.enumerated() {
             let lowHz = centerHz / barFactor
             let highHz = centerHz * barFactor
-            let lowFrac = max(0, (log10(lowHz) - logMin) / logRange)
-            let highFrac = min(1, (log10(highHz) - logMin) / logRange)
+            let lowFrac = axis.frac(forHz: lowHz, clamped: true)
+            let highFrac = axis.frac(forHz: highHz, clamped: true)
             let lowBin = max(0, Int(Double(bins) * lowFrac))
             let highBin = min(bins - 1, Int(Double(bins) * highFrac))
             guard lowBin <= highBin else { continue }
@@ -1747,9 +1739,7 @@ struct ParametricCanvasView: View {
         // sit a row above them so both are readable without overlap.
         let labelY = size.height - 32
         let swatchSize: CGFloat = 8
-        let logMin = log10(minHz)
-        let logMax = log10(maxHz)
-        let logRange = logMax - logMin
+        let axis = freqAxis
 
         for group in Self.semanticGroups {
             // Anchor the label to the LEFT EDGE of the first bar whose
@@ -1762,7 +1752,7 @@ struct ParametricCanvasView: View {
             if let firstIdx = visibleCenters.firstIndex(where: { $0 >= group.lowHz && $0 < group.highHz }) {
                 startX = firstX + CGFloat(firstIdx) * stepPx
             } else {
-                let frac = (log10(group.lowHz) - logMin) / logRange
+                let frac = axis.frac(forHz: group.lowHz)
                 startX = CGFloat(frac) * size.width
             }
 
@@ -1797,7 +1787,7 @@ struct ParametricCanvasView: View {
         // pitch's x position to teach the user where their pitch sits
         // in the audio map.
         if let notch, notch.enabled {
-            let frac = (log10(notch.frequencyHz) - logMin) / logRange
+            let frac = axis.frac(forHz: notch.frequencyHz)
             let x = max(20, min(size.width - 40, CGFloat(frac) * size.width))
             let labelY2 = size.height - 46  // a row above the other labels
             let labelText = Text(Self.tinnitusGroupLabel)
@@ -1925,18 +1915,11 @@ struct ParametricCanvasView: View {
     // MARK: - Coordinate maps
 
     private func xForFreq(_ hz: Double, width: CGFloat) -> CGFloat {
-        let logF = log10(max(minHz, min(maxHz, hz)))
-        let logMin = log10(minHz)
-        let logMax = log10(maxHz)
-        return width * CGFloat((logF - logMin) / (logMax - logMin))
+        freqAxis.x(forHz: hz, width: width)
     }
 
     private func freqForX(_ x: CGFloat, width: CGFloat) -> Double {
-        guard width > 0 else { return minHz }
-        let logMin = log10(minHz)
-        let logMax = log10(maxHz)
-        let frac = max(0, min(1, Double(x / width)))
-        return pow(10.0, logMin + frac * (logMax - logMin))
+        freqAxis.hz(forX: x, width: width)
     }
 
     private func yForDB(_ db: Double, height: CGFloat) -> CGFloat {

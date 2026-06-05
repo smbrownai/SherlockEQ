@@ -353,18 +353,14 @@ struct ToneFinderView: View {
         return "\(Int(k))k"
     }
 
+    private var freqAxis: LogFreqAxis { LogFreqAxis(minHz: minHz, maxHz: maxHz) }
+
     private func xFor(hz: Double, width: CGFloat) -> CGFloat {
-        let clamped = max(minHz, min(maxHz, hz))
-        let logMin = log10(minHz)
-        let logMax = log10(maxHz)
-        return CGFloat((log10(clamped) - logMin) / (logMax - logMin)) * width
+        freqAxis.x(forHz: hz, width: width)
     }
 
     private func hzFor(x: CGFloat, width: CGFloat) -> Double {
-        let frac = max(0, min(1, Double(x / width)))
-        let logMin = log10(minHz)
-        let logMax = log10(maxHz)
-        return pow(10, logMin + frac * (logMax - logMin))
+        freqAxis.hz(forX: x, width: width)
     }
 
     private func nudge(_ delta: Int) {
