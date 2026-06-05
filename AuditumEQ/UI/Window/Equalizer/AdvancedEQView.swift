@@ -34,6 +34,7 @@ struct AdvancedEQView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 topBar
+                HiddenBandsHintChip()
                 previewCanvas(profile)
                 slidersRow(profile)
                 resetButton(profile)

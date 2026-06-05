@@ -27,6 +27,13 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     /// Toggling the value never mutates band data; only future edits
     /// in the new mode propagate to one or both ears.
     var separateChannels: Bool                  // default false — single column UI
+    /// Which EQ "lens" this profile uses. The four modes are storage
+    /// views onto the same band array, not stackable layers — the
+    /// profile commits to one mental model (quick tone-shaping with
+    /// Simple, voice-tuned with Speech, graphic-EQ with Advanced,
+    /// full parametric with Expert). Switching is non-destructive:
+    /// bands the other modes wrote stay in storage and only hide.
+    var eqMode: EQMode                          // new profiles default .simple; legacy decode .expert
     var isBuiltIn: Bool                         // true for curated presets (Default, Voice Clarity) — UI blocks edits and offers Duplicate
 
     var createdAt: Date
@@ -52,6 +59,11 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.safeListeningCeilingDB = try c.decode(Double.self, forKey: .safeListeningCeilingDB)
         self.compensationFactor     = try c.decode(Double.self, forKey: .compensationFactor)
         self.separateChannels       = try c.decodeIfPresent(Bool.self, forKey: .separateChannels) ?? false
+        // Legacy profiles default to .expert so users who edited bands
+        // across multiple tabs in the old multi-tab world still see
+        // everything on first load. New profiles created via init
+        // default to .simple — see the designated initializer.
+        self.eqMode                 = try c.decodeIfPresent(EQMode.self, forKey: .eqMode) ?? .expert
         self.isBuiltIn              = try c.decodeIfPresent(Bool.self, forKey: .isBuiltIn) ?? false
         self.createdAt              = try c.decode(Date.self, forKey: .createdAt)
         self.modifiedAt             = try c.decode(Date.self, forKey: .modifiedAt)
@@ -64,6 +76,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         autoEQName: String? = nil, autoEQBands: [EQBand]? = nil, autoEQPreampDB: Double? = nil,
         safeListeningCeilingDB: Double, compensationFactor: Double,
         separateChannels: Bool = false,
+        eqMode: EQMode = .simple,
         isBuiltIn: Bool = false,
         createdAt: Date, modifiedAt: Date
     ) {
@@ -78,6 +91,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.safeListeningCeilingDB = safeListeningCeilingDB
         self.compensationFactor = compensationFactor
         self.separateChannels = separateChannels
+        self.eqMode = eqMode
         self.isBuiltIn = isBuiltIn
         self.createdAt = createdAt; self.modifiedAt = modifiedAt
     }
@@ -149,4 +163,86 @@ extension HearingProfile {
             modifiedAt: now
         )
     }
+}
+
+/// Which EQ lens this profile uses. The four modes are storage views
+/// onto one underlying band array — picking a mode chooses how the
+/// user thinks about EQ for this profile, not how the audio is
+/// processed. Switching mode is non-destructive: bands the other
+/// modes wrote stay in storage and only hide.
+enum EQMode: String, Codable, CaseIterable, Identifiable {
+    case simple, speech, advanced, expert
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .simple:   return "Simple"
+        case .speech:   return "Speech"
+        case .advanced: return "Advanced"
+        case .expert:   return "Expert"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .simple:   return "slider.horizontal.3"
+        case .speech:   return "waveform.badge.mic"
+        case .advanced: return "slider.vertical.3"
+        case .expert:   return "waveform.path"
+        }
+    }
+
+    var tagline: String {
+        switch self {
+        case .simple:   return "Three quick knobs — bass, mids, treble."
+        case .speech:   return "Six bands tuned for voice intelligibility."
+        case .advanced: return "Ten octave-spaced graphic EQ bands."
+        case .expert:   return "Full parametric — drop a band anywhere."
+        }
+    }
+
+    /// (frequency Hz, filter type) pairs the mode owns — bands at
+    /// these slots show in the mode's UI. Expert returns nil because
+    /// it owns everything; the helper below uses that as a sentinel.
+    fileprivate var ownedSlots: Set<EQSlot>? {
+        switch self {
+        case .simple:
+            return [
+                EQSlot(frequencyHz: 250,  filterType: .lowShelf),
+                EQSlot(frequencyHz: 1000, filterType: .parametric),
+                EQSlot(frequencyHz: 5000, filterType: .highShelf),
+            ]
+        case .speech:
+            return [
+                EQSlot(frequencyHz: 60,    filterType: .lowShelf),
+                EQSlot(frequencyHz: 200,   filterType: .parametric),
+                EQSlot(frequencyHz: 800,   filterType: .parametric),
+                EQSlot(frequencyHz: 2500,  filterType: .parametric),
+                EQSlot(frequencyHz: 6000,  filterType: .parametric),
+                EQSlot(frequencyHz: 12000, filterType: .highShelf),
+            ]
+        case .advanced:
+            let centers: [Double] = [31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+            return Set(centers.map { EQSlot(frequencyHz: $0, filterType: .parametric) })
+        case .expert:
+            return nil
+        }
+    }
+
+    /// Returns the bands in `chain` that aren't visible in this mode's
+    /// UI. Expert hides nothing, so always returns []. Non-Expert
+    /// modes return any band whose (freq, filterType) doesn't fall in
+    /// the owned-slot set.
+    func hiddenBands(in chain: [EQBand]) -> [EQBand] {
+        guard let owned = ownedSlots else { return [] }
+        return chain.filter { band in
+            !owned.contains(EQSlot(frequencyHz: band.frequencyHz, filterType: band.filterType))
+        }
+    }
+}
+
+private struct EQSlot: Hashable {
+    let frequencyHz: Double
+    let filterType: EQFilterType
 }

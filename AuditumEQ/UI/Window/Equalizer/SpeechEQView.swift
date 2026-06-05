@@ -120,6 +120,7 @@ struct SpeechEQView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 topBar
+                HiddenBandsHintChip()
                 previewCanvas(profile)
                 if linkChannels {
                     bandColumn(for: profile, ear: .left, color: .accentColor, title: "Both ears")

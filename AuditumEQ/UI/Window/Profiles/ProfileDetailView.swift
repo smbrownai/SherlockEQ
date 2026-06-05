@@ -233,6 +233,8 @@ struct ProfileDetailView: View {
     @ViewBuilder private func tuningSection(_ profile: HearingProfile) -> some View {
         sectionHeader("Tuning")
         sectionBox {
+            eqModeRow(profile)
+            Divider()
             sliderRow(
                 "Compensation",
                 value: profile.compensationFactor,
@@ -252,6 +254,35 @@ struct ProfileDetailView: View {
             balanceRow(profile)
             Divider()
             separateChannelsRow(profile)
+        }
+    }
+
+    /// EQ mode picker: which lens this profile uses on the Equalizer
+    /// screen. The four modes are storage views onto one underlying
+    /// band array — switching never deletes data, it only changes
+    /// which slice is editable. A profile picks the way its owner
+    /// wants to think about EQ; Expert is the "I want everything" mode.
+    @ViewBuilder private func eqModeRow(_ profile: HearingProfile) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("EQ mode")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 120, alignment: .leading)
+                Picker("", selection: Binding(
+                    get: { profile.eqMode },
+                    set: { v in update(profile) { $0.eqMode = v } }
+                )) {
+                    ForEach(EQMode.allCases) { mode in
+                        Label(mode.label, systemImage: mode.symbol).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(maxWidth: 220)
+                Spacer()
+            }
+            Text(profile.eqMode.tagline)
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
     }
 

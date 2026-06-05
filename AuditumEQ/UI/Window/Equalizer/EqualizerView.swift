@@ -1,37 +1,20 @@
 import SwiftUI
 
-/// Equalizer section of the main window — three-tab container per spec §8.3.
-/// Session 13 wires the Expert tab (parametric canvas + biquad math); the
-/// Simple (3-band) and Advanced (10-band graphic) tabs land in Session 14.
+/// Equalizer section of the main window — shows the EQ view that
+/// matches the active profile's `eqMode`. The four modes (Simple,
+/// Speech, Advanced, Expert) are storage views onto one underlying
+/// band array, not stackable layers — the profile commits to one
+/// mental model. Mode picker lives on Profile Detail.
 struct EqualizerView: View {
     @EnvironmentObject private var profileStore: ProfileStore
     @EnvironmentObject private var audioState: AudioState
 
-    private enum Tab: String, CaseIterable, Hashable {
-        case simple = "Simple"
-        case speech = "Speech"
-        case advanced = "Advanced"
-        case expert = "Expert"
-    }
-    @State private var tab: Tab = .expert
-
     var body: some View {
         let activeProfile = audioState.activeProfile(in: profileStore)
         let locked = activeProfile?.isBuiltIn ?? false
+        let mode = activeProfile?.eqMode ?? .simple
 
         VStack(spacing: 0) {
-            Picker("", selection: $tab) {
-                ForEach(Tab.allCases, id: \.self) { t in
-                    Text(t.rawValue).tag(t)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 460)
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-
-            Divider().padding(.top, 12)
-
             if let profile = activeProfile, profile.isBuiltIn {
                 BuiltInProfileBanner(profileName: profile.name) {
                     duplicateActive(profile)
@@ -41,7 +24,7 @@ struct EqualizerView: View {
             }
 
             Group {
-                switch tab {
+                switch mode {
                 case .simple:   SimpleEQView()
                 case .speech:   SpeechEQView()
                 case .advanced: AdvancedEQView()
