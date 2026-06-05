@@ -8,7 +8,6 @@ import AppKit
 struct MainPopoverView: View {
     @EnvironmentObject private var audioState: AudioState
     @EnvironmentObject private var profileStore: ProfileStore
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -155,18 +154,14 @@ struct MainPopoverView: View {
         return b < 0 ? "L \(pct)%" : "R \(pct)%"
     }
 
-    /// Open (or focus) the main window. The app switches to `.accessory` on
-    /// window close, so reopening has to flip back to `.regular` and
-    /// re-activate to get the menu bar back. Calling `activate` in the same
-    /// run-loop tick as `setActivationPolicy` is unreliable — AppKit hasn't
-    /// finished registering the policy change, and the menu bar fails to
-    /// redraw. Deferring activation to the next tick fixes it.
+    /// Open (or focus) the main window. Handed off to `AppDelegate`, which
+    /// owns the NSWindow and sequences the `.accessory → .regular` policy
+    /// flip + activation deterministically — see `AppDelegate.showMainWindow`.
     private func openMainWindow() {
-        NSApp.setActivationPolicy(.regular)
-        openWindow(id: "main")
-        DispatchQueue.main.async {
-            NSApp.activate(ignoringOtherApps: true)
-        }
+        // SwiftUI's `@NSApplicationDelegateAdaptor` proxies `NSApp.delegate`,
+        // so casting it back to `AppDelegate` returns nil. Reach the real
+        // instance via the singleton handle.
+        AppDelegate.shared?.showMainWindow()
     }
 
     private var deviceSymbol: String {

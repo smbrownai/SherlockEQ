@@ -155,7 +155,10 @@ final class CATapEngine: ObservableObject {
     func start() async {
         state = .starting
         do {
-            try buildTapAndAggregate()
+            let prep = try await Task.detached(priority: .userInitiated) {
+                try Self.prepareTapAndAggregate()
+            }.value
+            try applyTapPrep(prep)
             try startIO()
             installDefaultOutputDeviceListener()
             state = .running
@@ -174,19 +177,32 @@ final class CATapEngine: ObservableObject {
 
     // MARK: - Build
 
-    private func buildTapAndAggregate() throws {
-        let outputDeviceID = try Self.defaultOutputDeviceID()
-        currentOutputDeviceID = outputDeviceID
-        currentOutputDeviceName = (try? Self.deviceName(outputDeviceID)) ?? "Device \(outputDeviceID)"
+    /// Result of the off-main CoreAudio prep step. Carries every value the
+    /// main-actor `applyTapPrep` needs to wire up the source nodes without
+    /// re-entering CoreAudio.
+    private struct TapPrepResult {
+        let outputDeviceID: AudioDeviceID
+        let outputDeviceName: String
+        let ownProcessObjectID: AudioObjectID
+        let tapID: AudioObjectID
+        let aggregateDeviceID: AudioDeviceID
+        let asbd: AudioStreamBasicDescription
+        let deliveredRate: Double
+    }
 
-        let outputDeviceUID = try Self.deviceUID(outputDeviceID)
-
-        // DIAGNOSTIC: temporarily exclude nothing — tap *every* process including
-        // our own. This is unsafe for routing (potential feedback) but it isolates
-        // whether the PID-exclusion is what's causing the tap to deliver silence.
-        // Keep the test tone OFF while this is empty.
-        let ownProcessObjectID = (try? Self.processObjectIDForCurrentPID()) ?? 0
-        excludedProcessObjectID.set(Int64(ownProcessObjectID))
+    /// All of the synchronous CoreAudio calls that historically ran on
+    /// `@MainActor`. Hoisted out to a `nonisolated static` so callers can
+    /// dispatch it onto a detached task — a wedged HAL (post-sleep, stuck
+    /// aggregate, disconnected DAC the system still thinks is present)
+    /// blocks `AudioObjectGetPropertyData*` indefinitely, and on the main
+    /// thread that froze app launch. See memory `coreaudio-sync-main-thread-hang`.
+    /// Cleans up the tap / aggregate it created if a later step throws —
+    /// `start()`'s catch can't free them because they never reached `self`.
+    nonisolated private static func prepareTapAndAggregate() throws -> TapPrepResult {
+        let outputDeviceID = try defaultOutputDeviceID()
+        let outputDeviceName = (try? deviceName(outputDeviceID)) ?? "Device \(outputDeviceID)"
+        let outputDeviceUID = try deviceUID(outputDeviceID)
+        let ownProcessObjectID = (try? processObjectIDForCurrentPID()) ?? 0
 
         // Global tap, excluding our own process to prevent the
         // AVAudioEngine output → tap → output feedback loop.
@@ -205,14 +221,16 @@ final class CATapEngine: ObservableObject {
         guard tapStatus == noErr, newTapID != kAudioObjectUnknown else {
             throw TapError.tapCreationFailed(tapStatus)
         }
-        tapID = newTapID
+
+        let tapUID: String
+        do {
+            tapUID = try tapUIDString(newTapID)
+        } catch {
+            AudioHardwareDestroyProcessTap(newTapID)
+            throw error
+        }
 
         let aggUID = "com.shawnbrown.AuditumEQ.aggregate.\(UUID().uuidString)"
-        let tapUIDString = try Self.tapUIDString(tapID)
-
-        // Aggregate with the real output device as the main subdevice (for clock),
-        // and the tap attached via the tap list. The IOProc reads the tap's audio
-        // from the aggregate's input scope.
         let aggDescription: [String: Any] = [
             kAudioAggregateDeviceNameKey as String: "AuditumEQ Aggregate",
             kAudioAggregateDeviceUIDKey as String: aggUID,
@@ -225,7 +243,7 @@ final class CATapEngine: ObservableObject {
             ],
             kAudioAggregateDeviceTapListKey as String: [
                 [
-                    kAudioSubTapUIDKey as String: tapUIDString,
+                    kAudioSubTapUIDKey as String: tapUID,
                     kAudioSubTapDriftCompensationKey as String: 1
                 ]
             ]
@@ -234,9 +252,44 @@ final class CATapEngine: ObservableObject {
         var newAggID: AudioDeviceID = kAudioObjectUnknown
         let aggStatus = AudioHardwareCreateAggregateDevice(aggDescription as CFDictionary, &newAggID)
         guard aggStatus == noErr, newAggID != kAudioObjectUnknown else {
+            AudioHardwareDestroyProcessTap(newTapID)
             throw TapError.aggregateCreationFailed(aggStatus)
         }
-        aggregateDeviceID = newAggID
+
+        let asbd: AudioStreamBasicDescription
+        let deliveredRate: Double
+        do {
+            asbd = try inputStreamFormat(newAggID)
+            deliveredRate = try nominalSampleRate(outputDeviceID)
+        } catch {
+            AudioHardwareDestroyAggregateDevice(newAggID)
+            AudioHardwareDestroyProcessTap(newTapID)
+            throw error
+        }
+
+        return TapPrepResult(
+            outputDeviceID: outputDeviceID,
+            outputDeviceName: outputDeviceName,
+            ownProcessObjectID: ownProcessObjectID,
+            tapID: newTapID,
+            aggregateDeviceID: newAggID,
+            asbd: asbd,
+            deliveredRate: deliveredRate
+        )
+    }
+
+    /// Main-actor counterpart to `prepareTapAndAggregate`. Touches no
+    /// CoreAudio property APIs — only AVAudioFormat / source-node setup
+    /// and assignment to `@Published` / instance state. If this throws,
+    /// the tap / aggregate created by the prep step are still owned by
+    /// `self` (via the assignments below) and will be released by the
+    /// caller's `tearDown()`.
+    private func applyTapPrep(_ prep: TapPrepResult) throws {
+        currentOutputDeviceID = prep.outputDeviceID
+        currentOutputDeviceName = prep.outputDeviceName
+        excludedProcessObjectID.set(Int64(prep.ownProcessObjectID))
+        tapID = prep.tapID
+        aggregateDeviceID = prep.aggregateDeviceID
 
         // Read the tap stream format off the aggregate's input scope.
         // **Note**: `format.sampleRate` reports the *tap source* rate, not
@@ -245,14 +298,14 @@ final class CATapEngine: ObservableObject {
         // sees a sample. We stamp the source-node format and ring at the
         // **output rate** so AVAudioEngine consumes samples at the cadence
         // they actually arrive. See memory `audio-engine-sr-mismatch`.
-        var asbd = try Self.inputStreamFormat(aggregateDeviceID)
+        var asbd = prep.asbd
         guard let format = AVAudioFormat(streamDescription: &asbd) else {
             throw TapError.formatUnsupported
         }
         tapFormat = format
         tapChannelCount = Int(format.channelCount)
 
-        let deliveredRate = try Self.nominalSampleRate(outputDeviceID)
+        let deliveredRate = prep.deliveredRate
 
         // ~250ms headroom per channel ring, sized in delivered frames.
         let ringCapacity = max(4096, Int(deliveredRate) / 4)
