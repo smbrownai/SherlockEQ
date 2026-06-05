@@ -4,11 +4,19 @@ import SwiftUI
 /// Used in the Expert EQ tab. Width maps to Q (Narrow ≈ 8, Medium ≈ 4, Wide ≈ 2).
 struct NotchControlView: View {
     @Binding var notch: TinnitusNotch
+    /// Header label. Defaults to "Tinnitus notch" for the shared
+    /// single-notch UI; per-ear callers pass "Left ear" / "Right ear"
+    /// so the two panels read as distinct without repeating the
+    /// "Tinnitus notch" title twice.
+    var title: String = "Tinnitus notch"
+    /// Header SF Symbol. Defaults to the bandage icon used elsewhere
+    /// in the app for tinnitus-related controls.
+    var symbol: String = "bandage"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("Tinnitus notch", systemImage: "bandage")
+                Label(title, systemImage: symbol)
                     .font(.headline)
                 Spacer()
                 Toggle("", isOn: $notch.enabled)

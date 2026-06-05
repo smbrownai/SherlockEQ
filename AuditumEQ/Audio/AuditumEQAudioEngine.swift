@@ -403,9 +403,14 @@ final class AuditumEQAudioEngine: ObservableObject {
         // leftEQ} AVAudioUnitEQ pair (and right), which leaked cross-
         // channel content even with mono-on-one-channel input.
         let autoBands = profile.autoEQBands ?? []
-        let notchBand = Self.notchAsBand(profile.notch)
-        let combinedLeftBands = autoBands + profile.leftEar.bands + notchBand
-        let combinedRightBands = autoBands + profile.rightEar.bands + notchBand
+        // Per-ear notch — Tinnitus Notch UI lets the user dial in two
+        // independent notches (e.g. for unilateral tinnitus) when
+        // `separateNotch` is on. When off, the UI keeps the two in
+        // sync, so leftNotch and rightNotch carry the same values.
+        let leftNotchBand = Self.notchAsBand(profile.leftNotch)
+        let rightNotchBand = Self.notchAsBand(profile.rightNotch)
+        let combinedLeftBands = autoBands + profile.leftEar.bands + leftNotchBand
+        let combinedRightBands = autoBands + profile.rightEar.bands + rightNotchBand
         let combinedPreampDB = (profile.autoEQPreampDB ?? 0) + profile.globalTrimDB
 
         leftEQCascade?.setBands(combinedLeftBands, preampDB: combinedPreampDB, sampleRate: tapSampleRate)
@@ -413,7 +418,18 @@ final class AuditumEQAudioEngine: ObservableObject {
         leftEQCascade?.setBypassed(referenceMode)
         rightEQCascade?.setBypassed(referenceMode)
 
-        log.info("Applied profile \(profile.name, privacy: .public) — L:\(combinedLeftBands.count) bands, R:\(combinedRightBands.count) bands, preamp+trim:\(combinedPreampDB) dB, balance:\(profile.balance, format: .fixed(precision: 2)), notch:\(profile.notch.enabled ? "on" : "off"), autoEQ:\(profile.autoEQName ?? "none", privacy: .public)")
+        let notchDescription: String = {
+            switch (profile.leftNotch.enabled, profile.rightNotch.enabled) {
+            case (false, false): return "off"
+            case (true, false):  return "L only"
+            case (false, true):  return "R only"
+            case (true, true):
+                return profile.leftNotch.frequencyHz == profile.rightNotch.frequencyHz
+                    ? "both \(Int(profile.leftNotch.frequencyHz)) Hz"
+                    : "L \(Int(profile.leftNotch.frequencyHz)) Hz, R \(Int(profile.rightNotch.frequencyHz)) Hz"
+            }
+        }()
+        log.info("Applied profile \(profile.name, privacy: .public) — L:\(combinedLeftBands.count) bands, R:\(combinedRightBands.count) bands, preamp+trim:\(combinedPreampDB) dB, balance:\(profile.balance, format: .fixed(precision: 2)), notch:\(notchDescription, privacy: .public), autoEQ:\(profile.autoEQName ?? "none", privacy: .public)")
     }
 
     /// Linear-domain balance attenuation fed to the per-ear

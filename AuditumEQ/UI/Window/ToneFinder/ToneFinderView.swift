@@ -36,22 +36,94 @@ struct ToneFinderView: View {
         .onDisappear { generator.stop() }
     }
 
-    /// Notch filter controls — frequency / depth / width — bound to the
-    /// active profile. Hidden when no profile is loaded (matches the
-    /// "Set as Notch" button's disabled state, so the screen stays
-    /// coherent at first launch before profile seeding).
+    /// Notch filter controls — frequency / depth / width — bound to
+    /// the active profile. When `separateNotch` is on, two panels
+    /// stack so the user can dial in independent L / R notches (e.g.
+    /// unilateral tinnitus). When off, one panel writes both ears in
+    /// lockstep — every edit on the visible Left binding mirrors to
+    /// Right so the audio chain sees identical values. Hidden when
+    /// no profile is loaded.
     @ViewBuilder private var notchSection: some View {
         if let profile = audioState.activeProfile(in: profileStore) {
-            NotchControlView(notch: notchBinding(for: profile))
+            VStack(alignment: .leading, spacing: 14) {
+                separateToggleRow(profile)
+                if profile.separateNotch {
+                    NotchControlView(
+                        notch: leftNotchBinding(for: profile),
+                        title: "Left ear",
+                        symbol: "ear"
+                    )
+                    NotchControlView(
+                        notch: rightNotchBinding(for: profile),
+                        title: "Right ear",
+                        symbol: "ear"
+                    )
+                } else {
+                    // Linked: edits flow to both notches in one
+                    // write so the engine never sees an asymmetric
+                    // intermediate state during a slider drag.
+                    NotchControlView(notch: linkedNotchBinding(for: profile))
+                }
+            }
         }
     }
 
-    private func notchBinding(for profile: HearingProfile) -> Binding<TinnitusNotch> {
+    @ViewBuilder private func separateToggleRow(_ profile: HearingProfile) -> some View {
+        HStack {
+            Toggle("Separate L + R notch", isOn: Binding(
+                get: { profile.separateNotch },
+                set: { newValue in
+                    var updated = profile
+                    updated.separateNotch = newValue
+                    // Snap the right notch to the left when turning
+                    // separate off, so the linked-mode panel reflects
+                    // the value the user has been working with.
+                    if !newValue {
+                        updated.rightNotch = updated.leftNotch
+                    }
+                    try? profileStore.save(updated)
+                }
+            ))
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            Spacer()
+            Text("Useful for unilateral tinnitus or asymmetric pitch.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    /// Linked binding — every write goes to both ears so the engine
+    /// applies identical notches L and R.
+    private func linkedNotchBinding(for profile: HearingProfile) -> Binding<TinnitusNotch> {
         Binding(
-            get: { profile.notch },
+            get: { profile.leftNotch },
             set: { newValue in
                 var updated = profile
-                updated.notch = newValue
+                updated.leftNotch = newValue
+                updated.rightNotch = newValue
+                try? profileStore.save(updated)
+            }
+        )
+    }
+
+    private func leftNotchBinding(for profile: HearingProfile) -> Binding<TinnitusNotch> {
+        Binding(
+            get: { profile.leftNotch },
+            set: { newValue in
+                var updated = profile
+                updated.leftNotch = newValue
+                try? profileStore.save(updated)
+            }
+        )
+    }
+
+    private func rightNotchBinding(for profile: HearingProfile) -> Binding<TinnitusNotch> {
+        Binding(
+            get: { profile.rightNotch },
+            set: { newValue in
+                var updated = profile
+                updated.rightNotch = newValue
                 try? profileStore.save(updated)
             }
         )
@@ -205,14 +277,7 @@ struct ToneFinderView: View {
             .controlSize(.large)
             .keyboardShortcut(.space, modifiers: [])
 
-            Button {
-                setAsNotch()
-            } label: {
-                Label("Set as Notch Frequency", systemImage: "bandage")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            .disabled(audioState.activeProfile(in: profileStore) == nil)
+            setAsNotchButton
 
             Spacer()
 
@@ -307,10 +372,54 @@ struct ToneFinderView: View {
         generator.targetFrequencyHz = max(minHz, min(maxHz, target))
     }
 
-    private func setAsNotch() {
+    /// Action button next to Play. Single bordered button in the
+    /// linked-notch case, three-way Menu (Left / Right / Both) when
+    /// the user has turned on per-ear notch. The menu form keeps the
+    /// same affordance (still a bandage-labelled control) but lets
+    /// the user pick a target without leaving the tone-finder flow.
+    @ViewBuilder private var setAsNotchButton: some View {
+        let profile = audioState.activeProfile(in: profileStore)
+        if profile?.separateNotch == true {
+            Menu {
+                Button("Set as Left ear notch")  { setAsNotch(.left) }
+                Button("Set as Right ear notch") { setAsNotch(.right) }
+                Divider()
+                Button("Set as Both notches")    { setAsNotch(.both) }
+            } label: {
+                Label("Set as Notch Frequency", systemImage: "bandage")
+            }
+            .menuStyle(.borderedButton)
+            .controlSize(.large)
+            .disabled(profile == nil)
+        } else {
+            Button {
+                setAsNotch(.both)
+            } label: {
+                Label("Set as Notch Frequency", systemImage: "bandage")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .disabled(profile == nil)
+        }
+    }
+
+    private enum NotchTarget { case left, right, both }
+
+    private func setAsNotch(_ target: NotchTarget) {
         guard var profile = audioState.activeProfile(in: profileStore) else { return }
-        profile.notch.frequencyHz = currentHz
-        profile.notch.enabled = true
+        switch target {
+        case .left:
+            profile.leftNotch.frequencyHz = currentHz
+            profile.leftNotch.enabled = true
+        case .right:
+            profile.rightNotch.frequencyHz = currentHz
+            profile.rightNotch.enabled = true
+        case .both:
+            profile.leftNotch.frequencyHz = currentHz
+            profile.leftNotch.enabled = true
+            profile.rightNotch.frequencyHz = currentHz
+            profile.rightNotch.enabled = true
+        }
         try? profileStore.save(profile)
         lastConfirmedFrequency = currentHz
     }

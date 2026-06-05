@@ -96,7 +96,7 @@ struct ExpertEQView: View {
                     showTimeAxis: $showTimeAxisLayer,
                     showPersistence: $showPersistenceLayer,
                     earColor: earColor,
-                    hasNotch: profile.notch.enabled
+                    hasNotch: profile.leftNotch.enabled || profile.rightNotch.enabled
                 )
             }
             LiveParametricCanvas(
@@ -106,7 +106,7 @@ struct ExpertEQView: View {
                 bands: bandsBinding(for: profile),
                 shadowBands: shadowBands(for: profile),
                 targetBands: target,
-                notch: profile.notch,
+                notch: profile.leftNotch,
                 spectrumSampleRate: audioState.audio.outputSampleRate ?? 48_000,
                 earColor: earColor,
                 shadowColor: shadowColor,

@@ -10,7 +10,18 @@ struct HearingProfile: Codable, Identifiable, Hashable {
 
     var leftEar: EarProfile
     var rightEar: EarProfile
-    var notch: TinnitusNotch
+    /// Per-ear tinnitus notch. Defaults are .disabled. When
+    /// `separateNotch` is false (the common case) the UI keeps both
+    /// in sync — every edit writes the same value to both. When true,
+    /// the user can dial in different notches per ear, e.g. for
+    /// unilateral tinnitus or asymmetric pitch.
+    var leftNotch: TinnitusNotch
+    var rightNotch: TinnitusNotch
+    /// When true, the Tinnitus Notch UI exposes two notch panels (L
+    /// and R) and the "Set as Notch" button gains a three-way picker
+    /// (Left / Right / Both). When false, one panel writes both
+    /// ears in lockstep.
+    var separateNotch: Bool
     var globalTrimDB: Double                    // -12 to +12 — guards against post-boost clipping
     var balance: Double                         // -1 (full L) … 0 (centered) … +1 (full R)
     var autoEQCurveURL: URL?                    // legacy — kept for decoder compat, no longer read
@@ -39,6 +50,13 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     var createdAt: Date
     var modifiedAt: Date
 
+    /// Legacy keys that the synthesised CodingKeys (which mirrors only
+    /// current stored properties) doesn't include. Used by the custom
+    /// decoder to read old field names off disk.
+    private enum LegacyKeys: String, CodingKey {
+        case notch
+    }
+
     // Custom decoder so older profile JSON (pre-balance, pre-isBuiltIn) still
     // loads — missing fields decode to safe defaults. Encoding stays synthesized.
     init(from decoder: Decoder) throws {
@@ -49,7 +67,21 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.linkedDeviceUID        = try c.decodeIfPresent(String.self, forKey: .linkedDeviceUID)
         self.leftEar                = try c.decode(EarProfile.self, forKey: .leftEar)
         self.rightEar               = try c.decode(EarProfile.self, forKey: .rightEar)
-        self.notch                  = try c.decode(TinnitusNotch.self, forKey: .notch)
+        // Per-ear notch. Legacy profiles stored one shared `notch`
+        // field; mirror it onto both ears so old data keeps behaving
+        // exactly as it did. New profiles persist `leftNotch` /
+        // `rightNotch` explicitly.
+        if let lN = try c.decodeIfPresent(TinnitusNotch.self, forKey: .leftNotch),
+           let rN = try c.decodeIfPresent(TinnitusNotch.self, forKey: .rightNotch) {
+            self.leftNotch  = lN
+            self.rightNotch = rN
+        } else {
+            let legacy = try decoder.container(keyedBy: LegacyKeys.self)
+            let shared = try legacy.decode(TinnitusNotch.self, forKey: .notch)
+            self.leftNotch  = shared
+            self.rightNotch = shared
+        }
+        self.separateNotch          = try c.decodeIfPresent(Bool.self, forKey: .separateNotch) ?? false
         self.globalTrimDB           = try c.decode(Double.self, forKey: .globalTrimDB)
         self.balance                = try c.decodeIfPresent(Double.self, forKey: .balance) ?? 0
         self.autoEQCurveURL         = try c.decodeIfPresent(URL.self, forKey: .autoEQCurveURL)
@@ -71,7 +103,8 @@ struct HearingProfile: Codable, Identifiable, Hashable {
 
     init(
         id: UUID, name: String, symbol: String, linkedDeviceUID: String?,
-        leftEar: EarProfile, rightEar: EarProfile, notch: TinnitusNotch,
+        leftEar: EarProfile, rightEar: EarProfile,
+        leftNotch: TinnitusNotch, rightNotch: TinnitusNotch, separateNotch: Bool = false,
         globalTrimDB: Double, balance: Double = 0, autoEQCurveURL: URL?,
         autoEQName: String? = nil, autoEQBands: [EQBand]? = nil, autoEQPreampDB: Double? = nil,
         safeListeningCeilingDB: Double, compensationFactor: Double,
@@ -82,7 +115,9 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     ) {
         self.id = id; self.name = name; self.symbol = symbol
         self.linkedDeviceUID = linkedDeviceUID
-        self.leftEar = leftEar; self.rightEar = rightEar; self.notch = notch
+        self.leftEar = leftEar; self.rightEar = rightEar
+        self.leftNotch = leftNotch; self.rightNotch = rightNotch
+        self.separateNotch = separateNotch
         self.globalTrimDB = globalTrimDB; self.balance = balance
         self.autoEQCurveURL = autoEQCurveURL
         self.autoEQName = autoEQName
@@ -123,7 +158,8 @@ extension HearingProfile {
             linkedDeviceUID: nil,
             leftEar: .flat,
             rightEar: .flat,
-            notch: .disabled,
+            leftNotch: .disabled,
+            rightNotch: .disabled,
             globalTrimDB: 0,
             autoEQCurveURL: nil,
             safeListeningCeilingDB: 85.0,
@@ -153,7 +189,8 @@ extension HearingProfile {
             linkedDeviceUID: nil,
             leftEar: EarProfile(thresholds: AudiogramPoint.flat, bands: curve),
             rightEar: EarProfile(thresholds: AudiogramPoint.flat, bands: curve),
-            notch: .disabled,
+            leftNotch: .disabled,
+            rightNotch: .disabled,
             globalTrimDB: 0,
             autoEQCurveURL: nil,
             safeListeningCeilingDB: 85.0,
