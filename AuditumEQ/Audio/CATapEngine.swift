@@ -30,6 +30,18 @@ final class CATapEngine: ObservableObject {
     /// Mono source node for the right channel (stereo with L = 0, R = tapped R).
     private(set) var rightSourceNode: AVAudioSourceNode?
 
+    /// Per-ear EQ biquad cascades, applied in the source-node render
+    /// block immediately after the ring read. Carry the full per-ear
+    /// EQ stack: AutoEQ headphone correction + profile bands + tinnitus
+    /// notch + global trim. Replaces an upstream `AVAudioUnitEQ` chain
+    /// that introduced cross-channel content under extreme balance
+    /// pans — processing the filter on a single mono Float buffer per
+    /// render block keeps the L and R signal paths physically
+    /// separate. AuditumEQAudioEngine reconfigures these via
+    /// `setBands(...)` on every profile change.
+    let leftEQCascade = BiquadCascade()
+    let rightEQCascade = BiquadCascade()
+
     /// Format both source nodes emit (stereo, tap sample rate).
     private(set) var sourceFormat: AVAudioFormat?
     /// Tap stream descriptor — sample rate, channel count of the raw tap.
@@ -242,6 +254,12 @@ final class CATapEngine: ObservableObject {
         let sourceSR = stereoFormat.sampleRate
         let preIngest = self.preIngest    // strong capture — bare class, no actor
 
+        // Capture cascades strongly so the render block reads them
+        // without an isolation hop. They live for the engine's lifetime;
+        // safe to hold across the block's lifetime.
+        let lEQ = leftEQCascade
+        let rEQ = rightEQCascade
+
         leftSourceNode = AVAudioSourceNode(format: stereoFormat) { [weak leftRing] _, _, frameCount, audioBufferList -> OSStatus in
             let status = Self.fillFromMonoRing(
                 ring: leftRing,
@@ -249,11 +267,19 @@ final class CATapEngine: ObservableObject {
                 abl: audioBufferList,
                 frameCount: frameCount
             )
+            // EQ on the L channel only (R is held at 0 by the fill).
+            // Pre-EQ spectrum side-channel reads the *post-EQ* signal
+            // because that's what the user actually hears, matching the
+            // post-EQ tap on the other side of the chain.
+            let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+            if buffers.count > 0,
+               let lPtr = buffers[0].mData?.assumingMemoryBound(to: Float.self) {
+                lEQ.process(samples: lPtr, count: Int(frameCount))
+            }
             leftCounter.add(Int(frameCount))
             Self.recordPeak(abl: audioBufferList, frameCount: frameCount, into: outPeak)
             preIngest.renderBlockEntries &+= 1
             if let callback = preIngest.callback {
-                let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
                 if let lPtr = buffers[0].mData?.assumingMemoryBound(to: Float.self) {
                     callback(lPtr, Int(frameCount), sourceSR)
                     preIngest.callbackInvocations &+= 1
@@ -268,6 +294,12 @@ final class CATapEngine: ObservableObject {
                 abl: audioBufferList,
                 frameCount: frameCount
             )
+            // EQ on the R channel only (L is held at 0 by the fill).
+            let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+            if buffers.count >= 2,
+               let rPtr = buffers[1].mData?.assumingMemoryBound(to: Float.self) {
+                rEQ.process(samples: rPtr, count: Int(frameCount))
+            }
             rightCounter.add(Int(frameCount))
             Self.recordPeak(abl: audioBufferList, frameCount: frameCount, into: outPeak)
             return status

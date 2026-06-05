@@ -22,15 +22,27 @@ final class AuditumEQAudioEngine: ObservableObject {
     private let engine = AVAudioEngine()
     private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "AudioEngine")
 
-    private var leftEQ: AVAudioUnitEQ?
-    private var rightEQ: AVAudioUnitEQ?
-    /// AutoEQ headphone-correction stages, one per ear, upstream of the
-    /// user's profile EQ. AutoEQ files describe ear-pad/transducer
-    /// imperfections, not the user's hearing — keeping them on their own
-    /// nodes means profile EQ stays uncontaminated. 16 bands per ear
-    /// matches the high end of AutoEq-project output for headphones.
-    private var leftAutoEQ: AVAudioUnitEQ?
-    private var rightAutoEQ: AVAudioUnitEQ?
+    /// Full per-ear EQ runs as a manual biquad cascade inside the
+    /// source-node render block (owned by `CATapEngine`). One cascade
+    /// per ear, carrying AutoEQ headphone correction + profile bands +
+    /// tinnitus notch + global trim. Replaces the previous
+    /// `leftAutoEQ` + `leftEQ` (and right) AVAudioUnitEQ pair, both of
+    /// which introduced cross-channel content even with mono-on-one-
+    /// channel input. References stored at attach time so
+    /// `applyProfile` can push new coefficients on profile changes.
+    private weak var leftEQCascade: BiquadCascade?
+    private weak var rightEQCascade: BiquadCascade?
+    /// Sample rate the cascades' coefficients were computed at — kept
+    /// so `applyProfile` can recompute against the right Nyquist on
+    /// rebuilds (e.g. output-device switch with a different rate).
+    private var tapSampleRate: Double = 48000
+    /// Per-ear balance stages between `{l,r}eq` and `sumMixer`. Drives
+    /// the stereo-balance attenuation via `outputVolume` (linear, in
+    /// the AVAudioMixing protocol) instead of `{l,r}eq.globalGain`,
+    /// which appeared to leak ~45 dB at extreme attenuations. See
+    /// `avaudiounit-eq-extreme-attenuation-leak.md`.
+    private var leftBalanceMixer: AVAudioMixerNode?
+    private var rightBalanceMixer: AVAudioMixerNode?
     private var leftSource: AVAudioSourceNode?
     private var rightSource: AVAudioSourceNode?
 
@@ -60,6 +72,8 @@ final class AuditumEQAudioEngine: ObservableObject {
     func attach(
         leftSource: AVAudioSourceNode,
         rightSource: AVAudioSourceNode,
+        leftEQCascade: BiquadCascade,
+        rightEQCascade: BiquadCascade,
         sampleRate: Double
     ) {
         teardownGraph()
@@ -71,28 +85,12 @@ final class AuditumEQAudioEngine: ObservableObject {
             lastError = "Could not build stereo format @ \(sampleRate) Hz"
             return
         }
-
-        let leq = AVAudioUnitEQ(numberOfBands: 10)
-        let req = AVAudioUnitEQ(numberOfBands: 10)
-        Self.flatten(leq)
-        Self.flatten(req)
-
-        let lAuto = AVAudioUnitEQ(numberOfBands: 16)
-        let rAuto = AVAudioUnitEQ(numberOfBands: 16)
-        Self.flatten(lAuto)
-        Self.flatten(rAuto)
+        self.tapSampleRate = sampleRate
+        self.leftEQCascade = leftEQCascade
+        self.rightEQCascade = rightEQCascade
 
         engine.attach(leftSource)
         engine.attach(rightSource)
-        engine.attach(lAuto)
-        engine.attach(rAuto)
-        engine.attach(leq)
-        engine.attach(req)
-
-        engine.connect(leftSource, to: lAuto, format: tapFormat)
-        engine.connect(rightSource, to: rAuto, format: tapFormat)
-        engine.connect(lAuto, to: leq, format: tapFormat)
-        engine.connect(rAuto, to: req, format: tapFormat)
 
         // Sine tone generator — direct path to mainMixer, no EQ.
         if let toneNode = toneGenerator.makeSourceNode(sampleRate: sampleRate) {
@@ -142,41 +140,52 @@ final class AuditumEQAudioEngine: ObservableObject {
             self.sampleRateBridge = nil
             self.leftSource = leftSource
             self.rightSource = rightSource
-            self.leftEQ = leq
-            self.rightEQ = req
-            self.leftAutoEQ = lAuto
-            self.rightAutoEQ = rAuto
             log.info("Graph attached — tap \(Int(sampleRate)) Hz, output \(Int(outRate)) Hz (SR-mismatch — audio muted)")
             return
         }
 
         // Matching-rate path. AUPeakLimiter has a single input bus, so we
-        // can't connect leq and req directly to it — the second connection
-        // silently overrides the first and kills the L chain. Sum L+R
-        // through an explicit mixer first.
+        // can't connect the two source nodes directly to it — the second
+        // connection silently overrides the first and kills the L chain.
+        // Sum L+R through an explicit mixer first.
+        //
+        // Per-ear balance mixers sit between source nodes and sumMixer.
+        // The AVAudioMixing protocol's `outputVolume` gives clean linear
+        // attenuation on the bus, bypassing whatever cross-channel
+        // handling sumMixer / mainMixerNode does on stereo input at
+        // their defaults. Folding balance into upstream `globalGain`
+        // worked at small offsets but leaked ~45 dB at full pan.
+        //
+        // EQ (AutoEQ + profile bands + notch + trim) runs as a biquad
+        // cascade inside the source-node render block — owned by
+        // CATapEngine, configured from `applyProfile`. No AVAudioUnitEQ
+        // stage in this graph any more.
+        let lBal = AVAudioMixerNode()
+        let rBal = AVAudioMixerNode()
+        engine.attach(lBal)
+        engine.attach(rBal)
+        self.leftBalanceMixer = lBal
+        self.rightBalanceMixer = rBal
+
         let sumMixer = AVAudioMixerNode()
         engine.attach(sumMixer)
-        engine.connect(leq, to: sumMixer, format: tapFormat)
-        engine.connect(req, to: sumMixer, format: tapFormat)
+        engine.connect(leftSource, to: lBal, format: tapFormat)
+        engine.connect(rightSource, to: rBal, format: tapFormat)
+        engine.connect(lBal, to: sumMixer, format: tapFormat)
+        engine.connect(rBal, to: sumMixer, format: tapFormat)
         engine.connect(sumMixer, to: lim, format: tapFormat)
         engine.connect(lim, to: gainStage, format: tapFormat)
         engine.connect(gainStage, to: mixer, format: tapFormat)
         self.sampleRateBridge = sumMixer
         sampleRateMismatchWarning = nil
-        log.info("Graph attached — \(Int(sampleRate)) Hz end-to-end (sum + limiter + gain stage inline)")
+        log.info("Graph attached — \(Int(sampleRate)) Hz end-to-end (balance mixers + limiter + gain stage inline; EQ in render block)")
 
         self.leftSource = leftSource
         self.rightSource = rightSource
-        self.leftEQ = leq
-        self.rightEQ = req
-        self.leftAutoEQ = lAuto
-        self.rightAutoEQ = rAuto
 
-        leq.bypass = referenceMode
-        req.bypass = referenceMode
-        // AutoEQ stages also bypass when the user wants to hear raw signal.
-        lAuto.bypass = referenceMode
-        rAuto.bypass = referenceMode
+        // EQ cascades bypass when the user wants to hear raw signal.
+        leftEQCascade.setBypassed(referenceMode)
+        rightEQCascade.setBypassed(referenceMode)
     }
 
     func start() {
@@ -240,6 +249,18 @@ final class AuditumEQAudioEngine: ObservableObject {
     /// Install a buffer tap on `mainMixerNode` so a downstream analyzer can
     /// pull post-EQ PCM frames. The closure runs on the audio render thread;
     /// keep work realtime-safe (memcpy at most).
+    ///
+    /// We tap `mainMixerNode` rather than `masterGainStage` (one node
+    /// upstream) because the meter should reflect what the listener
+    /// actually hears. A diagnostic during the balance-leak work
+    /// surfaced ~−30 dB cross-channel content at `masterGainStage`
+    /// even with the per-ear balance mixer fully muted, but the same
+    /// content reads near the floor at `mainMixerNode` and is
+    /// audibly silent at the speakers — `mainMixerNode` (or the
+    /// output-device format conversion at its boundary) is scrubbing
+    /// the residual. Tapping there matches the listener experience.
+    /// The internal residual is real but not user-facing; worth
+    /// chasing only if it grows or starts bleeding to the output.
     func installSpectrumTap(
         bufferSize: AVAudioFrameCount = 1024,
         _ ingest: @escaping (AVAudioPCMBuffer, Double) -> Void
@@ -263,13 +284,20 @@ final class AuditumEQAudioEngine: ObservableObject {
     private func teardownGraph() {
         if let ls = leftSource { engine.detach(ls); leftSource = nil }
         if let rs = rightSource { engine.detach(rs); rightSource = nil }
-        if let leq = leftEQ { engine.detach(leq); leftEQ = nil }
-        if let req = rightEQ { engine.detach(req); rightEQ = nil }
+        if let lb = leftBalanceMixer { engine.detach(lb); leftBalanceMixer = nil }
+        if let rb = rightBalanceMixer { engine.detach(rb); rightBalanceMixer = nil }
         if let b = sampleRateBridge { engine.detach(b); sampleRateBridge = nil }
         if let l = limiter { engine.detach(l); limiter = nil }
         if let g = masterGainStage { engine.detach(g); masterGainStage = nil }
-        if let la = leftAutoEQ { engine.detach(la); leftAutoEQ = nil }
-        if let ra = rightAutoEQ { engine.detach(ra); rightAutoEQ = nil }
+        // EQ cascades are owned by CATapEngine — clear them to
+        // unity-and-bypassed so any audio that flows during teardown
+        // doesn't pick up a stale coefficient set, then drop our refs.
+        leftEQCascade?.setBands([], preampDB: 0, sampleRate: tapSampleRate)
+        rightEQCascade?.setBands([], preampDB: 0, sampleRate: tapSampleRate)
+        leftEQCascade?.setBypassed(true)
+        rightEQCascade?.setBypassed(true)
+        leftEQCascade = nil
+        rightEQCascade = nil
         if let t = toneSourceNode { engine.detach(t); toneSourceNode = nil }
     }
 
@@ -277,12 +305,11 @@ final class AuditumEQAudioEngine: ObservableObject {
 
     func setReferenceMode(_ on: Bool) {
         referenceMode = on
-        leftEQ?.bypass = on
-        rightEQ?.bypass = on
-        // Reference Mode also bypasses headphone correction so the user
-        // hears the truly-unprocessed source signal.
-        leftAutoEQ?.bypass = on
-        rightAutoEQ?.bypass = on
+        // EQ cascades carry AutoEQ + profile bands + notch + trim —
+        // a single bypass toggle takes the whole stack out of the path
+        // so the user hears the truly-unprocessed source signal.
+        leftEQCascade?.setBypassed(on)
+        rightEQCascade?.setBypassed(on)
     }
 
     /// Master output gain applied post-limiter via a dedicated AVAudioUnitEQ
@@ -324,93 +351,76 @@ final class AuditumEQAudioEngine: ObservableObject {
     /// the chain flattened.
     func setTestCurveEnabled(_ on: Bool) {
         testCurveEnabled = on
-        guard let leq = leftEQ, let req = rightEQ else { return }
-        Self.flatten(leq)
-        Self.flatten(req)
         if on {
-            let band = leq.bands[0]
-            band.filterType = .parametric
-            band.frequency = 3000
-            band.bandwidth = 0.5    // octaves
-            band.gain = 6.0
-            band.bypass = false
+            // Diagnostic curve: a single +6 dB parametric peak at 3 kHz
+            // — easy to hear, easy to compare to a reference. Pushed
+            // directly to both cascades, overriding whatever the active
+            // profile last installed. AudioState re-applies the profile
+            // when the user turns this off.
+            let testBand = EQBand(
+                frequencyHz: 3000,
+                gaindB: 6,
+                bandwidth: 1.0,
+                filterType: .parametric,
+                enabled: true
+            )
+            leftEQCascade?.setBands([testBand], preampDB: 0, sampleRate: tapSampleRate)
+            rightEQCascade?.setBands([testBand], preampDB: 0, sampleRate: tapSampleRate)
+            leftEQCascade?.setBypassed(false)
+            rightEQCascade?.setBypassed(false)
+        } else {
+            leftEQCascade?.setBands([], preampDB: 0, sampleRate: tapSampleRate)
+            rightEQCascade?.setBands([], preampDB: 0, sampleRate: tapSampleRate)
         }
     }
 
     /// Apply a hearing profile's per-ear bands + global trim to the chain.
-    /// Excess band slots beyond the profile's band count are flattened and
-    /// bypassed. Reference mode is preserved (we don't fight the bypass flag).
+    /// Folds AutoEQ + profile bands + tinnitus notch + global trim into
+    /// a single biquad cascade per ear, processed in the source-node
+    /// render block. Reference mode is preserved.
     /// Has no effect if the graph isn't attached yet (CATap permission denied,
     /// device not ready, etc.) — `attach()` calls this when the graph comes up.
     func applyProfile(_ profile: HearingProfile) {
-        guard let leq = leftEQ, let req = rightEQ else { return }
+        // Balance rides on the per-ear AVAudioMixerNode's `outputVolume`
+        // (linear, in the AVAudioMixing protocol). A dedicated mixer
+        // stage with `outputVolume` sidesteps the cross-channel handling
+        // that re-introduces signal from an attenuated bus — when the
+        // bus volume goes to 0, no signal reaches the sum.
+        let (leftLinear, rightLinear) = Self.balanceLinear(profile.balance)
+        leftBalanceMixer?.outputVolume = Float(leftLinear)
+        rightBalanceMixer?.outputVolume = Float(rightLinear)
+        log.info("Balance — L bus \(leftLinear, format: .fixed(precision: 3)), R bus \(rightLinear, format: .fixed(precision: 3)); trim \(profile.globalTrimDB, format: .fixed(precision: 2)) dB; balance \(profile.balance, format: .fixed(precision: 2))")
 
-        // Notch is shared across ears (spec §5.3) — pretend it's an extra
-        // band tacked onto each per-ear chain so the existing apply() works.
-        let leftBands = profile.leftEar.bands + Self.notchAsBand(profile.notch)
-        let rightBands = profile.rightEar.bands + Self.notchAsBand(profile.notch)
-
-        Self.apply(bands: leftBands, to: leq)
-        Self.apply(bands: rightBands, to: req)
-
-        // NOTE: balance is currently applied via `globalGain` on the per-
-        // ear AVAudioUnitEQ. Logs confirm the AU accepts the full −60 dB
-        // at full pan, but the channel separation seen at the mainMixer
-        // tap is only ~15 dB. That suggests some cross-channel mixing is
-        // happening downstream of leq/req — likely in AVAudioMixerNode's
-        // default stereo handling.
+        // Combined per-ear EQ stack:
+        //   1. AutoEQ headphone-correction bands (same for both ears —
+        //      AutoEQ files describe a stereo pair, not per-cup)
+        //   2. Profile bands for this ear
+        //   3. Tinnitus notch (shared across ears, spec §5.3)
         //
-        // Tried `leq.volume = leftLinear` (the AVAudioMixing protocol's
-        // bus-volume property) but AVAudioUnitEQ doesn't conform to
-        // AVAudioMixing — that path isn't available without inserting
-        // dedicated per-ear AVAudioMixerNode stages between leq/req and
-        // sumMixer (a future refactor; tracked in the follow-up task).
-        let (leftPanDB, rightPanDB) = Self.balanceDeltaDB(profile.balance)
-        leq.globalGain = Float(profile.globalTrimDB + leftPanDB)
-        req.globalGain = Float(profile.globalTrimDB + rightPanDB)
-        log.info("Balance — leq.globalGain \(leq.globalGain, format: .fixed(precision: 2)) dB, req.globalGain \(req.globalGain, format: .fixed(precision: 2)) dB; trim \(profile.globalTrimDB, format: .fixed(precision: 2)) dB; balance \(profile.balance, format: .fixed(precision: 2))")
+        // Combined preamp = AutoEQ preamp + profile global trim. All of
+        // it goes through the BiquadCascade so the L and R signal paths
+        // stay physically separate. Replaces the previous {leftAutoEQ,
+        // leftEQ} AVAudioUnitEQ pair (and right), which leaked cross-
+        // channel content even with mono-on-one-channel input.
+        let autoBands = profile.autoEQBands ?? []
+        let notchBand = Self.notchAsBand(profile.notch)
+        let combinedLeftBands = autoBands + profile.leftEar.bands + notchBand
+        let combinedRightBands = autoBands + profile.rightEar.bands + notchBand
+        let combinedPreampDB = (profile.autoEQPreampDB ?? 0) + profile.globalTrimDB
 
-        leq.bypass = referenceMode
-        req.bypass = referenceMode
+        leftEQCascade?.setBands(combinedLeftBands, preampDB: combinedPreampDB, sampleRate: tapSampleRate)
+        rightEQCascade?.setBands(combinedRightBands, preampDB: combinedPreampDB, sampleRate: tapSampleRate)
+        leftEQCascade?.setBypassed(referenceMode)
+        rightEQCascade?.setBypassed(referenceMode)
 
-        // AutoEQ correction (headphone-level) — applied identically to
-        // both ears since AutoEQ files describe a stereo pair, not per-cup.
-        if let auto = profile.autoEQBands, !auto.isEmpty {
-            Self.apply(bands: auto, to: leftAutoEQ)
-            Self.apply(bands: auto, to: rightAutoEQ)
-            let preamp = Float(profile.autoEQPreampDB ?? 0)
-            leftAutoEQ?.globalGain = preamp
-            rightAutoEQ?.globalGain = preamp
-            leftAutoEQ?.bypass = referenceMode
-            rightAutoEQ?.bypass = referenceMode
-        } else {
-            leftAutoEQ.map(Self.flatten)
-            rightAutoEQ.map(Self.flatten)
-            leftAutoEQ?.bypass = true
-            rightAutoEQ?.bypass = true
-        }
-
-        log.info("Applied profile \(profile.name, privacy: .public) — L:\(leftBands.count) bands, R:\(rightBands.count) bands, trim:\(profile.globalTrimDB) dB, balance:\(profile.balance, format: .fixed(precision: 2)), notch:\(profile.notch.enabled ? "on" : "off"), autoEQ:\(profile.autoEQName ?? "none", privacy: .public)")
+        log.info("Applied profile \(profile.name, privacy: .public) — L:\(combinedLeftBands.count) bands, R:\(combinedRightBands.count) bands, preamp+trim:\(combinedPreampDB) dB, balance:\(profile.balance, format: .fixed(precision: 2)), notch:\(profile.notch.enabled ? "on" : "off"), autoEQ:\(profile.autoEQName ?? "none", privacy: .public)")
     }
 
-    /// Linear-pan attenuation converted to dB so it can ride along with the
-    /// per-ear EQ globalGain. AVAudioUnitEQ doesn't expose AVAudioMixing.volume,
-    /// so we can't do it as a send level — folding into globalGain is the same
-    /// effect with one fewer node in the chain. Full-opposite caps at -60 dB so
-    /// log10 doesn't blow up at zero.
-    static func balanceDeltaDB(_ balance: Double) -> (left: Double, right: Double) {
-        let b = max(-1, min(1, balance))
-        let leftLinear  = b <= 0 ? 1.0 : max(0.001, 1.0 - b)
-        let rightLinear = b >= 0 ? 1.0 : max(0.001, 1.0 + b)
-        return (20 * log10(leftLinear), 20 * log10(rightLinear))
-    }
-
-    /// Linear-domain version of the balance attenuation — fed directly to
-    /// `AVAudioMixing.volume` rather than converted to dB then applied via
-    /// `globalGain`. Going through the mixer's bus-volume is more reliable
-    /// for getting clean ~60 dB channel separation; `globalGain` at large
-    /// negative values appears to leak channel content through whatever
-    /// stereo-handling AVAudioMixerNode does at its outputs.
+    /// Linear-domain balance attenuation fed to the per-ear
+    /// `AVAudioMixerNode.outputVolume`. balance = 0 leaves both buses
+    /// at unity; positive values attenuate the left bus, negative
+    /// values the right. Snaps cleanly to 0 at the extremes since
+    /// `outputVolume = 0` truly mutes the bus.
     static func balanceLinear(_ balance: Double) -> (left: Double, right: Double) {
         let b = max(-1, min(1, balance))
         // Volume snaps cleanly to 0 at the extremes — no need for the 0.001

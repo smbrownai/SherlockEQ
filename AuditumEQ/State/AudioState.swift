@@ -216,14 +216,29 @@ final class AudioState: ObservableObject {
         connectedStore = profileStore
         profileSubscriptions.removeAll()
 
+        // `@Published` fires its publisher in the property's `willSet`,
+        // *before* the value is actually assigned. If we call
+        // `applyActiveProfile()` directly inside the sink we read the
+        // store's *old* state and push the wrong profile to the engine.
+        // The bug bit a single-shot save (e.g. the "Center balance"
+        // recenter button) hardest: only one save fires, so the engine
+        // ends up holding whatever was there immediately before — the
+        // UI says "Center" while the audio chain is still at L 100 %.
+        // Slider drags hid it because each tick's apply caught up to
+        // the previous tick's save. Defer to the next main-actor turn
+        // so the assignment has landed by the time we read.
         $activeProfileID
             .dropFirst()
-            .sink { [weak self] _ in self?.applyActiveProfile() }
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.applyActiveProfile() }
+            }
             .store(in: &profileSubscriptions)
 
         profileStore.$profiles
             .dropFirst()
-            .sink { [weak self] _ in self?.applyActiveProfile() }
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.applyActiveProfile() }
+            }
             .store(in: &profileSubscriptions)
 
         applyActiveProfile()
@@ -441,6 +456,8 @@ final class AudioState: ObservableObject {
         audio.attach(
             leftSource: leftSource,
             rightSource: rightSource,
+            leftEQCascade: tap.leftEQCascade,
+            rightEQCascade: tap.rightEQCascade,
             sampleRate: format.sampleRate
         )
         audio.start()
