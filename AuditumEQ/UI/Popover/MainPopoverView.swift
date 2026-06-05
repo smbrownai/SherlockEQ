@@ -81,7 +81,7 @@ struct MainPopoverView: View {
             Text("Gain")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
-                .frame(width: 56, alignment: .leading)
+                .frame(width: 80, alignment: .leading)
             Slider(
                 value: Binding(
                     get: { audioState.masterGainDB },
@@ -114,7 +114,7 @@ struct MainPopoverView: View {
                 Text("Balance")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
-                    .frame(width: 56, alignment: .leading)
+                    .frame(width: 80, alignment: .leading)
                 Slider(
                     value: Binding(
                         get: { profile.balance },

@@ -19,10 +19,10 @@ struct DoseBarView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text("Session")
+            Text("Today's Dose")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
-                .frame(width: 56, alignment: .leading)
+                .frame(width: 80, alignment: .leading)
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {

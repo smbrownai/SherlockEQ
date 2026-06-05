@@ -30,7 +30,7 @@ struct PopoverLevelStrip: View {
             Text("Level")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
-                .frame(width: 56, alignment: .leading)
+                .frame(width: 80, alignment: .leading)
                 // Hit-target only on the label itself — the rest of the
                 // row stays cleanly non-interactive. Triple-tap toggles
                 // between strip ↔ analog. Single/double taps fall
