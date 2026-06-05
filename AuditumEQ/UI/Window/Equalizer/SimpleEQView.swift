@@ -68,10 +68,77 @@ struct SimpleEQView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
             Spacer()
+            presetMenu
             Toggle("Link L + R", isOn: $linkChannels)
                 .toggleStyle(.switch)
                 .controlSize(.small)
         }
+    }
+
+    /// One-click curated curves — same visual treatment Speech uses so
+    /// the affordance reads as familiar across tabs. Each preset
+    /// overwrites the three Simple bands on both ears; other tabs'
+    /// bands (Advanced peaks, Expert custom bands, AutoEQ, audiogram
+    /// compensation) are untouched.
+    private var presetMenu: some View {
+        Menu {
+            ForEach(SimpleEQPreset.allCases) { preset in
+                Button {
+                    apply(preset)
+                } label: {
+                    VStack(alignment: .leading) {
+                        Label(preset.label, systemImage: preset.symbol)
+                        Text(preset.tagline)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityLabel("\(preset.label) preset. \(preset.tagline)")
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "wand.and.stars")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.tint)
+                Text("Preset")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.tint)
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.tint)
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(Color.accentColor.opacity(0.16))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7)
+                    .stroke(Color.accentColor.opacity(0.55), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("One-click curated curves for the three Simple bands.")
+        .accessibilityLabel("Simple EQ preset")
+    }
+
+    private func apply(_ preset: SimpleEQPreset) {
+        guard let profile = audioState.activeProfile(in: profileStore) else { return }
+        var updated = profile
+        var lb = updated.leftEar.bands
+        var rb = updated.rightEar.bands
+        for band in Self.simpleBands {
+            let gain = preset.gain(forHz: band.frequencyHz)
+            EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &lb)
+            EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &rb)
+        }
+        updated.leftEar.bands = lb
+        updated.rightEar.bands = rb
+        try? profileStore.save(updated)
     }
 
     @State private var dummySelection: UUID? = nil
@@ -232,5 +299,81 @@ struct SimpleEQView: View {
     private func formatGain(_ db: Double) -> String {
         if abs(db) < 0.05 { return "0 dB" }
         return String(format: "%+.1f dB", db)
+    }
+}
+
+// MARK: - Simple presets
+
+/// Curated starting points for the 3-band Simple EQ. Each preset
+/// lists per-band dB offsets keyed by the band's centre frequency.
+/// Bands not in `gains` get 0 (flat / removed from the chain).
+enum SimpleEQPreset: String, CaseIterable, Identifiable {
+    case flat
+    case loudness
+    case warm
+    case bright
+    case vocalForward
+    case trebleTame
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .flat:         return "Flat"
+        case .loudness:     return "Loudness compensation"
+        case .warm:         return "Warm"
+        case .bright:       return "Bright"
+        case .vocalForward: return "Vocal forward"
+        case .trebleTame:   return "Treble tame"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .flat:         return "minus"
+        case .loudness:     return "speaker.wave.3"
+        case .warm:         return "flame"
+        case .bright:       return "sparkles"
+        case .vocalForward: return "person.wave.2"
+        case .trebleTame:   return "ear.trianglebadge.exclamationmark"
+        }
+    }
+
+    var tagline: String {
+        switch self {
+        case .flat:
+            return "Reset Bass, Mids, and Treble to 0."
+        case .loudness:
+            return "Lifts bass and treble — restores the perceived balance at low listening volume (Fletcher-Munson)."
+        case .warm:
+            return "Adds bass, gently rolls off treble — easier on long sessions."
+        case .bright:
+            return "Treble emphasis with a touch less bass — adds air."
+        case .vocalForward:
+            return "Mids boost, slight bass + treble cut — pushes voices forward."
+        case .trebleTame:
+            return "Treble cut — helpful for hyperacusis or harsh program material."
+        }
+    }
+
+    func gain(forHz hz: Double) -> Double { gains[hz] ?? 0 }
+
+    /// Keyed by band centre frequency: 250 Hz Bass shelf, 1 kHz Mids
+    /// parametric, 5 kHz Treble shelf — matches `SimpleEQView.simpleBands`.
+    var gains: [Double: Double] {
+        switch self {
+        case .flat:
+            return [:]
+        case .loudness:
+            return [250: 4, 1000: 0, 5000: 3]
+        case .warm:
+            return [250: 3, 1000: 0, 5000: -2]
+        case .bright:
+            return [250: -1, 1000: 0, 5000: 3]
+        case .vocalForward:
+            return [250: -2, 1000: 3, 5000: -1]
+        case .trebleTame:
+            return [250: 0, 1000: 0, 5000: -4]
+        }
     }
 }

@@ -44,10 +44,76 @@ struct AdvancedEQView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
             Spacer()
+            presetMenu
             Toggle("Link L + R", isOn: $linkChannels)
                 .toggleStyle(.switch)
                 .controlSize(.small)
         }
+    }
+
+    /// One-click curated curves shaped to the 10 octave bands. Mirrors
+    /// the Speech and Simple preset menus so the affordance reads as
+    /// consistent across tabs. Each preset overwrites the 10 Advanced
+    /// bands on both ears; other tabs' bands stay untouched.
+    private var presetMenu: some View {
+        Menu {
+            ForEach(AdvancedEQPreset.allCases) { preset in
+                Button {
+                    apply(preset)
+                } label: {
+                    VStack(alignment: .leading) {
+                        Label(preset.label, systemImage: preset.symbol)
+                        Text(preset.tagline)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityLabel("\(preset.label) preset. \(preset.tagline)")
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "wand.and.stars")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.tint)
+                Text("Preset")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.tint)
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.tint)
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(Color.accentColor.opacity(0.16))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7)
+                    .stroke(Color.accentColor.opacity(0.55), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("One-click curated curves for the 10 Advanced bands.")
+        .accessibilityLabel("Advanced EQ preset")
+    }
+
+    private func apply(_ preset: AdvancedEQPreset) {
+        guard let profile = audioState.activeProfile(in: profileStore) else { return }
+        var updated = profile
+        var lb = updated.leftEar.bands
+        var rb = updated.rightEar.bands
+        for freq in Self.frequencies {
+            let gain = preset.gain(forHz: freq)
+            EQBandLookup.setGain(gain, at: freq, bandwidth: Self.bandwidth, filterType: .parametric, in: &lb)
+            EQBandLookup.setGain(gain, at: freq, bandwidth: Self.bandwidth, filterType: .parametric, in: &rb)
+        }
+        updated.leftEar.bands = lb
+        updated.rightEar.bands = rb
+        try? profileStore.save(updated)
     }
 
     @State private var dummySelection: UUID? = nil
@@ -281,5 +347,164 @@ private struct VerticalGainSlider: View {
     private func yFor(_ db: Double, height: CGFloat) -> CGFloat {
         let normalized = (range.upperBound - db) / (range.upperBound - range.lowerBound)
         return CGFloat(normalized) * height
+    }
+}
+
+// MARK: - Advanced presets
+
+/// Curated starting points for the 10-band Advanced EQ. Each preset
+/// lists per-band dB offsets keyed by the band's centre frequency
+/// (Hz). Bands not in `gains` get 0 (flat / removed from the chain).
+enum AdvancedEQPreset: String, CaseIterable, Identifiable {
+    case flat
+    case loudness
+    case warm
+    case bright
+    case vShape
+    case classical
+    case acoustic
+    case country
+    case jazz
+    case rock
+    case hipHop
+    case electronic
+    case techno
+    case trebleTame
+    case bassRoll
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .flat:       return "Flat"
+        case .loudness:   return "Loudness compensation"
+        case .warm:       return "Warm"
+        case .bright:     return "Bright"
+        case .vShape:     return "V-shape"
+        case .classical:  return "Classical"
+        case .acoustic:   return "Acoustic"
+        case .country:    return "Country"
+        case .jazz:       return "Jazz"
+        case .rock:       return "Rock"
+        case .hipHop:     return "Hip-hop / R&B"
+        case .electronic: return "Electronic"
+        case .techno:     return "Techno"
+        case .trebleTame: return "Treble tame"
+        case .bassRoll:   return "Bass rolloff"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .flat:       return "minus"
+        case .loudness:   return "speaker.wave.3"
+        case .warm:       return "flame"
+        case .bright:     return "sparkles"
+        case .vShape:     return "chevron.up.chevron.down"
+        case .classical:  return "pianokeys"
+        case .acoustic:   return "music.quarternote.3"
+        case .country:    return "music.mic"
+        case .jazz:       return "music.note.list"
+        case .rock:       return "guitars"
+        case .hipHop:     return "waveform.path.ecg"
+        case .electronic: return "waveform"
+        case .techno:     return "waveform.circle"
+        case .trebleTame: return "ear.trianglebadge.exclamationmark"
+        case .bassRoll:   return "arrow.down.right"
+        }
+    }
+
+    var tagline: String {
+        switch self {
+        case .flat:
+            return "Reset all 10 bands to 0."
+        case .loudness:
+            return "Boosts low and high extremes — restores perceived balance at low listening volume (Fletcher-Munson)."
+        case .warm:
+            return "Bass-forward, gentle treble rolloff — easier on long sessions."
+        case .bright:
+            return "Treble emphasis with a slight low-mid cut — adds clarity and air."
+        case .vShape:
+            return "Boost the extremes, scoop the mids — modern consumer / club sound."
+        case .classical:
+            return "Trim rumble, gentle string and air lift — preserves the natural mid balance orchestras need."
+        case .acoustic:
+            return "Trim rumble, lift instrument body and string brilliance — fingerpicking and small-ensemble material."
+        case .country:
+            return "Warm vocal body and acoustic-instrument presence — vocal-forward without losing twang."
+        case .jazz:
+            return "Smooth mid warmth around horns and upright bass — mid-forward without spotlighting cymbals."
+        case .rock:
+            return "Mild bass body and a 2–4 kHz presence lift for guitar bite."
+        case .hipHop:
+            return "Sub-bass forward with a gentle low-mid scoop — kick drums and 808s hit harder."
+        case .electronic:
+            return "Wide synth shape — sub-bass body, scooped low-mids, shimmer on top."
+        case .techno:
+            return "Kick-forward bass body and crisp hi-hats — built for pumping four-on-the-floor."
+        case .trebleTame:
+            return "Progressive treble cut — useful for hyperacusis or sibilant material."
+        case .bassRoll:
+            return "Gentle low-frequency cut — tightens up small speakers and reduces room boom."
+        }
+    }
+
+    func gain(forHz hz: Double) -> Double { gains[hz] ?? 0 }
+
+    /// Keyed by band centre frequency — matches `AdvancedEQView.frequencies`.
+    var gains: [Double: Double] {
+        switch self {
+        case .flat:
+            return [:]
+        case .loudness:
+            return [31.5: 6, 63: 5, 125: 3, 250: 1,
+                    4000: 1, 8000: 3, 16000: 5]
+        case .warm:
+            return [31.5: 2, 63: 3, 125: 2, 250: 1,
+                    2000: -1, 4000: -2, 8000: -2, 16000: -1]
+        case .bright:
+            return [125: -1, 250: -1,
+                    2000: 1, 4000: 2, 8000: 3, 16000: 3]
+        case .vShape:
+            return [31.5: 3, 63: 3, 125: 2,
+                    500: -2, 1000: -3, 2000: -2,
+                    8000: 2, 16000: 3]
+        case .classical:
+            return [31.5: -2, 63: -1,
+                    250: 1,
+                    2000: 1, 4000: 1, 8000: 2, 16000: 1]
+        case .acoustic:
+            return [31.5: -2, 63: -1,
+                    250: 1, 500: 1,
+                    2000: 1, 4000: 1, 8000: 2, 16000: 1]
+        case .country:
+            return [31.5: -1,
+                    125: 1, 250: 1, 500: 1, 1000: 1,
+                    2000: 2, 4000: 1, 8000: 1]
+        case .jazz:
+            return [31.5: -2, 63: -1,
+                    125: 1, 250: 1, 500: 2, 1000: 1,
+                    2000: 1, 8000: 1]
+        case .rock:
+            return [31.5: 1, 63: 2, 125: 1,
+                    500: -1,
+                    2000: 2, 4000: 2, 8000: 1, 16000: 1]
+        case .hipHop:
+            return [31.5: 5, 63: 4, 125: 2,
+                    500: -2, 1000: -1,
+                    4000: 1, 8000: 2, 16000: 1]
+        case .electronic:
+            return [31.5: 3, 63: 3, 125: 1,
+                    500: -2, 1000: -1,
+                    4000: 1, 8000: 3, 16000: 2]
+        case .techno:
+            return [31.5: 4, 63: 4, 125: 2,
+                    1000: -1,
+                    4000: 1, 8000: 3, 16000: 3]
+        case .trebleTame:
+            return [2000: -1, 4000: -3, 8000: -5, 16000: -6]
+        case .bassRoll:
+            return [31.5: -6, 63: -4, 125: -2]
+        }
     }
 }
