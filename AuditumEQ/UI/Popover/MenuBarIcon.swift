@@ -27,21 +27,15 @@ struct MenuBarIcon: View {
     }
 
     private var dotVisible: Bool {
-        audioState.safeListening.didCrossAmberToday ||
-        audioState.safeListening.didCrossRedToday ||
-        dose >= 0.8
+        audioState.safeListening.doseSeverity != .safe
     }
 
-    private var dose: Double { audioState.safeListening.sessionDose }
-
     private var tint: Color {
-        if audioState.safeListening.didCrossRedToday || dose >= 1.0 {
-            return .red
+        switch audioState.safeListening.doseSeverity {
+        case .safe:  return .primary
+        case .amber: return .orange
+        case .red:   return .red
         }
-        if audioState.safeListening.didCrossAmberToday || dose >= 0.8 {
-            return .orange
-        }
-        return .primary
     }
 
     private var symbol: String { "waveform.and.magnifyingglass" }

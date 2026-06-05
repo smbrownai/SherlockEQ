@@ -335,9 +335,10 @@ struct SafeListeningView: View {
     }
 
     private var doseColor: Color {
-        let d = state.safeListening.sessionDose
-        if state.safeListening.didCrossRedToday || d >= 1.0 { return .red }
-        if state.safeListening.didCrossAmberToday || d >= 0.8 { return .orange }
-        return .green
+        switch state.safeListening.doseSeverity {
+        case .safe:  return .green
+        case .amber: return .orange
+        case .red:   return .red
+        }
     }
 }

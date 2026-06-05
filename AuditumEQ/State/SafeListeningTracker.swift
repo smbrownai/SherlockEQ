@@ -222,4 +222,23 @@ final class SafeListeningTracker: ObservableObject {
         lastEstimatePublish = nil
         remainingMinutes = nil
     }
+
+    /// Spec §5.4 dose tinting band. Single source of truth for any UI
+    /// that wants to colour-code dose state — menu-bar icon, popover,
+    /// Safe Listening view, Monitor sidebar all consume this so the
+    /// thresholds can't drift apart between surfaces. The `didCross*`
+    /// flags make severity monotone within a day: once the user has
+    /// hit a band, it sticks even if they go quiet enough that the
+    /// instantaneous dose dips below the threshold.
+    enum DoseSeverity {
+        case safe   // below 80 %
+        case amber  // ≥ 80 % or didCrossAmberToday
+        case red    // ≥ 100 % or didCrossRedToday
+    }
+
+    var doseSeverity: DoseSeverity {
+        if didCrossRedToday || sessionDose >= 1.0 { return .red }
+        if didCrossAmberToday || sessionDose >= 0.8 { return .amber }
+        return .safe
+    }
 }

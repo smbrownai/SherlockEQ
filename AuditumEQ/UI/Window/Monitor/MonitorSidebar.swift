@@ -219,10 +219,11 @@ struct MonitorSidebar: View {
     }
 
     private var doseColor: Color {
-        let dose = audioState.sessionDosePercent
-        if dose < 0.5 { return .green }
-        if dose < 0.8 { return .orange }
-        return .red
+        switch audioState.safeListening.doseSeverity {
+        case .safe:  return .green
+        case .amber: return .orange
+        case .red:   return .red
+        }
     }
 }
 
