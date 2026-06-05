@@ -113,7 +113,7 @@ struct MonitorSidebar: View {
     @ViewBuilder private var volumeSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Volume")
+                Text("Master Gain")
                     .font(.caption.weight(.semibold))
                 Spacer()
                 Text(formatGain(audioState.masterGainDB))
@@ -199,7 +199,7 @@ struct MonitorSidebar: View {
     @ViewBuilder private var doseSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Today")
+                Text("Today's Dose")
                     .font(.caption.weight(.semibold))
                 Spacer()
                 Text(String(format: "%.0f %%", audioState.sessionDosePercent * 100))

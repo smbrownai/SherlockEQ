@@ -22,6 +22,8 @@ struct MainPopoverView: View {
                 monitor: audioState.stereoMonitor,
                 calibrationOffsetDBA: audioState.calibrationOffsetDBA
             )
+            masterGainRow
+            balanceRow
             if let warning = audioState.audio.sampleRateMismatchWarning {
                 sampleRateBanner(warning)
             }
@@ -65,6 +67,95 @@ struct MainPopoverView: View {
             .buttonStyle(.plain)
             .help("Open AuditumEQ")
         }
+    }
+
+    // MARK: - Master gain + balance
+
+    /// Same visual rhythm as `PopoverLevelStrip`: a 56 pt gutter label
+    /// on the left so the row aligns with the level strip's "Level"
+    /// label, then the slider, then the numeric readout, then a tiny
+    /// recenter button. Master gain spans -60…+12 dB; reset returns
+    /// to 0 dB.
+    @ViewBuilder private var masterGainRow: some View {
+        HStack(spacing: 8) {
+            Text("Gain")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 56, alignment: .leading)
+            Slider(
+                value: Binding(
+                    get: { audioState.masterGainDB },
+                    set: { audioState.masterGainDB = $0 }
+                ),
+                in: -60...12
+            )
+            .controlSize(.small)
+            Text(formatGain(audioState.masterGainDB))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(width: 56, alignment: .trailing)
+            Button { audioState.masterGainDB = 0 } label: {
+                Image(systemName: "arrow.counterclockwise")
+                    .font(.caption2.weight(.semibold))
+            }
+            .buttonStyle(.borderless)
+            .help("Reset master gain to 0 dB")
+        }
+    }
+
+    /// Balance lives on the active profile, so we only show this row
+    /// when a profile is loaded. Saving through `ProfileStore` triggers
+    /// `applyActiveProfile` via the deferred Combine sink in
+    /// `AudioState` — see `published-willset-stale-read.md`.
+    @ViewBuilder private var balanceRow: some View {
+        if let profile = audioState.activeProfile(in: profileStore) {
+            HStack(spacing: 8) {
+                Text("Balance")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 56, alignment: .leading)
+                Slider(
+                    value: Binding(
+                        get: { profile.balance },
+                        set: { newValue in
+                            var updated = profile
+                            updated.balance = newValue
+                            try? profileStore.save(updated)
+                        }
+                    ),
+                    in: -1...1
+                )
+                .controlSize(.small)
+                Text(balanceLabel(profile.balance))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(width: 56, alignment: .trailing)
+                Button {
+                    var updated = profile
+                    updated.balance = 0
+                    try? profileStore.save(updated)
+                } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.caption2.weight(.semibold))
+                }
+                .buttonStyle(.borderless)
+                .help("Recenter balance")
+            }
+        }
+    }
+
+    private func formatGain(_ dB: Double) -> String {
+        let abs = Swift.abs(dB)
+        if abs < 0.05 { return "0 dB" }
+        return String(format: "%@%.1f dB", dB > 0 ? "+" : "−", abs)
+    }
+
+    private func balanceLabel(_ b: Double) -> String {
+        if abs(b) < 0.005 { return "Center" }
+        let pct = Int((abs(b) * 100).rounded())
+        return b < 0 ? "L \(pct)%" : "R \(pct)%"
     }
 
     @ViewBuilder private func sampleRateBanner(_ message: String) -> some View {
