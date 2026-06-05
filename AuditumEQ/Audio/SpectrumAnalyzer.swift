@@ -2,7 +2,6 @@ import Foundation
 import AVFoundation
 import Accelerate
 import Combine
-import OSLog
 
 /// vDSP-backed FFT spectrum analyzer that:
 ///   1. Installs a buffer tap on `AVAudioEngine.mainMixerNode` (post-EQ)
@@ -62,7 +61,6 @@ final class SpectrumAnalyzer: ObservableObject {
     /// 0 dBFS is a commonly used reasonable default for consumer playback.
     var calibrationOffsetDBA: Float = 100
 
-    private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "SpectrumAnalyzer")
     private let processingQueue = DispatchQueue(label: "com.shawnbrown.AuditumEQ.spectrum", qos: .userInitiated)
 
     // FFT state (created once, reused per frame).
@@ -282,7 +280,6 @@ final class SpectrumAnalyzer: ObservableObject {
         accumulatorLock.unlock()
         resetSmoothing()
         isAttached = true
-        log.info("SpectrumAnalyzer configured @ \(Int(sr)) Hz")
     }
 
     func detached() {

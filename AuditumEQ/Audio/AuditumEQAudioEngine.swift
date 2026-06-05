@@ -162,7 +162,7 @@ final class AuditumEQAudioEngine: ObservableObject {
         engine.connect(lim, to: gainStage, format: tapFormat)
         engine.connect(gainStage, to: mixer, format: tapFormat)
         self.sampleRateBridge = sumMixer
-        log.info("Graph attached — \(Int(sampleRate)) Hz end-to-end (balance mixers + limiter + gain stage inline; EQ in render block)")
+        log.info("Graph attached @ \(Int(sampleRate)) Hz end-to-end")
 
         self.leftSource = leftSource
         self.rightSource = rightSource
@@ -255,7 +255,7 @@ final class AuditumEQAudioEngine: ObservableObject {
             ingest(buffer, format.sampleRate)
         }
         spectrumTapInstalled = true
-        log.info("Spectrum tap installed (\(Int(format.sampleRate)) Hz, buffer \(bufferSize))")
+        log.debug("Spectrum tap installed (\(Int(format.sampleRate)) Hz, buffer \(bufferSize))")
     }
 
     func removeSpectrumTap() {
@@ -373,7 +373,6 @@ final class AuditumEQAudioEngine: ObservableObject {
         let (leftLinear, rightLinear) = Self.balanceLinear(profile.balance)
         leftBalanceMixer?.outputVolume = Float(leftLinear)
         rightBalanceMixer?.outputVolume = Float(rightLinear)
-        log.info("Balance — L bus \(leftLinear, format: .fixed(precision: 3)), R bus \(rightLinear, format: .fixed(precision: 3)); trim \(profile.globalTrimDB, format: .fixed(precision: 2)) dB; balance \(profile.balance, format: .fixed(precision: 2))")
 
         // Combined per-ear EQ stack:
         //   1. AutoEQ headphone-correction bands (same for both ears —
@@ -413,7 +412,7 @@ final class AuditumEQAudioEngine: ObservableObject {
                     : "L \(Int(profile.leftNotch.frequencyHz)) Hz, R \(Int(profile.rightNotch.frequencyHz)) Hz"
             }
         }()
-        log.info("Applied profile \(profile.name, privacy: .public) — L:\(combinedLeftBands.count) bands, R:\(combinedRightBands.count) bands, preamp+trim:\(combinedPreampDB) dB, balance:\(profile.balance, format: .fixed(precision: 2)), notch:\(notchDescription, privacy: .public), autoEQ:\(profile.autoEQName ?? "none", privacy: .public)")
+        log.debug("Applied profile \(profile.name, privacy: .public) — L:\(combinedLeftBands.count) bands, R:\(combinedRightBands.count) bands, preamp+trim:\(combinedPreampDB) dB, balance:\(profile.balance, format: .fixed(precision: 2)), notch:\(notchDescription, privacy: .public), autoEQ:\(profile.autoEQName ?? "none", privacy: .public)")
     }
 
     /// Linear-domain balance attenuation fed to the per-ear

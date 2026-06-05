@@ -1,7 +1,6 @@
 import Foundation
 import AVFoundation
 import Combine
-import OSLog
 
 /// Continuously-phased sine generator for the Tone Finder (spec §5.10).
 ///
@@ -28,7 +27,6 @@ final class SineToneGenerator: ObservableObject {
         didSet { state.isPlaying = isPlaying }
     }
 
-    private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "ToneGen")
     private let state = ToneState()
     private(set) var sourceNode: AVAudioSourceNode?
 
@@ -104,7 +102,6 @@ final class SineToneGenerator: ObservableObject {
         }
 
         self.sourceNode = node
-        log.info("SineToneGenerator source node ready @ \(Int(sampleRate)) Hz")
         return node
     }
 

@@ -81,13 +81,9 @@ final class CATapEngine: ObservableObject {
     let ioProcBufferCount = AudioCounter()
     let ioProcFirstChannels = AudioCounter()
     let ioProcFirstByteSize = AudioCounter()
-    /// Number of IOProc invocations — paired with `tapFramesIn` to compute
-    /// the actual delivered frame rate (frames/sec, mean frames/call). Memory
-    /// `audio-engine-sr-mismatch` flags this as the first unknown to verify
-    /// before writing any new resampler code: ASBD claims 48 kHz, but on a
-    /// 44.1 kHz output the aggregate's drift compensation may deliver a
-    /// different rate. This counter + the 1 Hz logger in `startIO` answer
-    /// that question over a few seconds of playback.
+    /// Number of IOProc invocations — paired with `tapFramesIn` so the
+    /// Debug view can show mean frames/call (sanity check on the aggregate's
+    /// drift compensation; see memory `audio-engine-sr-mismatch`).
     let ioProcCalls = AudioCounter()
     /// Process object ID we excluded from the global tap (our own).
     let excludedProcessObjectID = AudioCounter()
@@ -97,11 +93,6 @@ final class CATapEngine: ObservableObject {
     private var tapID: AudioObjectID = kAudioObjectUnknown
     private var aggregateDeviceID: AudioDeviceID = kAudioObjectUnknown
     private var ioProcID: AudioDeviceIOProcID?
-
-    private var frameRateLogTimer: Timer?
-    private var frameRateLastFrames: Int64 = 0
-    private var frameRateLastCalls: Int64 = 0
-    private var frameRateLastSampleAt: Date?
 
     private var leftRing: TapRingBuffer?
     private var rightRing: TapRingBuffer?
@@ -514,57 +505,6 @@ final class CATapEngine: ObservableObject {
         guard startStatus == noErr else {
             throw TapError.ioProcStartFailed(startStatus)
         }
-        startFrameRateLogger()
-    }
-
-    /// 1 Hz diagnostic: how many IOProc invocations + total frames per second
-    /// the aggregate is actually delivering, vs. the rate the ASBD claims.
-    /// Answers the SR-mismatch question: when tap ASBD reports 48 kHz but
-    /// the output device runs at 44.1 kHz, does this loop see 48000 fps or
-    /// 44100 fps? The answer dictates the resampler ratio in the eventual
-    /// fix. See memory `audio-engine-sr-mismatch` → Attempt log.
-    private func startFrameRateLogger() {
-        frameRateLogTimer?.invalidate()
-        frameRateLastFrames = tapFramesIn.read()
-        frameRateLastCalls = ioProcCalls.read()
-        frameRateLastSampleAt = Date()
-        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.logFrameRateSnapshot()
-            }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        frameRateLogTimer = timer
-    }
-
-    private func logFrameRateSnapshot() {
-        let now = Date()
-        let frames = tapFramesIn.read()
-        let calls = ioProcCalls.read()
-        let elapsed = frameRateLastSampleAt.map { now.timeIntervalSince($0) } ?? 1.0
-        let dFrames = frames - frameRateLastFrames
-        let dCalls = calls - frameRateLastCalls
-        frameRateLastFrames = frames
-        frameRateLastCalls = calls
-        frameRateLastSampleAt = now
-        guard elapsed > 0.001 else { return }
-        let fps = Double(dFrames) / elapsed
-        let cps = Double(dCalls) / elapsed
-        let meanPerCall = dCalls > 0 ? Double(dFrames) / Double(dCalls) : 0
-        let asbdRate = tapFormat?.sampleRate ?? 0
-        let drift = asbdRate > 0 ? fps - asbdRate : 0
-        log.info("""
-            Tap IOProc rate: \(String(format: "%.1f", fps)) frames/sec across \
-            \(String(format: "%.1f", cps)) calls/sec (mean \
-            \(String(format: "%.1f", meanPerCall)) frames/call) — ASBD claims \
-            \(Int(asbdRate)) Hz, Δ \(String(format: "%+.1f", drift)) Hz
-            """)
-    }
-
-    private func stopFrameRateLogger() {
-        frameRateLogTimer?.invalidate()
-        frameRateLogTimer = nil
-        frameRateLastSampleAt = nil
     }
 
     // MARK: - Device-change listener
@@ -626,7 +566,6 @@ final class CATapEngine: ObservableObject {
     }
 
     private func tearDownTapAndAggregate() {
-        stopFrameRateLogger()
         Self.tearDownSync(
             tapID: tapID,
             aggregateDeviceID: aggregateDeviceID,
