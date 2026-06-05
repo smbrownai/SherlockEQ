@@ -1,11 +1,48 @@
 import Foundation
 
-/// Shared helpers used by the Simple and Advanced EQ tabs. Both are
-/// "convenience views" onto the same per-ear `[EQBand]` array — they edit
-/// whatever parametric band lives at (or near) a target frequency, creating
-/// one with neutral gain if none exists yet. This means moves in Simple
-/// show up in Advanced and Expert and vice-versa.
+/// Shared helpers used by the Simple, Speech, and Advanced EQ tabs. All
+/// three are "convenience views" onto the same per-ear `[EQBand]` array
+/// — they edit whatever parametric band lives at (or near) a target
+/// frequency, creating one with neutral gain if none exists yet. This
+/// means moves in Simple show up in Advanced and Expert and vice-versa.
 enum EQBandLookup {
+
+    /// Which ear a UI gesture addresses. Single enum instead of one
+    /// per view (Simple/Speech used `Ear`, Advanced used `Channel`)
+    /// so all three can route through the same mutation helpers below.
+    enum Ear { case left, right }
+
+    /// Mutate one or both ears of `profile` according to `linkChannels`.
+    /// When linked, `mutation` runs against both ears so an edit in the
+    /// addressed ear is mirrored to the other. When unlinked, only the
+    /// addressed ear is touched.
+    static func mutateBands(
+        of profile: inout HearingProfile,
+        ear: Ear,
+        linkChannels: Bool,
+        _ mutation: (inout [EQBand]) -> Void
+    ) {
+        if linkChannels {
+            mutateBothEars(of: &profile, mutation)
+        } else {
+            switch ear {
+            case .left:  mutation(&profile.leftEar.bands)
+            case .right: mutation(&profile.rightEar.bands)
+            }
+        }
+    }
+
+    /// Run `mutation` against both ears unconditionally. Used by
+    /// "apply preset" and "reset" flows, which target the whole
+    /// profile regardless of the per-ear linking toggle.
+    static func mutateBothEars(
+        of profile: inout HearingProfile,
+        _ mutation: (inout [EQBand]) -> Void
+    ) {
+        mutation(&profile.leftEar.bands)
+        mutation(&profile.rightEar.bands)
+    }
+
     /// Tolerance for treating an existing band's frequency as "matching" a
     /// target slot. 1/12 octave on either side.
     static let matchToleranceRatio: Double = 1.0594631 - 1.0  // 2^(1/12) − 1

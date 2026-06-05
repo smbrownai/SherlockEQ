@@ -92,7 +92,7 @@ struct SpeechEQView: View {
 
     // MARK: - View state
 
-    private enum Ear { case left, right }
+    private typealias Ear = EQBandLookup.Ear
 
     /// Reads the active profile's `separateChannels` flag. Toggle
     /// lives on Profile Detail. Default for new profiles is false
@@ -300,24 +300,8 @@ struct SpeechEQView: View {
 
     private func setGain(_ gain: Double, profile: HearingProfile, ear: Ear, band: SpeechBand) {
         var updated = profile
-        if linkChannels {
-            var lb = updated.leftEar.bands
-            EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &lb)
-            updated.leftEar.bands = lb
-            var rb = updated.rightEar.bands
-            EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &rb)
-            updated.rightEar.bands = rb
-        } else {
-            switch ear {
-            case .left:
-                var b = updated.leftEar.bands
-                EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &b)
-                updated.leftEar.bands = b
-            case .right:
-                var b = updated.rightEar.bands
-                EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &b)
-                updated.rightEar.bands = b
-            }
+        EQBandLookup.mutateBands(of: &updated, ear: ear, linkChannels: linkChannels) { bands in
+            EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &bands)
         }
         try? profileStore.save(updated)
     }
@@ -327,30 +311,24 @@ struct SpeechEQView: View {
     private func apply(_ preset: SpeechPreset) {
         guard let profile = audioState.activeProfile(in: profileStore) else { return }
         var updated = profile
-        var lb = updated.leftEar.bands
-        var rb = updated.rightEar.bands
-        for band in Self.speechBands {
-            let gain = preset.gain(for: band.id)
-            EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &lb)
-            EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &rb)
+        EQBandLookup.mutateBothEars(of: &updated) { bands in
+            for band in Self.speechBands {
+                let gain = preset.gain(for: band.id)
+                EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &bands)
+            }
         }
-        updated.leftEar.bands = lb
-        updated.rightEar.bands = rb
         try? profileStore.save(updated)
     }
 
     private func reset(_ profile: HearingProfile) {
         var updated = profile
-        var lb = updated.leftEar.bands
-        var rb = updated.rightEar.bands
         // Setting to 0 with our shelf/parametric spec causes EQBandLookup
         // to remove the band (its own contract for "flat = drop").
-        for band in Self.speechBands {
-            EQBandLookup.setGain(0, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &lb)
-            EQBandLookup.setGain(0, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &rb)
+        EQBandLookup.mutateBothEars(of: &updated) { bands in
+            for band in Self.speechBands {
+                EQBandLookup.setGain(0, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &bands)
+            }
         }
-        updated.leftEar.bands = lb
-        updated.rightEar.bands = rb
         try? profileStore.save(updated)
     }
 

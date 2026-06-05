@@ -150,15 +150,12 @@ struct SimpleEQView: View {
     private func apply(_ preset: SimpleEQPreset) {
         guard let profile = audioState.activeProfile(in: profileStore) else { return }
         var updated = profile
-        var lb = updated.leftEar.bands
-        var rb = updated.rightEar.bands
-        for band in Self.simpleBands {
-            let gain = preset.gain(forHz: band.frequencyHz)
-            EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &lb)
-            EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &rb)
+        EQBandLookup.mutateBothEars(of: &updated) { bands in
+            for band in Self.simpleBands {
+                let gain = preset.gain(forHz: band.frequencyHz)
+                EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &bands)
+            }
         }
-        updated.leftEar.bands = lb
-        updated.rightEar.bands = rb
         try? profileStore.save(updated)
     }
 
@@ -181,7 +178,7 @@ struct SimpleEQView: View {
         .frame(height: 180)
     }
 
-    private enum Ear { case left, right }
+    private typealias Ear = EQBandLookup.Ear
 
     @ViewBuilder
     private func bandColumn(for profile: HearingProfile, ear: Ear, color: Color, title: String) -> some View {
@@ -270,31 +267,18 @@ struct SimpleEQView: View {
 
     private func setGain(_ gain: Double, profile: HearingProfile, ear: Ear, band: SimpleBand) {
         var updated = profile
-        if linkChannels {
-            var lb = updated.leftEar.bands
-            EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &lb)
-            updated.leftEar.bands = lb
-            var rb = updated.rightEar.bands
-            EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &rb)
-            updated.rightEar.bands = rb
-        } else {
-            var bands = ear == .left ? updated.leftEar.bands : updated.rightEar.bands
+        EQBandLookup.mutateBands(of: &updated, ear: ear, linkChannels: linkChannels) { bands in
             EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &bands)
-            if ear == .left { updated.leftEar.bands = bands } else { updated.rightEar.bands = bands }
         }
         try? profileStore.save(updated)
     }
 
     private func reset(_ profile: HearingProfile) {
         var updated = profile
-        for band in Self.simpleBands {
-            var leftBands = updated.leftEar.bands
-            EQBandLookup.setGain(0, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &leftBands)
-            updated.leftEar.bands = leftBands
-
-            var rightBands = updated.rightEar.bands
-            EQBandLookup.setGain(0, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &rightBands)
-            updated.rightEar.bands = rightBands
+        EQBandLookup.mutateBothEars(of: &updated) { bands in
+            for band in Self.simpleBands {
+                EQBandLookup.setGain(0, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &bands)
+            }
         }
         try? profileStore.save(updated)
     }

@@ -104,15 +104,12 @@ struct AdvancedEQView: View {
     private func apply(_ preset: AdvancedEQPreset) {
         guard let profile = audioState.activeProfile(in: profileStore) else { return }
         var updated = profile
-        var lb = updated.leftEar.bands
-        var rb = updated.rightEar.bands
-        for freq in Self.frequencies {
-            let gain = preset.gain(forHz: freq)
-            EQBandLookup.setGain(gain, at: freq, bandwidth: Self.bandwidth, filterType: .parametric, in: &lb)
-            EQBandLookup.setGain(gain, at: freq, bandwidth: Self.bandwidth, filterType: .parametric, in: &rb)
+        EQBandLookup.mutateBothEars(of: &updated) { bands in
+            for freq in Self.frequencies {
+                let gain = preset.gain(forHz: freq)
+                EQBandLookup.setGain(gain, at: freq, bandwidth: Self.bandwidth, filterType: .parametric, in: &bands)
+            }
         }
-        updated.leftEar.bands = lb
-        updated.rightEar.bands = rb
         try? profileStore.save(updated)
     }
 
@@ -164,20 +161,20 @@ struct AdvancedEQView: View {
             HStack(spacing: 4) {
                 if linkChannels {
                     VerticalGainSlider(
-                        value: gainBinding(profile: profile, frequency: frequency, channel: .left),
+                        value: gainBinding(profile: profile, frequency: frequency, ear: .left),
                         range: -12...12,
                         tint: audioState.leftEarColor
                     )
                     .frame(width: 40)
                 } else {
                     VerticalGainSlider(
-                        value: gainBinding(profile: profile, frequency: frequency, channel: .left),
+                        value: gainBinding(profile: profile, frequency: frequency, ear: .left),
                         range: -12...12,
                         tint: audioState.leftEarColor
                     )
                     .frame(width: 26)
                     VerticalGainSlider(
-                        value: gainBinding(profile: profile, frequency: frequency, channel: .right),
+                        value: gainBinding(profile: profile, frequency: frequency, ear: .right),
                         range: -12...12,
                         tint: audioState.rightEarColor
                     )
@@ -194,7 +191,7 @@ struct AdvancedEQView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private enum Channel { case left, right }
+    private typealias Ear = EQBandLookup.Ear
 
     private func resetButton(_ profile: HearingProfile) -> some View {
         HStack {
@@ -216,53 +213,34 @@ struct AdvancedEQView: View {
         return (left + right) / 2
     }
 
-    private func gainBinding(profile: HearingProfile, frequency: Double, channel: Channel) -> Binding<Double> {
+    private func gainBinding(profile: HearingProfile, frequency: Double, ear: Ear) -> Binding<Double> {
         Binding(
-            get: { gain(profile: profile, frequency: frequency, channel: channel) },
-            set: { newValue in setGain(newValue, profile: profile, frequency: frequency, channel: channel) }
+            get: { gain(profile: profile, frequency: frequency, ear: ear) },
+            set: { newValue in setGain(newValue, profile: profile, frequency: frequency, ear: ear) }
         )
     }
 
-    private func gain(profile: HearingProfile, frequency: Double, channel: Channel) -> Double {
-        switch channel {
+    private func gain(profile: HearingProfile, frequency: Double, ear: Ear) -> Double {
+        switch ear {
         case .left:  return EQBandLookup.gain(at: frequency, filterType: .parametric, in: profile.leftEar.bands)
         case .right: return EQBandLookup.gain(at: frequency, filterType: .parametric, in: profile.rightEar.bands)
         }
     }
 
-    private func setGain(_ gain: Double, profile: HearingProfile, frequency: Double, channel: Channel) {
+    private func setGain(_ gain: Double, profile: HearingProfile, frequency: Double, ear: Ear) {
         var updated = profile
-        if linkChannels {
-            var lb = updated.leftEar.bands
-            EQBandLookup.setGain(gain, at: frequency, bandwidth: Self.bandwidth, filterType: .parametric, in: &lb)
-            updated.leftEar.bands = lb
-            var rb = updated.rightEar.bands
-            EQBandLookup.setGain(gain, at: frequency, bandwidth: Self.bandwidth, filterType: .parametric, in: &rb)
-            updated.rightEar.bands = rb
-        } else {
-            switch channel {
-            case .left:
-                var lb = updated.leftEar.bands
-                EQBandLookup.setGain(gain, at: frequency, bandwidth: Self.bandwidth, filterType: .parametric, in: &lb)
-                updated.leftEar.bands = lb
-            case .right:
-                var rb = updated.rightEar.bands
-                EQBandLookup.setGain(gain, at: frequency, bandwidth: Self.bandwidth, filterType: .parametric, in: &rb)
-                updated.rightEar.bands = rb
-            }
+        EQBandLookup.mutateBands(of: &updated, ear: ear, linkChannels: linkChannels) { bands in
+            EQBandLookup.setGain(gain, at: frequency, bandwidth: Self.bandwidth, filterType: .parametric, in: &bands)
         }
         try? profileStore.save(updated)
     }
 
     private func reset(_ profile: HearingProfile) {
         var updated = profile
-        for freq in Self.frequencies {
-            var lb = updated.leftEar.bands
-            EQBandLookup.setGain(0, at: freq, bandwidth: Self.bandwidth, filterType: .parametric, in: &lb)
-            updated.leftEar.bands = lb
-            var rb = updated.rightEar.bands
-            EQBandLookup.setGain(0, at: freq, bandwidth: Self.bandwidth, filterType: .parametric, in: &rb)
-            updated.rightEar.bands = rb
+        EQBandLookup.mutateBothEars(of: &updated) { bands in
+            for freq in Self.frequencies {
+                EQBandLookup.setGain(0, at: freq, bandwidth: Self.bandwidth, filterType: .parametric, in: &bands)
+            }
         }
         try? profileStore.save(updated)
     }
