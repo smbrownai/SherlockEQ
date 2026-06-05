@@ -37,8 +37,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // `showMainWindow`; flips back on window close if the user has
         // `hideFromDockEnabled` set.
         NSApp.setActivationPolicy(.accessory)
-        installMainMenu()
         bootstrap()
+        // SwiftUI's scene system installs its own NSApp.mainMenu *after*
+        // applicationDidFinishLaunching returns, wiping anything we set
+        // here. Defer our install to the next runloop tick so ours wins.
+        Task { @MainActor in installMainMenu() }
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        // Safety net: if anything else (a sub-window, an alert sheet, a
+        // scene-restore cycle) reinstalls SwiftUI's default menu, restore
+        // ours whenever the app comes forward.
+        installMainMenu()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -102,7 +112,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // the policy change without a perceptible delay.
             RunLoop.current.run(mode: .common, before: Date(timeIntervalSinceNow: 0.01))
         }
-        NSApp.activate(ignoringOtherApps: true)
+        // `NSApp.activate(ignoringOtherApps:)` is deprecated in macOS 14
+        // and the system can silently drop the request — the window
+        // appears but the menu bar stays in its inactive (greyed) state
+        // because the OS doesn't think we're truly frontmost.
+        // `NSRunningApplication.current.activate(options:)` is the
+        // forceful replacement that brings every window forward and
+        // properly transfers menu-bar focus.
+        NSRunningApplication.current.activate(options: [.activateAllWindows])
         window.makeKeyAndOrderFront(nil)
     }
 
@@ -132,10 +149,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func installMainMenu() {
         let mainMenu = NSMenu()
         mainMenu.addItem(makeAppMenuItem())
+        mainMenu.addItem(makeFileMenuItem())
         mainMenu.addItem(makeEditMenuItem())
         mainMenu.addItem(makeAudioMenuItem())
         mainMenu.addItem(makeWindowMenuItem())
         NSApp.mainMenu = mainMenu
+    }
+
+    private func makeFileMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "File", action: nil, keyEquivalent: "")
+        let menu = NSMenu(title: "File")
+        menu.addItem(withTitle: "Close Window",
+                     action: #selector(NSWindow.performClose(_:)),
+                     keyEquivalent: "w")
+        item.submenu = menu
+        return item
     }
 
     private func makeAppMenuItem() -> NSMenuItem {
@@ -170,7 +198,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func makeEditMenuItem() -> NSMenuItem {
-        let item = NSMenuItem()
+        let item = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
         let menu = NSMenu(title: "Edit")
 
         // Undo/Redo dispatch via responder chain to the window's
@@ -202,7 +230,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func makeAudioMenuItem() -> NSMenuItem {
-        let item = NSMenuItem()
+        let item = NSMenuItem(title: "Audio", action: nil, keyEquivalent: "")
         let menu = NSMenu(title: "Audio")
         let toggle = NSMenuItem(title: "Toggle Reference Mode",
                                 action: #selector(toggleReferenceMode(_:)),
@@ -214,7 +242,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func makeWindowMenuItem() -> NSMenuItem {
-        let item = NSMenuItem()
+        let item = NSMenuItem(title: "Window", action: nil, keyEquivalent: "")
         let menu = NSMenu(title: "Window")
         menu.addItem(withTitle: "Minimize",
                      action: #selector(NSWindow.performMiniaturize(_:)),
