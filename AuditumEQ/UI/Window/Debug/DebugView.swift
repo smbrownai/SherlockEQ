@@ -74,14 +74,6 @@ struct DebugView: View {
         labeled("Session dose", value: String(format: "%.1f %%", state.safeListening.sessionDose * 100))
         labeled("Remaining", value: state.safeListening.remainingMinutes.map { String(format: "%.1f min", $0) } ?? "—")
         labeled("Last error", value: state.audio.lastError ?? "—")
-        if let warn = state.audio.sampleRateMismatchWarning {
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                Text(warn).font(.callout).foregroundStyle(.orange)
-            }
-            .padding(.top, 4)
-        }
     }
 
     @ViewBuilder private var profilesSection: some View {

@@ -17,7 +17,6 @@ final class AuditumEQAudioEngine: ObservableObject {
     /// Non-nil when tap rate differs from output rate — audio quality is
     /// degraded by AVAudioMixerNode's internal resampler on this path.
     /// Cleared when rates match.
-    @Published private(set) var sampleRateMismatchWarning: String?
 
     private let engine = AVAudioEngine()
     private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "AudioEngine")
@@ -62,13 +61,11 @@ final class AuditumEQAudioEngine: ObservableObject {
     /// Wires up the graph with the L/R source nodes from the tap.
     /// Tears down any prior graph first; safe to call on device change.
     ///
-    /// Sample-rate handling: when the tap's rate (driven by the system's default
-    /// output device at tap-creation time) differs from the engine's outputNode
-    /// rate (driven by the *current* default output device, which can change),
-    /// `mainMixerNode`'s built-in conversion produces audible distortion on at
-    /// least the 3.5mm/USB-C path. Inserting an explicit `AVAudioMixerNode`
-    /// downstream of the EQs whose connection to mainMixer is at the output's
-    /// rate confines the SR conversion to a dedicated node, which sounds clean.
+    /// Sample-rate handling: the `sampleRate` passed in is the output
+    /// device's nominal rate (which is also the rate the aggregate's
+    /// drift-compensated IOProc delivers). The engine's outputNode rate
+    /// matches, so the graph is uniform end-to-end and no bridge / SRC
+    /// node is required. See memory `audio-engine-sr-mismatch`.
     func attach(
         leftSource: AVAudioSourceNode,
         rightSource: AVAudioSourceNode,
@@ -123,28 +120,16 @@ final class AuditumEQAudioEngine: ObservableObject {
         self.masterGainStage = gainStage
 
         if outRate > 0 && Int(outRate.rounded()) != Int(sampleRate.rounded()) {
-            // SR mismatch path is intentionally silenced.
-            //
-            // The previous behaviour wired in an AVAudioMixerNode bridge to
-            // perform the conversion, but the built-in mixer resampler on
-            // macOS Tahoe produces audibly robotic / crackly output on the
-            // mismatched path (see `audio-engine-sr-mismatch.md`). Shipping
-            // degraded audio under the user's profile is worse UX than
-            // silence + a clear "device not supported" surface.
-            //
-            // Source nodes are *attached* but not *connected*, so the
-            // engine still starts cleanly; there's just no audio path
-            // from the tap to the output. Switching to a matching-rate
-            // device triggers `rebuildAudioGraph()` and audio resumes.
-            sampleRateMismatchWarning = "Tap \(Int(sampleRate)) Hz ≠ output \(Int(outRate)) Hz — audio muted until a manual resampler lands or you pick a matching-rate output."
-            self.sampleRateBridge = nil
-            self.leftSource = leftSource
-            self.rightSource = rightSource
-            log.info("Graph attached — tap \(Int(sampleRate)) Hz, output \(Int(outRate)) Hz (SR-mismatch — audio muted)")
-            return
+            // Source-node format is now stamped at the output device's
+            // nominal rate (in `CATapEngine.buildTapAndAggregate`), and the
+            // aggregate's drift comp delivers that same rate to the IOProc
+            // — so this branch shouldn't be reachable in normal operation.
+            // Logging if it ever fires would catch a regression (e.g. tap
+            // built before output device changed without rebuild).
+            log.error("Unexpected SR mismatch: source \(Int(sampleRate)) Hz vs output \(Int(outRate)) Hz — graph rebuild needed")
         }
 
-        // Matching-rate path. AUPeakLimiter has a single input bus, so we
+        // AUPeakLimiter has a single input bus, so we
         // can't connect the two source nodes directly to it — the second
         // connection silently overrides the first and kills the L chain.
         // Sum L+R through an explicit mixer first.
@@ -177,7 +162,6 @@ final class AuditumEQAudioEngine: ObservableObject {
         engine.connect(lim, to: gainStage, format: tapFormat)
         engine.connect(gainStage, to: mixer, format: tapFormat)
         self.sampleRateBridge = sumMixer
-        sampleRateMismatchWarning = nil
         log.info("Graph attached — \(Int(sampleRate)) Hz end-to-end (balance mixers + limiter + gain stage inline; EQ in render block)")
 
         self.leftSource = leftSource

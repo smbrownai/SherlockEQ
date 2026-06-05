@@ -24,9 +24,6 @@ struct MainPopoverView: View {
             )
             masterGainRow
             balanceRow
-            if let warning = audioState.audio.sampleRateMismatchWarning {
-                sampleRateBanner(warning)
-            }
             Divider()
             ProfilePickerRow()
             CompensationSliderView()
@@ -156,26 +153,6 @@ struct MainPopoverView: View {
         if abs(b) < 0.005 { return "Center" }
         let pct = Int((abs(b) * 100).rounded())
         return b < 0 ? "L \(pct)%" : "R \(pct)%"
-    }
-
-    @ViewBuilder private func sampleRateBanner(_ message: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "speaker.slash")
-                .foregroundStyle(.orange)
-            Text(message)
-                .font(.caption)
-                .foregroundStyle(.primary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.orange.opacity(0.12))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(Color.orange.opacity(0.4), lineWidth: 1)
-        )
     }
 
     /// Open (or focus) the main window. The app switches to `.accessory` on

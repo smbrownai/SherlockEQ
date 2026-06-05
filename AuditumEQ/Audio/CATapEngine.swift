@@ -81,6 +81,14 @@ final class CATapEngine: ObservableObject {
     let ioProcBufferCount = AudioCounter()
     let ioProcFirstChannels = AudioCounter()
     let ioProcFirstByteSize = AudioCounter()
+    /// Number of IOProc invocations — paired with `tapFramesIn` to compute
+    /// the actual delivered frame rate (frames/sec, mean frames/call). Memory
+    /// `audio-engine-sr-mismatch` flags this as the first unknown to verify
+    /// before writing any new resampler code: ASBD claims 48 kHz, but on a
+    /// 44.1 kHz output the aggregate's drift compensation may deliver a
+    /// different rate. This counter + the 1 Hz logger in `startIO` answer
+    /// that question over a few seconds of playback.
+    let ioProcCalls = AudioCounter()
     /// Process object ID we excluded from the global tap (our own).
     let excludedProcessObjectID = AudioCounter()
 
@@ -89,6 +97,11 @@ final class CATapEngine: ObservableObject {
     private var tapID: AudioObjectID = kAudioObjectUnknown
     private var aggregateDeviceID: AudioDeviceID = kAudioObjectUnknown
     private var ioProcID: AudioDeviceIOProcID?
+
+    private var frameRateLogTimer: Timer?
+    private var frameRateLastFrames: Int64 = 0
+    private var frameRateLastCalls: Int64 = 0
+    private var frameRateLastSampleAt: Date?
 
     private var leftRing: TapRingBuffer?
     private var rightRing: TapRingBuffer?
@@ -226,6 +239,12 @@ final class CATapEngine: ObservableObject {
         aggregateDeviceID = newAggID
 
         // Read the tap stream format off the aggregate's input scope.
+        // **Note**: `format.sampleRate` reports the *tap source* rate, not
+        // the rate the IOProc will deliver. With drift compensation on,
+        // the aggregate SRCs to the output device's rate before the IOProc
+        // sees a sample. We stamp the source-node format and ring at the
+        // **output rate** so AVAudioEngine consumes samples at the cadence
+        // they actually arrive. See memory `audio-engine-sr-mismatch`.
         var asbd = try Self.inputStreamFormat(aggregateDeviceID)
         guard let format = AVAudioFormat(streamDescription: &asbd) else {
             throw TapError.formatUnsupported
@@ -233,16 +252,19 @@ final class CATapEngine: ObservableObject {
         tapFormat = format
         tapChannelCount = Int(format.channelCount)
 
-        // ~250ms headroom per channel ring.
-        let ringCapacity = max(4096, Int(format.sampleRate) / 4)
+        let deliveredRate = try Self.nominalSampleRate(outputDeviceID)
+
+        // ~250ms headroom per channel ring, sized in delivered frames.
+        let ringCapacity = max(4096, Int(deliveredRate) / 4)
         let leftRing = TapRingBuffer(capacityFrames: ringCapacity)
         let rightRing = TapRingBuffer(capacityFrames: ringCapacity)
         self.leftRing = leftRing
         self.rightRing = rightRing
 
-        // Source nodes emit stereo Float32 non-interleaved.
+        // Source nodes emit stereo Float32 non-interleaved at the delivered
+        // (output) rate — not the ASBD's claimed tap rate.
         let stereoFormat = AVAudioFormat(
-            standardFormatWithSampleRate: format.sampleRate,
+            standardFormatWithSampleRate: deliveredRate,
             channels: 2
         )!
         sourceFormat = stereoFormat
@@ -369,12 +391,14 @@ final class CATapEngine: ObservableObject {
         let layoutCountRef = Unmanaged.passUnretained(ioProcBufferCount)
         let layoutChannelsRef = Unmanaged.passUnretained(ioProcFirstChannels)
         let layoutBytesRef = Unmanaged.passUnretained(ioProcFirstByteSize)
+        let callsRef = Unmanaged.passUnretained(ioProcCalls)
 
         let ioStatus = AudioDeviceCreateIOProcIDWithBlock(
             &procID,
             aggregateDeviceID,
             nil
         ) { _, inInputData, _, _, _ in
+            callsRef.takeUnretainedValue().add(1)
             let abl = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: inInputData))
             layoutCountRef.takeUnretainedValue().set(Int64(abl.count))
             guard let first = abl.first else { return }
@@ -437,6 +461,57 @@ final class CATapEngine: ObservableObject {
         guard startStatus == noErr else {
             throw TapError.ioProcStartFailed(startStatus)
         }
+        startFrameRateLogger()
+    }
+
+    /// 1 Hz diagnostic: how many IOProc invocations + total frames per second
+    /// the aggregate is actually delivering, vs. the rate the ASBD claims.
+    /// Answers the SR-mismatch question: when tap ASBD reports 48 kHz but
+    /// the output device runs at 44.1 kHz, does this loop see 48000 fps or
+    /// 44100 fps? The answer dictates the resampler ratio in the eventual
+    /// fix. See memory `audio-engine-sr-mismatch` → Attempt log.
+    private func startFrameRateLogger() {
+        frameRateLogTimer?.invalidate()
+        frameRateLastFrames = tapFramesIn.read()
+        frameRateLastCalls = ioProcCalls.read()
+        frameRateLastSampleAt = Date()
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.logFrameRateSnapshot()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        frameRateLogTimer = timer
+    }
+
+    private func logFrameRateSnapshot() {
+        let now = Date()
+        let frames = tapFramesIn.read()
+        let calls = ioProcCalls.read()
+        let elapsed = frameRateLastSampleAt.map { now.timeIntervalSince($0) } ?? 1.0
+        let dFrames = frames - frameRateLastFrames
+        let dCalls = calls - frameRateLastCalls
+        frameRateLastFrames = frames
+        frameRateLastCalls = calls
+        frameRateLastSampleAt = now
+        guard elapsed > 0.001 else { return }
+        let fps = Double(dFrames) / elapsed
+        let cps = Double(dCalls) / elapsed
+        let meanPerCall = dCalls > 0 ? Double(dFrames) / Double(dCalls) : 0
+        let asbdRate = tapFormat?.sampleRate ?? 0
+        let drift = asbdRate > 0 ? fps - asbdRate : 0
+        log.info("""
+            Tap IOProc rate: \(String(format: "%.1f", fps)) frames/sec across \
+            \(String(format: "%.1f", cps)) calls/sec (mean \
+            \(String(format: "%.1f", meanPerCall)) frames/call) — ASBD claims \
+            \(Int(asbdRate)) Hz, Δ \(String(format: "%+.1f", drift)) Hz
+            """)
+    }
+
+    private func stopFrameRateLogger() {
+        frameRateLogTimer?.invalidate()
+        frameRateLogTimer = nil
+        frameRateLastSampleAt = nil
     }
 
     // MARK: - Device-change listener
@@ -498,6 +573,7 @@ final class CATapEngine: ObservableObject {
     }
 
     private func tearDownTapAndAggregate() {
+        stopFrameRateLogger()
         Self.tearDownSync(
             tapID: tapID,
             aggregateDeviceID: aggregateDeviceID,
@@ -598,6 +674,26 @@ extension CATapEngine {
         let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &name)
         guard status == noErr else { throw TapError.deviceUIDUnavailable(status) }
         return name as String
+    }
+
+    /// Output device's nominal sample rate. **This is the rate the IOProc
+    /// actually delivers** when the aggregate runs with drift compensation
+    /// on — see memory `audio-engine-sr-mismatch` (the ASBD on the
+    /// aggregate's input scope still reports the tap's source rate, which
+    /// is misleading: drift comp silently SRCs to the output rate before
+    /// the IOProc fires). Used to stamp the source-node format so
+    /// AVAudioEngine consumes samples at the same cadence they arrive.
+    nonisolated static func nominalSampleRate(_ deviceID: AudioDeviceID) throws -> Double {
+        var rate: Float64 = 0
+        var size = UInt32(MemoryLayout<Float64>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyNominalSampleRate,
+            mScope: kAudioObjectPropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &rate)
+        guard status == noErr, rate > 0 else { throw TapError.formatUnavailable(status) }
+        return rate
     }
 
     nonisolated static func deviceUID(_ deviceID: AudioDeviceID) throws -> String {
