@@ -206,8 +206,19 @@ final class AudioState: ObservableObject {
     /// truth and edits naturally flow through `ProfileStore.save(_:)`.
     @Published var activeProfileID: UUID?
 
-    /// Safe-listening session dose (0…1). Populated by `SafeListeningTracker`
-    /// when that lands in Session 10; until then it stays at zero.
+    /// Throttled mirrors of `safeListening.sessionDose` / `.remainingMinutes`
+    /// for views that re-render on every `AudioState` tick. Populated at 1 Hz
+    /// from `mirrorTrackerState()` — see the throttle wiring in init.
+    ///
+    /// Dual-surface warning: any new safe-listening UI logic (e.g. "just
+    /// crossed 80%") has to be wired into *both* paths if it needs to be
+    /// visible everywhere:
+    ///   - The popover and `MonitorSidebar` read these throttled mirrors.
+    ///   - `SafeListeningView`, `MenuBarIcon`, and `DebugView` read
+    ///     `audioState.safeListening.sessionDose` / `.remainingMinutes`
+    ///     directly so they can update faster than 1 Hz.
+    /// Threshold/severity helpers belong on `SafeListeningTracker` so both
+    /// sides see the same answer.
     @Published var sessionDosePercent: Double = 0
     @Published var remainingMinutes: Double?
 
