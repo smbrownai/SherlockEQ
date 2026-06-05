@@ -301,6 +301,15 @@ private struct VerticalGainSlider: View {
                     .fill(Color.secondary.opacity(0.18))
                     .frame(width: 8)
 
+                // Tick marks at every 0.5 dB across the full range.
+                // Integer dB values get a slightly wider, more opaque
+                // tick so the eye can still find whole numbers; the
+                // 0.5 mid-marks read as finer hairlines beside them.
+                // Drawn via Canvas (one draw call instead of N
+                // Rectangles) since there are 49 ticks per slider and
+                // 10–20 sliders on screen.
+                ticksCanvas(size: geo.size)
+
                 // Fill between value and zero
                 Capsule()
                     .fill(tint.opacity(0.55))
@@ -310,7 +319,8 @@ private struct VerticalGainSlider: View {
                         y: (valueY + zeroY) / 2
                     )
 
-                // 0 dB tick
+                // 0 dB tick — full-width emphasis above the per-0.5
+                // tick ladder so center reference stays unambiguous.
                 Rectangle()
                     .fill(Color.primary.opacity(0.45))
                     .frame(width: geo.size.width * 0.85, height: 1)
@@ -333,11 +343,52 @@ private struct VerticalGainSlider: View {
                         let y = max(0, min(geo.size.height, gesture.location.y))
                         let normalized = 1 - Double(y / geo.size.height)
                         var newValue = range.lowerBound + normalized * (range.upperBound - range.lowerBound)
-                        newValue = (newValue * 2).rounded() / 2   // 0.5 dB steps
+                        // 0.1 dB drag resolution — fine enough for
+                        // careful tonal adjustment without the slider
+                        // feeling stick-slip noisy. The on-screen
+                        // readout still rounds to 1 decimal place,
+                        // so the displayed value matches the stored
+                        // value exactly.
+                        newValue = (newValue * 10).rounded() / 10
                         value = max(range.lowerBound, min(range.upperBound, newValue))
                     }
             )
         }
+    }
+
+    @ViewBuilder
+    private func ticksCanvas(size: CGSize) -> some View {
+        let halfTrackWidth: CGFloat = 5   // a bit outside the 8 pt track
+        let majorLength: CGFloat = 5
+        let minorLength: CGFloat = 3
+        let majorOpacity: Double = 0.40
+        let minorOpacity: Double = 0.22
+        // Generate the half-dB tick values inside the range, skipping
+        // 0 (the dedicated full-width 0 dB tick handles that).
+        let lo = range.lowerBound
+        let hi = range.upperBound
+        // Multiply by 2 + integer stride to avoid floating-point drift.
+        let firstHalf = Int((lo * 2).rounded(.up))
+        let lastHalf  = Int((hi * 2).rounded(.down))
+        Canvas { context, canvasSize in
+            for halfStep in firstHalf...lastHalf {
+                let db = Double(halfStep) / 2
+                if db == 0 { continue }
+                let isMajor = halfStep % 2 == 0
+                let length = isMajor ? majorLength : minorLength
+                let opacity = isMajor ? majorOpacity : minorOpacity
+                let y = yFor(db, height: canvasSize.height)
+                let centerX = canvasSize.width / 2
+                var path = Path()
+                path.move(to: CGPoint(x: centerX - halfTrackWidth - length, y: y))
+                path.addLine(to: CGPoint(x: centerX - halfTrackWidth, y: y))
+                path.move(to: CGPoint(x: centerX + halfTrackWidth, y: y))
+                path.addLine(to: CGPoint(x: centerX + halfTrackWidth + length, y: y))
+                context.stroke(path, with: .color(Color.secondary.opacity(opacity)), lineWidth: 1)
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        .allowsHitTesting(false)
     }
 
     private var clampedValue: Double {
