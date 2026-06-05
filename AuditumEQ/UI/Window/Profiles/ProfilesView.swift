@@ -170,7 +170,7 @@ struct ProfilesView: View {
         do {
             try profileStore.save(newProfile)
             selection = newProfile.id
-        } catch { /* surfaced via ProfileStore.lastError in Debug */ }
+        } catch { /* surfaced via ProfileStore.lastError (DebugView) */ }
     }
 
     private func duplicateSelected() {
@@ -231,7 +231,7 @@ struct ProfilesView: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try profileStore.exportProfile(profile, to: url)
-        } catch { /* surfaced via ProfileStore.lastError */ }
+        } catch { /* surfaced via ProfileStore.lastError (DebugView) */ }
     }
 
     private func importProfiles() {

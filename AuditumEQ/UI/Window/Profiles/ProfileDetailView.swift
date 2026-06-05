@@ -564,7 +564,7 @@ struct ProfileDetailView: View {
             audioState.activeProfileID = copy.id
             onDuplicatedToCopy?(copy)
         } catch {
-            // Surfaced via ProfileStore.lastError; built-in stays as-is.
+            // Surfaced via ProfileStore.lastError (DebugView); built-in stays as-is.
         }
     }
 

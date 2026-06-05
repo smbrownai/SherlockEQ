@@ -80,6 +80,7 @@ struct DebugView: View {
         Text("Profiles").font(.subheadline).foregroundStyle(.secondary)
         labeled("Loaded count", value: "\(profileStore.profiles.count)")
         labeled("Active profile", value: state.activeProfile(in: profileStore)?.name ?? "—")
+        labeled("Last error", value: profileStore.lastError ?? "—")
         ForEach(profileStore.profiles) { profile in
             HStack {
                 Image(systemName: profile.symbol).frame(width: 18)

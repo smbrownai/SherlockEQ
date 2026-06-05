@@ -85,53 +85,61 @@ final class ProfileStore: ObservableObject {
     /// Bumps `modifiedAt` to now. Registers an undo entry against the
     /// current `undoManager` unless we're inside a coalescing burst (rapid
     /// repeated saves of the same profile, e.g. slider drags).
+    ///
+    /// On failure `lastError` is set and the error is re-thrown — callers
+    /// using `try?` get the silent ignore they asked for, but the value
+    /// shows up in DebugView's Profiles section.
     func save(_ profile: HearingProfile) throws {
-        ensureDirectory()
-        let now = Date()
-        let previousOnDisk = profiles.first { $0.id == profile.id }
-        let inBurst: Bool = {
-            guard let last = lastBurstSaveAt[profile.id] else { return false }
-            return now.timeIntervalSince(last) < coalesceWindow
-        }()
+        try tracking("Save") {
+            ensureDirectory()
+            let now = Date()
+            let previousOnDisk = profiles.first { $0.id == profile.id }
+            let inBurst: Bool = {
+                guard let last = lastBurstSaveAt[profile.id] else { return false }
+                return now.timeIntervalSince(last) < coalesceWindow
+            }()
 
-        var p = profile
-        p.modifiedAt = now
-        let data = try encoder.encode(p)
-        let url = directory.appendingPathComponent("\(p.id.uuidString).json")
-        try data.write(to: url, options: .atomic)
-        if let idx = profiles.firstIndex(where: { $0.id == p.id }) {
-            profiles[idx] = p
-        } else {
-            profiles.append(p)
-            profiles.sort { $0.createdAt < $1.createdAt }
-        }
-
-        if let undoManager, !inBurst {
-            let actionName = previousOnDisk == nil ? "Create \(p.name)" : "Edit \(p.name)"
-            if let snapshot = previousOnDisk {
-                undoManager.registerUndo(withTarget: self) { store in
-                    try? store.save(snapshot)
-                }
+            var p = profile
+            p.modifiedAt = now
+            let data = try encoder.encode(p)
+            let url = directory.appendingPathComponent("\(p.id.uuidString).json")
+            try data.write(to: url, options: .atomic)
+            if let idx = profiles.firstIndex(where: { $0.id == p.id }) {
+                profiles[idx] = p
             } else {
-                // First time this profile hit disk → undo = delete.
-                undoManager.registerUndo(withTarget: self) { store in
-                    try? store.delete(p)
-                }
+                profiles.append(p)
+                profiles.sort { $0.createdAt < $1.createdAt }
             }
-            undoManager.setActionName(actionName)
-        }
-        lastBurstSaveAt[profile.id] = now
 
-        log.info("Saved profile \(p.name, privacy: .public) (\(p.id.uuidString, privacy: .public))")
+            if let undoManager, !inBurst {
+                let actionName = previousOnDisk == nil ? "Create \(p.name)" : "Edit \(p.name)"
+                if let snapshot = previousOnDisk {
+                    undoManager.registerUndo(withTarget: self) { store in
+                        try? store.save(snapshot)
+                    }
+                } else {
+                    // First time this profile hit disk → undo = delete.
+                    undoManager.registerUndo(withTarget: self) { store in
+                        try? store.delete(p)
+                    }
+                }
+                undoManager.setActionName(actionName)
+            }
+            lastBurstSaveAt[profile.id] = now
+
+            log.info("Saved profile \(p.name, privacy: .public) (\(p.id.uuidString, privacy: .public))")
+        }
     }
 
     /// Encode `profile` to a user-chosen location. Independent of the
     /// internal profiles directory — used for sharing profiles between
     /// machines or with other users.
     func exportProfile(_ profile: HearingProfile, to url: URL) throws {
-        let data = try encoder.encode(profile)
-        try data.write(to: url, options: .atomic)
-        log.info("Exported \(profile.name, privacy: .public) to \(url.lastPathComponent, privacy: .public)")
+        try tracking("Export") {
+            let data = try encoder.encode(profile)
+            try data.write(to: url, options: .atomic)
+            log.info("Exported \(profile.name, privacy: .public) to \(url.lastPathComponent, privacy: .public)")
+        }
     }
 
     /// Read a profile JSON from `url`, dedupe its ID and name against the
@@ -140,16 +148,18 @@ final class ProfileStore: ObservableObject {
     /// can switch selection or activate it.
     @discardableResult
     func importProfile(from url: URL) throws -> HearingProfile {
-        let data = try Data(contentsOf: url)
-        var imported = try decoder.decode(HearingProfile.self, from: data)
-        if profiles.contains(where: { $0.id == imported.id }) {
-            imported.id = UUID()
+        try tracking("Import") {
+            let data = try Data(contentsOf: url)
+            var imported = try decoder.decode(HearingProfile.self, from: data)
+            if profiles.contains(where: { $0.id == imported.id }) {
+                imported.id = UUID()
+            }
+            imported.name = uniqueName(base: imported.name)
+            imported.isBuiltIn = false
+            try save(imported)
+            log.info("Imported \(imported.name, privacy: .public) from \(url.lastPathComponent, privacy: .public)")
+            return imported
         }
-        imported.name = uniqueName(base: imported.name)
-        imported.isBuiltIn = false
-        try save(imported)
-        log.info("Imported \(imported.name, privacy: .public) from \(url.lastPathComponent, privacy: .public)")
-        return imported
     }
 
     private func uniqueName(base: String) -> String {
@@ -163,21 +173,23 @@ final class ProfileStore: ObservableObject {
     /// Remove the on-disk file and drop the profile from the in-memory
     /// array. Registers an undo that re-saves the deleted snapshot.
     func delete(_ profile: HearingProfile) throws {
-        let url = directory.appendingPathComponent("\(profile.id.uuidString).json")
-        if FileManager.default.fileExists(atPath: url.path) {
-            try FileManager.default.removeItem(at: url)
-        }
-        profiles.removeAll { $0.id == profile.id }
-        lastBurstSaveAt[profile.id] = nil
-
-        if let undoManager {
-            undoManager.registerUndo(withTarget: self) { store in
-                try? store.save(profile)
+        try tracking("Delete") {
+            let url = directory.appendingPathComponent("\(profile.id.uuidString).json")
+            if FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.removeItem(at: url)
             }
-            undoManager.setActionName("Delete \(profile.name)")
-        }
+            profiles.removeAll { $0.id == profile.id }
+            lastBurstSaveAt[profile.id] = nil
 
-        log.info("Deleted profile \(profile.name, privacy: .public)")
+            if let undoManager {
+                undoManager.registerUndo(withTarget: self) { store in
+                    try? store.save(profile)
+                }
+                undoManager.setActionName("Delete \(profile.name)")
+            }
+
+            log.info("Deleted profile \(profile.name, privacy: .public)")
+        }
     }
 
     /// On first launch, seed a "Default" profile and the Voice Clarity preset
@@ -253,37 +265,57 @@ final class ProfileStore: ObservableObject {
     /// Either way, the override is persisted and `loadAll()` is called so
     /// the in-memory profile list reflects whatever's in the new folder.
     func relocate(to newDirectory: URL, moveExisting: Bool) throws {
-        let oldDirectory = directory
-        if newDirectory.standardizedFileURL == oldDirectory.standardizedFileURL {
-            throw RelocationError.sourceIsDestination
-        }
+        try tracking("Relocate") {
+            let oldDirectory = directory
+            if newDirectory.standardizedFileURL == oldDirectory.standardizedFileURL {
+                throw RelocationError.sourceIsDestination
+            }
 
-        let fm = FileManager.default
-        if !fm.fileExists(atPath: newDirectory.path) {
-            try fm.createDirectory(at: newDirectory, withIntermediateDirectories: true)
-        }
+            let fm = FileManager.default
+            if !fm.fileExists(atPath: newDirectory.path) {
+                try fm.createDirectory(at: newDirectory, withIntermediateDirectories: true)
+            }
 
-        if moveExisting, fm.fileExists(atPath: oldDirectory.path) {
-            let oldURLs = (try? fm.contentsOfDirectory(at: oldDirectory, includingPropertiesForKeys: nil)) ?? []
-            for src in oldURLs where src.pathExtension == "json" {
-                let dst = newDirectory.appendingPathComponent(src.lastPathComponent)
-                if fm.fileExists(atPath: dst.path) {
-                    try? fm.removeItem(at: dst)
-                }
-                do {
-                    try fm.moveItem(at: src, to: dst)
-                } catch {
-                    throw RelocationError.moveFailed(error.localizedDescription)
+            if moveExisting, fm.fileExists(atPath: oldDirectory.path) {
+                let oldURLs = (try? fm.contentsOfDirectory(at: oldDirectory, includingPropertiesForKeys: nil)) ?? []
+                for src in oldURLs where src.pathExtension == "json" {
+                    let dst = newDirectory.appendingPathComponent(src.lastPathComponent)
+                    if fm.fileExists(atPath: dst.path) {
+                        try? fm.removeItem(at: dst)
+                    }
+                    do {
+                        try fm.moveItem(at: src, to: dst)
+                    } catch {
+                        throw RelocationError.moveFailed(error.localizedDescription)
+                    }
                 }
             }
-        }
 
-        directory = newDirectory
-        if newDirectory.standardizedFileURL == Self.defaultDirectory().standardizedFileURL {
-            UserDefaults.standard.removeObject(forKey: Self.directoryOverrideKey)
-        } else {
-            UserDefaults.standard.set(newDirectory.path, forKey: Self.directoryOverrideKey)
+            directory = newDirectory
+            if newDirectory.standardizedFileURL == Self.defaultDirectory().standardizedFileURL {
+                UserDefaults.standard.removeObject(forKey: Self.directoryOverrideKey)
+            } else {
+                UserDefaults.standard.set(newDirectory.path, forKey: Self.directoryOverrideKey)
+            }
+            loadAll()
         }
-        loadAll()
+    }
+
+    // MARK: - Error tracking
+
+    /// Wrap every throwing public operation so `lastError` reflects the
+    /// outcome of the most recent attempt — set on failure, cleared on
+    /// success. Callers using `try?` still get the silent ignore they
+    /// asked for; the published value lets DebugView surface what went
+    /// wrong even when the call site swallowed the error.
+    private func tracking<T>(_ operation: String, _ work: () throws -> T) throws -> T {
+        do {
+            let result = try work()
+            lastError = nil
+            return result
+        } catch {
+            lastError = "\(operation) failed: \(error.localizedDescription)"
+            throw error
+        }
     }
 }

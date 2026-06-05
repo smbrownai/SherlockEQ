@@ -42,7 +42,7 @@ struct EqualizerView: View {
         do {
             try profileStore.save(copy)
             audioState.activeProfileID = copy.id
-        } catch { /* surfaced via ProfileStore.lastError */ }
+        } catch { /* surfaced via ProfileStore.lastError (DebugView) */ }
     }
 
     private func uniqueName(base: String) -> String {
