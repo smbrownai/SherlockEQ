@@ -114,8 +114,15 @@ struct ParametricCanvasView: View {
 
     private let minHz: Double = 20
     private let maxHz: Double = 20_000
-    private let minDB: Double = -24
-    private let maxDB: Double = 24
+    /// Y-axis range for the EQ curve (dB gain, around 0). Tightened
+    /// from ±24 → ±18 so typical bands (mostly ±6 dB) deflect ~33 %
+    /// more pixels and the curve reads as a real shape rather than a
+    /// faint wobble near zero. Profile bands max out at ±12 dB, so
+    /// 6 dB of headroom remains for the rare extreme tweak before the
+    /// node hits the visible ceiling. Pair this with `drawDBLabels`'s
+    /// stride-by-6 so the axis still divides cleanly.
+    private let minDB: Double = -18
+    private let maxDB: Double = 18
     private let nodeRadius: CGFloat = 8
     private let nodeHitRadius: CGFloat = 16
 
@@ -133,11 +140,14 @@ struct ParametricCanvasView: View {
     private let spectrumMaxDB: Double = -6
     /// Mode-aware: the heatmap needs much more vertical room than a thin
     /// silhouette overlay, so Spectrogram mode gets 65% of the canvas
-    /// versus Spectrum / Bars at 40%. The EQ curve, grid, and labels
-    /// continue to draw across the full canvas — they just sit in a
-    /// smaller proportion of it when the spectrogram is large.
+    /// versus Spectrum / Bars at 50%. (Was 40 % before; bumped to 50 %
+    /// when the Expert canvas grew to 450pt, since the spectrum's
+    /// 84 dB range was visibly cramped in the smaller fraction.)
+    /// The EQ curve, grid, and labels continue to draw across the
+    /// full canvas — they just sit in a smaller proportion of it
+    /// when the spectrogram is large.
     private var spectrumHeightFraction: CGFloat {
-        vizMode == .spectrogram ? 0.65 : 0.4
+        vizMode == .spectrogram ? 0.65 : 0.5
     }
 
     @State private var dragState: DragState?
@@ -1852,13 +1862,14 @@ struct ParametricCanvasView: View {
     }
 
     private func drawDBLabels(_ context: GraphicsContext, size: CGSize) {
-        // Safe-area: clamp each label's y so the topmost (+24) and bottom-
-        // most (−24) stay inside the canvas frame instead of getting half-
+        // Safe-area: clamp each label's y so the topmost (+18) and bottom-
+        // most (−18) stay inside the canvas frame instead of getting half-
         // cropped by the rounded-rect clip. 12pt vertical inset matches the
-        // bottom frequency-label inset.
+        // bottom frequency-label inset. Stride-by-6 plays cleanly with the
+        // ±18 dB EQ range — labels read −18 / −12 / −6 / 0 / +6 / +12 / +18.
         let topSafe: CGFloat = 12
         let bottomSafe: CGFloat = 12
-        for db in stride(from: minDB, through: maxDB, by: 12) {
+        for db in stride(from: minDB, through: maxDB, by: 6) {
             let rawY = yForDB(db, height: size.height)
             let y = max(topSafe, min(size.height - bottomSafe, rawY))
             let label = db > 0 ? "+\(Int(db))" : "\(Int(db))"

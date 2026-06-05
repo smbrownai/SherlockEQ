@@ -131,7 +131,12 @@ struct ExpertEQView: View {
                 safetyCeilingDBA: profile.safeListeningCeilingDB,
                 calibrationOffsetDBA: audioState.calibrationOffsetDBA
             )
-            .frame(minHeight: 280)
+            // Roomier canvas — there's plenty of vertical real estate
+            // below the canvas on Expert, and the spectrum + EQ curve
+            // both benefit from more pixels per dB. ~60 % taller than
+            // the original 280pt while still leaving the band table
+            // and controls bar comfortably above the fold.
+            .frame(minHeight: 450)
             .focusable()
             .focused($canvasFocused)
             // Band navigation: Tab and L go forward, J goes back.
