@@ -563,7 +563,13 @@ final class CATapEngine: ObservableObject {
 @available(macOS 14.2, *)
 extension CATapEngine {
 
-    static func defaultOutputDeviceID() throws -> AudioDeviceID {
+    /// `nonisolated` because the body only does CoreAudio C calls and
+    /// touches no instance state — any caller (main or background)
+    /// can run it. `AudioObjectGetPropertyData` for the default-output
+    /// selector is the same family of calls that wedged at launch via
+    /// `allOutputDevices`, so keeping these helpers safe to dispatch
+    /// off-main is hygiene against future regressions.
+    nonisolated static func defaultOutputDeviceID() throws -> AudioDeviceID {
         var deviceID = AudioDeviceID(0)
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         var address = AudioObjectPropertyAddress(
@@ -663,7 +669,7 @@ extension CATapEngine {
         return size > 0
     }
 
-    static func tapUIDString(_ tapID: AudioObjectID) throws -> String {
+    nonisolated static func tapUIDString(_ tapID: AudioObjectID) throws -> String {
         var uid: CFString = "" as CFString
         var size = UInt32(MemoryLayout<CFString>.size)
         var address = AudioObjectPropertyAddress(
@@ -676,7 +682,7 @@ extension CATapEngine {
         return uid as String
     }
 
-    static func inputStreamFormat(_ deviceID: AudioDeviceID) throws -> AudioStreamBasicDescription {
+    nonisolated static func inputStreamFormat(_ deviceID: AudioDeviceID) throws -> AudioStreamBasicDescription {
         var asbd = AudioStreamBasicDescription()
         var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
         var address = AudioObjectPropertyAddress(
@@ -691,7 +697,7 @@ extension CATapEngine {
 
     /// Translate our own PID into a Core Audio process-object ID so we can exclude
     /// ourselves from the global tap (preventing AVAudioEngine output → tap → output feedback).
-    static func processObjectIDForCurrentPID() throws -> AudioObjectID {
+    nonisolated static func processObjectIDForCurrentPID() throws -> AudioObjectID {
         var pid = pid_t(getpid())
         var processObjectID = AudioObjectID(0)
         var size = UInt32(MemoryLayout<AudioObjectID>.size)
