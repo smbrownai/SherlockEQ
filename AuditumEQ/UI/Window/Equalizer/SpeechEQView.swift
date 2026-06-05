@@ -94,7 +94,12 @@ struct SpeechEQView: View {
 
     private enum Ear { case left, right }
 
-    @AppStorage("auditumeq.speech.linkChannels") private var linkChannels: Bool = true
+    /// Reads the active profile's `separateChannels` flag. Toggle
+    /// lives on Profile Detail. Default for new profiles is false
+    /// (linked).
+    private var linkChannels: Bool {
+        !(audioState.activeProfile(in: profileStore)?.separateChannels ?? false)
+    }
     @AppStorage("auditumeq.speech.showHelp") private var showHelp: Bool = true
     @State private var dummySelection: UUID? = nil
 
@@ -149,9 +154,6 @@ struct SpeechEQView: View {
             presetMenu
             Spacer()
             Toggle("Show help", isOn: $showHelp)
-                .toggleStyle(.switch)
-                .controlSize(.small)
-            Toggle("Link L + R", isOn: $linkChannels)
                 .toggleStyle(.switch)
                 .controlSize(.small)
         }

@@ -16,8 +16,12 @@ struct ExpertEQView: View {
     /// Display preference for the Q/BW readout — Q value vs equivalent
     /// bandwidth in octaves. Storage is always Q internally.
     @State private var showQAsOctaves: Bool = false
-    /// When on, every band edit propagates to both ears in lockstep.
-    @State private var linkChannels: Bool = false
+    /// Reads the active profile's `separateChannels` flag. Toggle
+    /// lives on Profile Detail. Default for new profiles is false
+    /// (linked) — band edits propagate to both ears.
+    private var linkChannels: Bool {
+        !(audioState.activeProfile(in: profileStore)?.separateChannels ?? false)
+    }
     /// Selected underlay visualisation, persisted across launches.
     @AppStorage("auditumeq.expertVizMode") private var vizModeRaw: String = CanvasVizMode.spectrum.rawValue
 
@@ -261,13 +265,22 @@ struct ExpertEQView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Picker("", selection: $tab) {
-                ForEach(EarTab.allCases, id: \.self) { t in
-                    Text(t.rawValue).tag(t)
+            // Ear-tab picker is only meaningful when L and R are being
+            // edited independently. In linked mode (the default) every
+            // edit propagates to both ears, so showing the picker
+            // would suggest a choice that doesn't exist. Drives off
+            // the same `auditumeq.separateChannels` AppStorage key as
+            // every other EQ tab — single switch in Settings →
+            // Equalizer flips the whole app's behaviour at once.
+            if !linkChannels {
+                Picker("", selection: $tab) {
+                    ForEach(EarTab.allCases, id: \.self) { t in
+                        Text(t.rawValue).tag(t)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 240)
             }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 240)
 
             Picker("", selection: vizModeBinding) {
                 ForEach(CanvasVizMode.userVisibleCases) { mode in
@@ -292,11 +305,6 @@ struct ExpertEQView: View {
             .pickerStyle(.segmented)
             .frame(width: 80)
             .help("Display the selected band's width as Q or as octave bandwidth")
-
-            Toggle("Link L+R", isOn: $linkChannels)
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .help("When on, edits to a band on this ear also update the other ear")
 
             Button {
                 addBand()

@@ -250,6 +250,51 @@ struct ProfileDetailView: View {
             )
             Divider()
             balanceRow(profile)
+            Divider()
+            separateChannelsRow(profile)
+        }
+    }
+
+    /// Per-profile UI toggle: when on, every EQ tab (Simple, Speech,
+    /// Advanced, Expert) exposes per-ear sliders / band lists for
+    /// fine-tuning. When off (default), one column drives both ears.
+    /// Toggling never mutates band data — the profile's leftEar /
+    /// rightEar arrays stay as they are; only future edits in the
+    /// chosen mode propagate to one or both ears. The Audiogram screen
+    /// is always per-ear regardless of this setting.
+    @ViewBuilder private func separateChannelsRow(_ profile: HearingProfile) -> some View {
+        // Compare by audio behaviour, not by band identity. EQBand
+        // carries a UUID that's generated fresh on construction —
+        // Simple/Speech/Advanced mint independent bands per ear via
+        // EQBandLookup, so the raw `==` is almost always false even
+        // when both ears describe identical filters. See
+        // `Array<EQBand>.audiblyEquivalent(to:)`.
+        let asymmetric = !profile.leftEar.bands.audiblyEquivalent(to: profile.rightEar.bands)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Separate L + R")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 120, alignment: .leading)
+                Toggle("", isOn: Binding(
+                    get: { profile.separateChannels },
+                    set: { v in update(profile) { $0.separateChannels = v } }
+                ))
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+                Spacer()
+                if asymmetric && !profile.separateChannels {
+                    Label("L ≠ R", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.orange)
+                        .help("This profile has different bands on each ear, but EQ tabs are in linked mode. Linked-mode edits will collapse the difference on bands you touch; untouched bands stay asymmetric.")
+                }
+            }
+            Text(profile.separateChannels
+                 ? "EQ tabs show per-ear sliders. Edits affect only the ear you touch."
+                 : "EQ tabs show a single set of sliders. Edits apply to both ears.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
     }
 

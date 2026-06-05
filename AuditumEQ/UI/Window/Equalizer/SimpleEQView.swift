@@ -27,7 +27,12 @@ struct SimpleEQView: View {
         SimpleBand(label: "Treble", frequencyHz: 5000, bandwidth: 0.707, filterType: .highShelf, icon: "music.note"),
     ]
 
-    @State private var linkChannels: Bool = true
+    /// Reads the active profile's `separateChannels` flag (single
+    /// column when false, per-ear columns when true). Profile Detail
+    /// exposes the toggle. Default for new profiles is false.
+    private var linkChannels: Bool {
+        !(audioState.activeProfile(in: profileStore)?.separateChannels ?? false)
+    }
 
     var body: some View {
         if let profile = audioState.activeProfile(in: profileStore) {
@@ -64,14 +69,11 @@ struct SimpleEQView: View {
 
     private var topBar: some View {
         HStack(spacing: 12) {
-            Text("Three quick knobs per ear")
+            Text(linkChannels ? "Three quick knobs" : "Three quick knobs per ear")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             Spacer()
             presetMenu
-            Toggle("Link L + R", isOn: $linkChannels)
-                .toggleStyle(.switch)
-                .controlSize(.small)
         }
     }
 

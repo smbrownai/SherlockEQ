@@ -11,7 +11,12 @@ struct AdvancedEQView: View {
     ]
     private static let bandwidth: Double = 1.0   // 1 octave Q
 
-    @State private var linkChannels: Bool = true
+    /// Reads the active profile's `separateChannels` flag. Toggle
+    /// lives on Profile Detail. Default for new profiles is false
+    /// (linked).
+    private var linkChannels: Bool {
+        !(audioState.activeProfile(in: profileStore)?.separateChannels ?? false)
+    }
 
     var body: some View {
         if let profile = audioState.activeProfile(in: profileStore) {
@@ -40,14 +45,11 @@ struct AdvancedEQView: View {
 
     private var topBar: some View {
         HStack(spacing: 12) {
-            Text("10 octave-spaced bands per ear")
+            Text(linkChannels ? "10 octave-spaced bands" : "10 octave-spaced bands per ear")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             Spacer()
             presetMenu
-            Toggle("Link L + R", isOn: $linkChannels)
-                .toggleStyle(.switch)
-                .controlSize(.small)
         }
     }
 

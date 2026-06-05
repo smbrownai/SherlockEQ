@@ -34,4 +34,38 @@ extension EQBand {
             enabled: false
         )
     }
+
+    /// Equality ignoring `id`. Two bands compare audibly the same when
+    /// they describe the same filter behaviour, even if they were
+    /// constructed independently per ear (and so carry different
+    /// UUIDs). The built-in `==` uses `id`, so the synthesised
+    /// `Hashable` conformance can stay identity-aware for diffable
+    /// lists while we get a content-aware predicate here.
+    func audiblySame(as other: EQBand) -> Bool {
+        frequencyHz == other.frequencyHz
+            && gaindB == other.gaindB
+            && bandwidth == other.bandwidth
+            && filterType == other.filterType
+            && enabled == other.enabled
+    }
+}
+
+extension Array where Element == EQBand {
+    /// Audio-equivalent comparison ignoring band IDs. Sorts both
+    /// arrays by (frequency, filter type) so authoring order doesn't
+    /// flip the result. Use this when asking "do the L and R chains
+    /// describe the same EQ?" — `==` on the arrays will be false the
+    /// moment the bands have different UUIDs, which they almost
+    /// always do because Simple/Speech/Advanced/EQBandLookup mint
+    /// fresh bands per ear and Expert's mirror function preserves
+    /// the target ear's existing IDs by design.
+    func audiblyEquivalent(to other: [EQBand]) -> Bool {
+        guard count == other.count else { return false }
+        let lhs = sorted { ($0.frequencyHz, $0.filterType.rawValue) < ($1.frequencyHz, $1.filterType.rawValue) }
+        let rhs = other.sorted { ($0.frequencyHz, $0.filterType.rawValue) < ($1.frequencyHz, $1.filterType.rawValue) }
+        for (a, b) in zip(lhs, rhs) {
+            if !a.audiblySame(as: b) { return false }
+        }
+        return true
+    }
 }

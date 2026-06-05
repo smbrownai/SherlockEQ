@@ -19,6 +19,14 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     var autoEQPreampDB: Double?                 // headroom adjustment baked into the AutoEQ file
     var safeListeningCeilingDB: Double          // user-set, default 85.0
     var compensationFactor: Double              // 0.25–1.0 — audiogram→EQ strength
+    /// When true, EQ tabs show per-ear sliders; when false, every edit
+    /// applies to both ears in lockstep. Lives on the profile because
+    /// the audiogram itself is per-ear — symmetric-hearing users keep
+    /// this off and avoid a row of duplicate sliders; asymmetric-
+    /// hearing users flip it on per-profile without a global setting.
+    /// Toggling the value never mutates band data; only future edits
+    /// in the new mode propagate to one or both ears.
+    var separateChannels: Bool                  // default false — single column UI
     var isBuiltIn: Bool                         // true for curated presets (Default, Voice Clarity) — UI blocks edits and offers Duplicate
 
     var createdAt: Date
@@ -43,6 +51,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.autoEQPreampDB         = try c.decodeIfPresent(Double.self, forKey: .autoEQPreampDB)
         self.safeListeningCeilingDB = try c.decode(Double.self, forKey: .safeListeningCeilingDB)
         self.compensationFactor     = try c.decode(Double.self, forKey: .compensationFactor)
+        self.separateChannels       = try c.decodeIfPresent(Bool.self, forKey: .separateChannels) ?? false
         self.isBuiltIn              = try c.decodeIfPresent(Bool.self, forKey: .isBuiltIn) ?? false
         self.createdAt              = try c.decode(Date.self, forKey: .createdAt)
         self.modifiedAt             = try c.decode(Date.self, forKey: .modifiedAt)
@@ -54,6 +63,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         globalTrimDB: Double, balance: Double = 0, autoEQCurveURL: URL?,
         autoEQName: String? = nil, autoEQBands: [EQBand]? = nil, autoEQPreampDB: Double? = nil,
         safeListeningCeilingDB: Double, compensationFactor: Double,
+        separateChannels: Bool = false,
         isBuiltIn: Bool = false,
         createdAt: Date, modifiedAt: Date
     ) {
@@ -67,6 +77,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.autoEQPreampDB = autoEQPreampDB
         self.safeListeningCeilingDB = safeListeningCeilingDB
         self.compensationFactor = compensationFactor
+        self.separateChannels = separateChannels
         self.isBuiltIn = isBuiltIn
         self.createdAt = createdAt; self.modifiedAt = modifiedAt
     }
