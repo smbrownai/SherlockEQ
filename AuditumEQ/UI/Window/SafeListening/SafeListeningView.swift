@@ -91,11 +91,11 @@ struct SafeListeningView: View {
             .frame(height: 14)
 
             HStack {
-                Text("0 %").font(.caption2.monospaced()).foregroundStyle(.secondary)
+                Text("0 %").font(.caption.monospaced()).foregroundStyle(.secondary)
                 Spacer()
-                Text("Warn (80 %)").font(.caption2.monospaced()).foregroundStyle(.orange)
+                Text("Warn (80 %)").font(.caption.monospaced()).foregroundStyle(.orange)
                 Spacer()
-                Text("Limit (100 %)").font(.caption2.monospaced()).foregroundStyle(.red)
+                Text("Limit (100 %)").font(.caption.monospaced()).foregroundStyle(.red)
             }
         }
     }
@@ -117,8 +117,8 @@ struct SafeListeningView: View {
                     }
                 )
                 Text("Ceiling lives on each profile — switching profiles can change this.")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             } else {
                 Text("No active profile — make one active in the Profiles section to set a ceiling.")
                     .font(.callout)
@@ -135,8 +135,8 @@ struct SafeListeningView: View {
                 set: { state.safeListening.quietThresholdDBA = $0 }
             )
             Text("Below this level, AuditumEQ stops counting remaining time and treats sustained quiet as a break.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
 
             Divider()
 
@@ -148,8 +148,8 @@ struct SafeListeningView: View {
                 set: { state.calibrationOffsetDBA = $0 }
             )
             Text("The dB SPL produced at your ear when a full-scale (0 dBFS) digital sample plays through your current output device at your usual volume. Used to convert dBFS into dBA for dose tracking AND to anchor the Loudness lens's safety overlay to real SPL. Default 100 is a rough estimate for consumer headphones at moderate volume — for accurate values use the reference tone below.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
 
             calibrationToneRow
 
@@ -220,8 +220,8 @@ struct SafeListeningView: View {
             }
 
             Text("Play the tone with your usual output device at your usual volume. Hold a phone-based SPL meter (NIOSH SLM is recommended on iPhone — it's been NIOSH-validated within ±2 dB) at your listening position. Type the dBA reading and tap Apply — the slider above will jump to the matching calibration. For headphones, cup the earcup over the phone mic; results are within a few dB. Don't forget to stop the tone before measuring music!")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -257,8 +257,8 @@ struct SafeListeningView: View {
                 Spacer()
             }
             Text("Persistence + chart wiring lands in a focused follow-up. Today's dose is shown above.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
     }
 

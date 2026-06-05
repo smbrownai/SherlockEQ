@@ -86,7 +86,7 @@ struct EQPreviewView: View {
                 AxisTick()
                 AxisValueLabel {
                     if let hz = value.as(Double.self) {
-                        Text(formatFrequency(hz)).font(.caption2)
+                        Text(formatFrequency(hz)).font(.caption)
                     }
                 }
             }
@@ -99,7 +99,7 @@ struct EQPreviewView: View {
                 AxisValueLabel {
                     if let v = value.as(Double.self) {
                         Text(v == 0 ? "0" : String(format: "%+.0f", v))
-                            .font(.caption2)
+                            .font(.caption)
                     }
                 }
             }
@@ -113,8 +113,8 @@ struct EQPreviewView: View {
             legendDot(audioState.rightEarColor, label: "Right")
             Spacer()
             Text("Per-band ceiling: \(Int(AudiogramConversion.perBandCeilingDB)) dB")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 

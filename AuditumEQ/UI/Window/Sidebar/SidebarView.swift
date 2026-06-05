@@ -35,8 +35,8 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Active profile")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Text(activeProfileName)
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(.primary)

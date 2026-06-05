@@ -88,8 +88,8 @@ struct ToneFinderView: View {
             .controlSize(.small)
             Spacer()
             Text("Useful for unilateral tinnitus or asymmetric pitch.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -189,7 +189,7 @@ struct ToneFinderView: View {
                     .stroke(Color.secondary.opacity(0.18), lineWidth: 0.5)
 
                     Text(formatTick(hz))
-                        .font(.caption2.monospaced())
+                        .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
                         .position(x: x, y: geo.size.height - 12)
                 }
@@ -230,7 +230,7 @@ struct ToneFinderView: View {
 
             Text("Hz")
                 .font(.caption.monospaced())
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
 
             Button { nudge(+1) }   label: { Text("+1")   }
@@ -295,7 +295,7 @@ struct ToneFinderView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
             Text("AuditumEQ doesn't diagnose, measure, or treat tinnitus. This tool helps you pick a single frequency for the optional notch filter — a way to subtly de-emphasize the pitch that's mentally fatiguing. If your tinnitus changes or worsens, see a hearing professional.")
-                .font(.caption)
+                .font(.callout)
                 .foregroundStyle(.secondary)
         }
         .padding(14)

@@ -109,7 +109,7 @@ private struct ThresholdRow: View {
             }
             .frame(height: 6)
             Text(severityCategory)
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(width: 90, alignment: .leading)
         }

@@ -52,8 +52,8 @@ struct SettingsView: View {
                     Spacer()
                 }
                 Text("When enabled, AuditumEQ starts automatically when you log in and runs in the menu bar. You can revoke this in System Settings → General → Login Items.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
                     .padding(.vertical, 4)
                 Divider()
                 HStack {
@@ -63,8 +63,8 @@ struct SettingsView: View {
                     Spacer()
                 }
                 Text("When enabled, the Dock icon disappears after you close the main window — AuditumEQ keeps running in the menu bar. Turn this off if the macOS menu bar fails to redraw when you reopen the window; you'll get a permanent Dock icon in exchange.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
                     .padding(.vertical, 4)
             }
         }
@@ -77,8 +77,8 @@ struct SettingsView: View {
                 masterGainRow
                 Divider()
                 Text("Applied after the peak limiter — the limiter still catches summed peaks, so boost up to +12 dB is safe. Persists across launches.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
                     .padding(.vertical, 4)
             }
         }
@@ -153,8 +153,8 @@ struct SettingsView: View {
                 )
                 Divider()
                 Text("Shorter attack catches sharp transients but adds distortion. Longer decay smooths out sustained signals at the cost of pumping. Pre-gain pushes the signal harder into the limiter before it triggers.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
                     .padding(.vertical, 4)
             }
         }
@@ -209,8 +209,8 @@ struct SettingsView: View {
                 )
                 Divider()
                 Text("Colors used for the left/right curves, audiogram thresholds, and EQ band sliders. Helpful for users who can't distinguish the default blue/red.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
                     .padding(.vertical, 4)
             }
         }

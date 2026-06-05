@@ -76,7 +76,7 @@ struct LevelMeterView: View {
                 Spacer()
                 Text("\(Int(maxDB))")
             }
-            .font(.caption2.monospaced())
+            .font(.caption.monospaced())
             .foregroundStyle(.secondary)
         }
     }

@@ -24,7 +24,7 @@ struct ProfileListItem: View {
                 }
                 if let uid = profile.linkedDeviceUID, !uid.isEmpty {
                     Text(uid)
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }

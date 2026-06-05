@@ -117,8 +117,8 @@ struct ProfileDetailView: View {
             }
             Divider()
             Text("When the system output switches to the linked device, AuditumEQ activates this profile automatically. Leave \"Any device\" to keep this profile manual.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
                 .padding(.vertical, 4)
         }
         .onAppear { refreshDeviceList() }
@@ -183,8 +183,21 @@ struct ProfileDetailView: View {
     }
 
     private func refreshDeviceList() {
-        availableDevices = CATapEngine.allOutputDevices()
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        // CoreAudio's `AudioObjectGetPropertyDataSize` can block the
+        // calling thread when the audio HAL is in a confused state
+        // (stuck aggregate devices, disconnected USB DACs the system
+        // still thinks are present, post-sleep wedge). Running the
+        // enumeration on the main thread froze the whole app at
+        // launch — Profile Detail's `.onAppear` fires before the
+        // window is even visible, so a hang here means no UI at all.
+        // Hop to a background queue, then publish the result on main.
+        Task.detached(priority: .userInitiated) {
+            let devices = CATapEngine.allOutputDevices()
+                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            await MainActor.run {
+                self.availableDevices = devices
+            }
+        }
     }
 
     @ViewBuilder private func autoEQSection(_ profile: HearingProfile) -> some View {
@@ -281,8 +294,8 @@ struct ProfileDetailView: View {
                 Spacer()
             }
             Text(profile.eqMode.tagline)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -324,8 +337,8 @@ struct ProfileDetailView: View {
             Text(profile.separateChannels
                  ? "EQ tabs show per-ear sliders. Edits affect only the ear you touch."
                  : "EQ tabs show a single set of sliders. Edits apply to both ears.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -381,8 +394,8 @@ struct ProfileDetailView: View {
             )
             Divider()
             Text("NIOSH recommends 85 dBA over 8 hours; lower values shorten the safe daily duration.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
                 .padding(.vertical, 4)
         }
     }

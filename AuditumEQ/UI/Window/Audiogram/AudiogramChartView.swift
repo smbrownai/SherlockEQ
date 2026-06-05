@@ -38,7 +38,7 @@ struct AudiogramChartView: View {
                 AxisValueLabel {
                     if let hz = value.as(Double.self) {
                         Text(formatFrequency(hz))
-                            .font(.caption2)
+                            .font(.caption)
                     }
                 }
             }
@@ -52,7 +52,7 @@ struct AudiogramChartView: View {
                 AxisTick()
                 AxisValueLabel {
                     if let v = value.as(Double.self) {
-                        Text("\(Int(v))").font(.caption2)
+                        Text("\(Int(v))").font(.caption)
                     }
                 }
             }

@@ -581,7 +581,7 @@ extension CATapEngine {
         return deviceID
     }
 
-    static func deviceName(_ deviceID: AudioDeviceID) throws -> String {
+    nonisolated static func deviceName(_ deviceID: AudioDeviceID) throws -> String {
         var name: CFString = "" as CFString
         var size = UInt32(MemoryLayout<CFString>.size)
         var address = AudioObjectPropertyAddress(
@@ -594,7 +594,7 @@ extension CATapEngine {
         return name as String
     }
 
-    static func deviceUID(_ deviceID: AudioDeviceID) throws -> String {
+    nonisolated static func deviceUID(_ deviceID: AudioDeviceID) throws -> String {
         var uid: CFString = "" as CFString
         var size = UInt32(MemoryLayout<CFString>.size)
         var address = AudioObjectPropertyAddress(
@@ -617,7 +617,15 @@ extension CATapEngine {
     /// Enumerate every device that can act as an output. Skips devices
     /// without output streams (mics, aggregate-only inputs) and any
     /// device whose UID we can't read.
-    static func allOutputDevices() -> [OutputDevice] {
+    ///
+    /// `nonisolated` because the body only does CoreAudio C calls and
+    /// touches no instance state — and the underlying
+    /// `AudioObjectGetPropertyDataSize` can block when the audio HAL
+    /// is in a stuck state (post-sleep wedge, disconnected USB DAC
+    /// the system still thinks is present). Running it on the main
+    /// thread froze the app at launch when Profile Detail's
+    /// `.onAppear` fired before the window was visible.
+    nonisolated static func allOutputDevices() -> [OutputDevice] {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -642,7 +650,7 @@ extension CATapEngine {
 
     /// True when a device exposes at least one output stream — filters
     /// microphones and input-only aggregates out of the picker.
-    private static func hasOutputStream(_ deviceID: AudioDeviceID) -> Bool {
+    nonisolated private static func hasOutputStream(_ deviceID: AudioDeviceID) -> Bool {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyStreams,
             mScope: kAudioDevicePropertyScopeOutput,
