@@ -150,6 +150,7 @@ struct ExpertEQView: View {
             .onKeyPress { press in handleKey(press, in: profile) }
             .onTapGesture { canvasFocused = true }
             controlsBar(profile)
+            shortcutsKey
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -178,28 +179,54 @@ struct ExpertEQView: View {
             return .ignored
         }
 
-        let stepGain: Double = press.modifiers.contains(.shift) ? 0.5 : 1.0
-        let bigGain: Double = 5.0
-        // ±5 % per arrow, ±15 % with shift, ±50 % with command.
-        let freqStep: Double = press.modifiers.contains(.shift) ? 1.15 : 1.05
-        let freqBigStep: Double = 1.5
+        let isCmd = press.modifiers.contains(.command)
+        let isShift = press.modifiers.contains(.shift)
+
+        // Gain step ladder (priority: most specific modifier wins).
+        // ⌘⇧ = ±0.1 dB (fine), ⌘ = ±5 dB (jump), ⇧ = ±0.5 dB (half),
+        // no modifier = ±1 dB (default).
+        let gainAmount: Double = {
+            if isCmd && isShift { return 0.1 }
+            if isCmd            { return 5.0 }
+            if isShift          { return 0.5 }
+            return 1.0
+        }()
+
+        // Frequency step ladder — multiplicative for percentage-style
+        // sweeps, but ⌘⇧ snaps to ±1 Hz absolute so users can nudge
+        // a band by single-Hertz amounts for surgical work near a
+        // specific pitch (e.g. dialling in a tinnitus notch).
+        // ⌘ = ±50 %, ⇧ = ±15 %, default = ±5 %.
+        let freqFactor: Double = {
+            if isCmd   { return 1.5 }
+            if isShift { return 1.15 }
+            return 1.05
+        }()
 
         switch press.key {
         case .upArrow:
-            let amount = press.modifiers.contains(.command) ? bigGain : stepGain
-            update(band: band) { $0.gaindB = clampDB($0.gaindB + amount) }
+            update(band: band) { $0.gaindB = clampDB($0.gaindB + gainAmount) }
             return .handled
         case .downArrow:
-            let amount = press.modifiers.contains(.command) ? bigGain : stepGain
-            update(band: band) { $0.gaindB = clampDB($0.gaindB - amount) }
+            update(band: band) { $0.gaindB = clampDB($0.gaindB - gainAmount) }
             return .handled
         case .leftArrow:
-            let factor = press.modifiers.contains(.command) ? freqBigStep : freqStep
-            update(band: band) { $0.frequencyHz = clampHz($0.frequencyHz / factor) }
+            update(band: band) {
+                if isCmd && isShift {
+                    $0.frequencyHz = clampHz($0.frequencyHz - 1)
+                } else {
+                    $0.frequencyHz = clampHz($0.frequencyHz / freqFactor)
+                }
+            }
             return .handled
         case .rightArrow:
-            let factor = press.modifiers.contains(.command) ? freqBigStep : freqStep
-            update(band: band) { $0.frequencyHz = clampHz($0.frequencyHz * factor) }
+            update(band: band) {
+                if isCmd && isShift {
+                    $0.frequencyHz = clampHz($0.frequencyHz + 1)
+                } else {
+                    $0.frequencyHz = clampHz($0.frequencyHz * freqFactor)
+                }
+            }
             return .handled
         case .delete, .deleteForward:
             removeBand(band)
@@ -348,7 +375,15 @@ struct ExpertEQView: View {
                     update(band: band) { $0.frequencyHz = clampHz($0.frequencyHz + Double(dragged) * 5) }
                 }
 
-                paramRow("Gain", value: Int(band.gaindB), unit: "dB") { dragged in
+                // Pre-format to %+.1f so the readout reflects the
+                // 0.1 dB drag resolution. Casting to Int (the previous
+                // behaviour) threw away every sub-integer move — the
+                // user could see the slope of the curve change but
+                // the number wouldn't budge until they crossed to the
+                // next whole dB.
+                paramRow("Gain",
+                         value: String(format: "%+.1f", band.gaindB),
+                         unit: "dB") { dragged in
                     update(band: band) { $0.gaindB = clampDB($0.gaindB + Double(dragged) * 0.1) }
                 }
 
@@ -436,6 +471,99 @@ struct ExpertEQView: View {
             else { profile.leftEar.bands = seed }
         }
         try? profileStore.save(profile)
+    }
+
+    /// Bottom-of-screen keyboard cheat sheet. Expert is the power-
+    /// user tab — the shortcuts are real and load-bearing, but
+    /// discovering them by reading the source isn't a workflow. Pin
+    /// the legend to the page so they're visible while you're using
+    /// the tab. Compact 2-column grid with monospaced keycap glyphs
+    /// to read as keys rather than running text.
+    @ViewBuilder private var shortcutsKey: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "keyboard")
+                    .foregroundStyle(.secondary)
+                Text("Keyboard shortcuts")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            // Two columns of rows so 8 entries fit without scrolling.
+            // Grid lines up keycaps in their own column so the eye
+            // can scan straight down the list.
+            Grid(alignment: .topLeading, horizontalSpacing: 20, verticalSpacing: 6) {
+                GridRow {
+                    shortcutEntry(keys: ["Tab"], alt: ["L"], label: "Next band")
+                    shortcutEntry(keys: ["␣"], alt: nil, label: "Toggle band on / off")
+                }
+                GridRow {
+                    shortcutEntry(keys: ["J"], alt: nil, label: "Previous band")
+                    shortcutEntry(keys: ["↩"], alt: nil, label: "Reset gain to 0")
+                }
+                GridRow {
+                    shortcutEntry(keys: ["↑", "↓"], alt: nil,
+                                  label: "Gain ±1 dB",
+                                  modifiers: "Shift ±0.5 · ⌘ ±5 · ⌘⇧ ±0.1")
+                    shortcutEntry(keys: ["⌫"], alt: nil, label: "Remove band")
+                }
+                GridRow {
+                    shortcutEntry(keys: ["←", "→"], alt: nil,
+                                  label: "Frequency ±5 %",
+                                  modifiers: "Shift ±15 % · ⌘ ±50 % · ⌘⇧ ±1 Hz")
+                    shortcutEntry(keys: ["[", "]"], alt: nil, label: "Q tighter / wider")
+                }
+            }
+        }
+        .padding(.top, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// One shortcut entry: a row of monospaced keycaps + a short label
+    /// + an optional second line of modifier hints (e.g. Shift / ⌘
+    /// behaviour on the arrows).
+    @ViewBuilder
+    private func shortcutEntry(
+        keys: [String],
+        alt: [String]?,
+        label: String,
+        modifiers: String? = nil
+    ) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            HStack(spacing: 4) {
+                ForEach(keys, id: \.self) { keycap($0) }
+                if let alt {
+                    Text("or").font(.caption2).foregroundStyle(.tertiary)
+                    ForEach(alt, id: \.self) { keycap($0) }
+                }
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let modifiers {
+                    Text(modifiers)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func keycap(_ label: String) -> some View {
+        Text(label)
+            .font(.system(.caption, design: .monospaced).weight(.medium))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.secondary.opacity(0.15))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(Color.secondary.opacity(0.45), lineWidth: 0.5)
+            )
     }
 
     private func paramRow<V>(
