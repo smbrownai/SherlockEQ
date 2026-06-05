@@ -45,11 +45,8 @@ struct AdvancedEQView: View {
 
     private var topBar: some View {
         HStack(spacing: 12) {
-            Text(linkChannels ? "10 octave-spaced bands" : "10 octave-spaced bands per ear")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            Spacer()
             presetMenu
+            Spacer()
         }
     }
 

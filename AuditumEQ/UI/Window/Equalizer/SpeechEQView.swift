@@ -119,7 +119,6 @@ struct SpeechEQView: View {
     private func content(_ profile: HearingProfile) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                intro
                 topBar
                 previewCanvas(profile)
                 if linkChannels {
@@ -138,16 +137,6 @@ struct SpeechEQView: View {
     }
 
     // MARK: - Sections
-
-    private var intro: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Tune for speech clarity")
-                .font(.title3.weight(.semibold))
-            Text("Six sliders organised around how voices actually work. Use a preset to start, then nudge what you're hearing.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-    }
 
     private var topBar: some View {
         HStack(spacing: 12) {

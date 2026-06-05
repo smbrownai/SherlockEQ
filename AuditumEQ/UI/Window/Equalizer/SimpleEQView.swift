@@ -15,6 +15,7 @@ struct SimpleEQView: View {
         let bandwidth: Double
         let filterType: EQFilterType
         let icon: String
+        let help: String
     }
 
     /// Bass + Treble are shelves so adjusting them never stacks weirdly
@@ -22,9 +23,30 @@ struct SimpleEQView: View {
     /// — a shelf is a fundamentally different filter shape. Mids stays a
     /// parametric peak (no equivalent shelf for the middle region).
     private static let simpleBands: [SimpleBand] = [
-        SimpleBand(label: "Bass",   frequencyHz: 250,  bandwidth: 0.707, filterType: .lowShelf,  icon: "speaker.wave.2.fill"),
-        SimpleBand(label: "Mids",   frequencyHz: 1000, bandwidth: 1.8,   filterType: .parametric, icon: "waveform"),
-        SimpleBand(label: "Treble", frequencyHz: 5000, bandwidth: 0.707, filterType: .highShelf, icon: "music.note"),
+        SimpleBand(
+            label: "Bass",
+            frequencyHz: 250,
+            bandwidth: 0.707,
+            filterType: .lowShelf,
+            icon: "speaker.wave.2.fill",
+            help: "Warmth and weight — kick drums, bass guitar, the foundation of male voices. Too much sounds boomy or muddy; too little sounds thin and tinny."
+        ),
+        SimpleBand(
+            label: "Mids",
+            frequencyHz: 1000,
+            bandwidth: 1.8,
+            filterType: .parametric,
+            icon: "waveform",
+            help: "The body of voices and most instruments — where almost all musical detail lives. Cutting here pushes everything back; boosting can sound boxy or honky."
+        ),
+        SimpleBand(
+            label: "Treble",
+            frequencyHz: 5000,
+            bandwidth: 0.707,
+            filterType: .highShelf,
+            icon: "music.note",
+            help: "Brightness and air — cymbals, sibilance, instrument detail. Too much sounds harsh or fatiguing; too little sounds dull and veiled."
+        ),
     ]
 
     /// Reads the active profile's `separateChannels` flag (single
@@ -60,7 +82,6 @@ struct SimpleEQView: View {
                     }
                 }
                 resetButton(profile)
-                educationCard
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -69,11 +90,8 @@ struct SimpleEQView: View {
 
     private var topBar: some View {
         HStack(spacing: 12) {
-            Text(linkChannels ? "Three quick knobs" : "Three quick knobs per ear")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            Spacer()
             presetMenu
+            Spacer()
         }
     }
 
@@ -216,13 +234,10 @@ struct SimpleEQView: View {
             )
             .tint(color)
             .controlSize(.large)
-            HStack {
-                Text("-12 dB").font(.caption2).foregroundStyle(.tertiary)
-                Spacer()
-                Text("0").font(.caption2).foregroundStyle(.tertiary)
-                Spacer()
-                Text("+12 dB").font(.caption2).foregroundStyle(.tertiary)
-            }
+            Text(band.help)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -236,21 +251,6 @@ struct SimpleEQView: View {
             }
             .help("Removes the 3 bands per ear that the Simple sliders manage. Bands at other frequencies stay.")
         }
-    }
-
-    private var educationCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label("How Simple works", systemImage: "info.circle")
-                .font(.subheadline.weight(.semibold))
-            Text("Bass and Treble are *shelf* filters — Bass lifts or cuts everything below ~250 Hz, Treble does the same above ~5 kHz. Mids is a wide peak at 1 kHz. Shelves don't stack badly with Advanced/Expert's per-band peaks, so you can roughly shape your sound here and then refine in the other tabs without doubling up.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.secondary.opacity(0.05))
-        )
     }
 
     // MARK: - Bindings
