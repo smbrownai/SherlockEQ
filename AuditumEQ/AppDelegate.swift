@@ -25,11 +25,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     let audioState = AudioState()
     let profileStore = ProfileStore(directory: ProfileStore.bootDirectory())
+    /// Phase-1 / Phase-2 fetcher for the AutoEQ remote catalog. Single
+    /// shared instance so the cached index + in-flight rate-limit
+    /// backoff are consistent across every surface that opens the
+    /// search view (popover-less for now, but the saved-list is also
+    /// driven from here).
+    let autoEQRemote = AutoEQRemoteService()
+    let autoEQSavedProfiles = AutoEQSavedProfilesStore()
 
     private var mainWindow: NSWindow?
     private let mainWindowUndoManager = UndoManager()
     private let globalReferenceHotKey = GlobalHotKey()
     private var cancellables: Set<AnyCancellable> = []
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Multi-instance guard: a second AuditumEQ binary would install
+        // its own global CATap. Each instance only excludes its own PID
+        // from the system tap, so each would capture the other's
+        // processed output → AVAudioEngine → tap, creating a feedback
+        // loop. Detect an already-running instance and hand off to it.
+        guard let bundleID = Bundle.main.bundleIdentifier else { return }
+        let me = NSRunningApplication.current
+        let others = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+            .filter { $0.processIdentifier != me.processIdentifier }
+        if let existing = others.first {
+            existing.activate()
+            NSApp.terminate(nil)
+        }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.shared = self
@@ -127,6 +150,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let root = MainWindowView()
             .environmentObject(audioState)
             .environmentObject(profileStore)
+            .environmentObject(autoEQRemote)
+            .environmentObject(autoEQSavedProfiles)
         let hosting = NSHostingController(rootView: root)
 
         let window = NSWindow(contentViewController: hosting)

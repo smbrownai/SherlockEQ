@@ -144,7 +144,19 @@ final class CATapEngine: ObservableObject {
     private var rightRing: TapRingBuffer?
     private var tapChannelCount: Int = 2
 
-    private var deviceListenerInstalled = false
+    /// Installed CoreAudio property listeners, kept by block reference
+    /// so `AudioObjectRemovePropertyListenerBlock` can match the
+    /// original closures when tearing down (the API matches by block
+    /// identity — a fresh empty block won't match and leaks the
+    /// listener). The system-object default-output listener stays for
+    /// the life of the engine; the per-device config listeners get
+    /// reinstalled whenever the device binding changes.
+    private struct InstalledListener {
+        var target: AudioObjectID
+        var selector: AudioObjectPropertySelector
+        var block: AudioObjectPropertyListenerBlock
+    }
+    private var installedListeners: [InstalledListener] = []
 
     deinit {
         Self.tearDownSync(
@@ -155,6 +167,29 @@ final class CATapEngine: ObservableObject {
     }
 
     // MARK: - Public lifecycle
+
+    /// Re-check Screen Recording permission. macOS lets the user revoke
+    /// it in System Settings mid-session; when that happens the IOProc
+    /// silently delivers zeros and nothing in our state changes. Call
+    /// this when the app becomes active (the natural moment the user
+    /// has returned from toggling something in Settings) — if the
+    /// permission has dropped while we thought we were running, flip
+    /// to `.failed` and tear down so the user sees the same actionable
+    /// error message as the first-time-denied path.
+    func recheckScreenCapturePermission() {
+        // Only meaningful while we believed we were tapping. In other
+        // states this is either irrelevant (.idle, .awaitingPermission,
+        // .permissionDenied) or already handled (.failed, .starting).
+        guard case .running = state else { return }
+        guard !CGPreflightScreenCaptureAccess() else { return }
+        log.error("Screen Recording permission revoked mid-session — tearing tap down")
+        state = .failed("""
+            Screen & System Audio Recording permission was revoked. \
+            Open System Settings → Privacy & Security → Screen & System Audio \
+            Recording, re-enable AuditumEQ, then quit and relaunch the app.
+            """)
+        tearDownTapAndAggregate()
+    }
 
     func requestPermissionAndStart() async {
         state = .awaitingPermission
@@ -556,27 +591,97 @@ final class CATapEngine: ObservableObject {
 
     // MARK: - Device-change listener
 
+    /// Install the system-wide default-output-device listener (fires
+    /// when the user picks a different output in System Settings) plus
+    /// per-device listeners on the currently-bound device for stream
+    /// configuration (channel-layout change) and nominal sample rate
+    /// (rate change in Audio MIDI Setup). All three flow through
+    /// `handleDeviceTopologyChanged` which rebuilds the graph against
+    /// the new shape.
     private func installDefaultOutputDeviceListener() {
-        guard !deviceListenerInstalled else { return }
+        // Idempotent — re-bind only if not already present for the
+        // current target. Default-output listener targets the system
+        // object; the per-device listeners target the current device,
+        // so they need re-installing whenever the device binding moves.
+        installSystemListener(
+            selector: kAudioHardwarePropertyDefaultOutputDevice
+        ) { [weak self] in
+            await self?.handleDefaultOutputDeviceChanged()
+        }
+        installCurrentDeviceConfigListeners()
+    }
+
+    /// Re-install the per-device listeners against `currentOutputDeviceID`.
+    /// Called after start() and after a device change so the listeners
+    /// always point at the device we're currently tapping.
+    private func installCurrentDeviceConfigListeners() {
+        // Drop any prior per-device listeners — they're targeted at
+        // the previous device's ID and would never fire on the new one.
+        removeListeners(matching: { $0.target != AudioObjectID(kAudioObjectSystemObject) })
+
+        let deviceID = currentOutputDeviceID
+        guard deviceID != kAudioObjectUnknown else { return }
+        installDeviceListener(deviceID: deviceID, selector: kAudioDevicePropertyStreamConfiguration) { [weak self] in
+            await self?.handleDeviceTopologyChanged(reason: "stream config")
+        }
+        installDeviceListener(deviceID: deviceID, selector: kAudioDevicePropertyNominalSampleRate) { [weak self] in
+            await self?.handleDeviceTopologyChanged(reason: "sample rate")
+        }
+    }
+
+    private func installSystemListener(
+        selector: AudioObjectPropertySelector,
+        action: @escaping @Sendable () async -> Void
+    ) {
+        let target = AudioObjectID(kAudioObjectSystemObject)
+        guard !installedListeners.contains(where: { $0.target == target && $0.selector == selector }) else { return }
+        addListener(target: target, selector: selector, action: action)
+    }
+
+    private func installDeviceListener(
+        deviceID: AudioObjectID,
+        selector: AudioObjectPropertySelector,
+        action: @escaping @Sendable () async -> Void
+    ) {
+        addListener(target: deviceID, selector: selector, action: action)
+    }
+
+    private func addListener(
+        target: AudioObjectID,
+        selector: AudioObjectPropertySelector,
+        action: @escaping @Sendable () async -> Void
+    ) {
         var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mSelector: selector,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        let status = AudioObjectAddPropertyListenerBlock(
-            AudioObjectID(kAudioObjectSystemObject),
-            &address,
-            DispatchQueue.main
-        ) { [weak self] _, _ in
-            Task { @MainActor in
-                await self?.handleDefaultOutputDeviceChanged()
+        let block: AudioObjectPropertyListenerBlock = { _, _ in
+            Task { @MainActor in await action() }
+        }
+        let status = AudioObjectAddPropertyListenerBlock(target, &address, DispatchQueue.main, block)
+        if status == noErr {
+            installedListeners.append(InstalledListener(target: target, selector: selector, block: block))
+        } else {
+            log.error("Failed to install listener (sel \(selector), target \(target)): \(status)")
+        }
+    }
+
+    private func removeListeners(matching predicate: (InstalledListener) -> Bool) {
+        var keep: [InstalledListener] = []
+        for listener in installedListeners {
+            if predicate(listener) {
+                var address = AudioObjectPropertyAddress(
+                    mSelector: listener.selector,
+                    mScope: kAudioObjectPropertyScopeGlobal,
+                    mElement: kAudioObjectPropertyElementMain
+                )
+                _ = AudioObjectRemovePropertyListenerBlock(listener.target, &address, DispatchQueue.main, listener.block)
+            } else {
+                keep.append(listener)
             }
         }
-        if status == noErr {
-            deviceListenerInstalled = true
-        } else {
-            log.error("Failed to install default-output listener: \(status)")
-        }
+        installedListeners = keep
     }
 
     private func handleDefaultOutputDeviceChanged() async {
@@ -587,23 +692,22 @@ final class CATapEngine: ObservableObject {
         onOutputDeviceChanged?(currentOutputDeviceID)
     }
 
+    /// Same shape as a device-change for the AVAudioEngine graph: the
+    /// stream layout or nominal rate of the device we're tapping has
+    /// changed under us, and the aggregate + source-node formats are
+    /// now stale. Rebuild against the new shape.
+    private func handleDeviceTopologyChanged(reason: String) async {
+        log.info("Output device topology change (\(reason, privacy: .public)) — rebuilding")
+        tearDownTapAndAggregate()
+        await start()
+        onOutputDeviceChanged?(currentOutputDeviceID)
+    }
+
     // MARK: - Teardown
 
     private func tearDown() {
         tearDownTapAndAggregate()
-        if deviceListenerInstalled {
-            var address = AudioObjectPropertyAddress(
-                mSelector: kAudioHardwarePropertyDefaultOutputDevice,
-                mScope: kAudioObjectPropertyScopeGlobal,
-                mElement: kAudioObjectPropertyElementMain
-            )
-            _ = AudioObjectRemovePropertyListenerBlock(
-                AudioObjectID(kAudioObjectSystemObject),
-                &address,
-                DispatchQueue.main
-            ) { _, _ in }
-            deviceListenerInstalled = false
-        }
+        removeListeners(matching: { _ in true })
         leftSourceNode = nil
         rightSourceNode = nil
         tapFormat = nil
@@ -613,6 +717,11 @@ final class CATapEngine: ObservableObject {
     }
 
     private func tearDownTapAndAggregate() {
+        // Drop per-device listeners since the device binding is going
+        // away (or about to be replaced). The system-object default-
+        // output listener stays — it's how we'll be told about the
+        // user picking a new device next.
+        removeListeners(matching: { $0.target != AudioObjectID(kAudioObjectSystemObject) })
         Self.tearDownSync(
             tapID: tapID,
             aggregateDeviceID: aggregateDeviceID,

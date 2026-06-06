@@ -57,6 +57,45 @@ final class AuditumEQAudioEngine: ObservableObject {
     private var masterGainStage: AVAudioUnitEQ?
     private var masterGainDB: Double = 0
 
+    /// Called when AVAudioEngine itself decides to reconfigure (route
+    /// change, Bluetooth disconnect/reconnect, sample-rate negotiation).
+    /// AVAudioEngine stops rendering when this notification fires and
+    /// the graph must be rebuilt. The host (AudioState) wires this to
+    /// its `rebuildAudioGraph()` path so a Bluetooth handoff or other
+    /// route change doesn't strand the user in silence.
+    var onConfigurationChange: (() -> Void)?
+
+    /// Lazy-installed observer for `.AVAudioEngineConfigurationChange`.
+    /// Held so we can remove it on deinit / detach if needed.
+    private var configChangeObserver: NSObjectProtocol?
+
+    init() {
+        installConfigurationChangeObserver()
+    }
+
+    deinit {
+        if let token = configChangeObserver {
+            NotificationCenter.default.removeObserver(token)
+        }
+    }
+
+    private func installConfigurationChangeObserver() {
+        // The notification can fire on a non-main thread; hop to main
+        // before invoking the callback so the rebuild runs through
+        // AudioState's @MainActor methods.
+        configChangeObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: nil
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.log.info("AVAudioEngine configuration change — rebuilding graph")
+                self.onConfigurationChange?()
+            }
+        }
+    }
+
     /// Wires up the graph with the L/R source nodes from the tap.
     /// Tears down any prior graph first; safe to call on device change.
     ///

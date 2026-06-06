@@ -321,6 +321,7 @@ final class AudioState: ObservableObject {
     private weak var connectedStore: ProfileStore?
     private var sleepObserverToken: NSObjectProtocol?
     private var wakeObserverToken: NSObjectProtocol?
+    private var didBecomeActiveObserverToken: NSObjectProtocol?
     private var wasRunningBeforeSleep = false
     private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "AudioState")
 
@@ -343,6 +344,15 @@ final class AudioState: ObservableObject {
                 self?.rebuildAudioGraph()
                 self?.autoSwitchProfileIfLinked(deviceID: deviceID)
             }
+        }
+
+        // AVAudioEngine sometimes reconfigures itself (Bluetooth route
+        // change, sample-rate renegotiation, etc.) and stops rendering
+        // until the graph is rebuilt. The notification can land at any
+        // time — already on main via the observer's Task hop in
+        // `AuditumEQAudioEngine`, so we just kick the existing rebuild.
+        audio.onConfigurationChange = { [weak self] in
+            self?.rebuildAudioGraph()
         }
 
         // No always-on subscribe. Both analyzers run a CHEAP level pass in
@@ -408,6 +418,9 @@ final class AudioState: ObservableObject {
         if let t = wakeObserverToken {
             NSWorkspace.shared.notificationCenter.removeObserver(t)
         }
+        if let t = didBecomeActiveObserverToken {
+            NotificationCenter.default.removeObserver(t)
+        }
     }
 
     /// On sleep the CATap usually keeps its IOProc alive, but the AVAudioEngine
@@ -430,6 +443,21 @@ final class AudioState: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in self?.handleDidWake() }
+        }
+
+        // The user can revoke Screen Recording (or Microphone) in
+        // System Settings while AuditumEQ is running. The IOProc then
+        // silently delivers zeros and the rest of our state has no way
+        // to know. `didBecomeActiveNotification` fires when the user
+        // returns from Settings (the natural moment to re-check), so
+        // we ask the tap to re-preflight and flip to `.failed` if
+        // permission has dropped.
+        didBecomeActiveObserverToken = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.tap.recheckScreenCapturePermission() }
         }
     }
 
