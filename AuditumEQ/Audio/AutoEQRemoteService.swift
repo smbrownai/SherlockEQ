@@ -209,6 +209,19 @@ final class AutoEQRemoteService: ObservableObject {
     /// ParametricEQ.txt. Each path component is percent-encoded
     /// individually so spaces and parentheses in headphone names
     /// don't break the request, but the `/` separators stay literal.
+    ///
+    /// AutoEq names the file `<HeadphoneName> ParametricEQ.txt` inside
+    /// each headphone folder, not just `ParametricEQ.txt` — the spec
+    /// doc undersells this. Verified against the live repo:
+    ///
+    ///   /results/oratory1990/over-ear/Sennheiser HD 650/Sennheiser HD 650 ParametricEQ.txt
+    ///
+    /// We use the index entry's `name` as the leaf prefix. If a future
+    /// AutoEq reorganisation breaks this assumption, swap in a probe
+    /// of the headphone folder's `README.md` to discover the actual
+    /// filename — but for now every entry in the catalog follows the
+    /// rule, and the 404 fallback path surfaces a clean inline error
+    /// if any single profile diverges.
     static func profileURL(for entry: AutoEQIndexEntry) -> URL {
         let encodedComponents = entry.path
             .split(separator: "/")
@@ -216,15 +229,19 @@ final class AutoEQRemoteService: ObservableObject {
                 let raw = String(component)
                 return raw.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? raw
             }
-        let joined = encodedComponents.joined(separator: "/")
-        // The encoded `path` portion + the literal `ParametricEQ.txt`.
-        // Constructed as URL components so trailing slashes resolve right.
-        let full = profileBaseURL.appendingPathComponent(joined, isDirectory: true)
-            .appendingPathComponent("ParametricEQ.txt")
-        // appendingPathComponent re-encodes again; avoid that by going
-        // through string concatenation for the encoded fragment.
-        let combined = profileBaseURL.absoluteString + joined + "/ParametricEQ.txt"
-        return URL(string: combined) ?? full
+        let joinedDirs = encodedComponents.joined(separator: "/")
+        let encodedLeaf: String = {
+            let raw = "\(entry.name) ParametricEQ.txt"
+            return raw.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? raw
+        }()
+        // Build via string concatenation so the per-component percent
+        // encoding we already did doesn't get re-encoded by
+        // appendingPathComponent.
+        let combined = profileBaseURL.absoluteString + joinedDirs + "/" + encodedLeaf
+        return URL(string: combined)
+            ?? profileBaseURL
+                .appendingPathComponent(joinedDirs, isDirectory: true)
+                .appendingPathComponent("\(entry.name) ParametricEQ.txt")
     }
 
     // MARK: - Networking
