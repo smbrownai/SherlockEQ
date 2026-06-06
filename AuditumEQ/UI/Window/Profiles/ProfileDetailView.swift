@@ -45,7 +45,18 @@ struct ProfileDetailView: View {
                     Group {
                         identitySection(profile)
                         deviceSection(profile)
-                        autoEQSection(profile)
+                    }
+                    .disabled(profile.isBuiltIn)
+                    // Headphone correction lives OUTSIDE the built-in
+                    // disable group: the search + saved-list panel
+                    // browses and imports to global AppStorage state,
+                    // not to the profile itself, so it must stay
+                    // tappable even when the active profile is locked.
+                    // The writable parts inside (Apply, file-picker
+                    // import, clear button) gate themselves on
+                    // `profile.isBuiltIn` individually.
+                    autoEQSection(profile)
+                    Group {
                         tuningSection(profile)
                         safetySection(profile)
                     }
@@ -217,12 +228,17 @@ struct ProfileDetailView: View {
                 AutoEQSavedProfilesList(profile: profile) { saved in
                     applySavedAutoEQ(saved, to: profile)
                 }
+                .disabled(profile.isBuiltIn)
+                if profile.isBuiltIn {
+                    builtInCorrectionHint
+                }
                 if !audioState.autoEQEnabled {
                     autoEQDisabledHint
                 }
                 if AutoEQLibrary.entries(in: audioState.autoEQLibraryFolder).isEmpty == false ||
                     profile.autoEQName == nil {
                     legacyImportRow(for: profile)
+                        .disabled(profile.isBuiltIn)
                 }
             }
         }
@@ -260,6 +276,7 @@ struct ProfileDetailView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Remove headphone correction")
+                .disabled(profile.isBuiltIn)
             }
         } else {
             HStack(spacing: 10) {
@@ -327,6 +344,21 @@ struct ProfileDetailView: View {
         Label("AutoEQ stage is currently bypassed (toggle is off).", systemImage: "speaker.slash")
             .font(.caption)
             .foregroundStyle(.secondary)
+    }
+
+    /// Search + importing to the saved list works on a built-in
+    /// profile (those operations write to global AppStorage, not the
+    /// locked profile), but actually applying a correction does not.
+    /// Surface that so users aren't confused when Apply is greyed out
+    /// after a successful import.
+    @ViewBuilder
+    private var builtInCorrectionHint: some View {
+        Label(
+            "Search and importing work here, but Apply is disabled on built-in profiles. Duplicate the profile above to apply a correction.",
+            systemImage: "lock"
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
 
     /// File-picker / library-folder import path. Kept because users
