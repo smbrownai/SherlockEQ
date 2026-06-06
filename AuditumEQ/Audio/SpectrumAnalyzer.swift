@@ -72,7 +72,7 @@ final class SpectrumAnalyzer: ObservableObject {
     private let processingQueue = DispatchQueue(label: "com.shawnbrown.AuditumEQ.spectrum", qos: .userInitiated)
 
     // FFT state (created once, reused per frame).
-    private let dftSetup: vDSP.DFT<Float>
+    private let dftSetup: vDSP.DiscreteFourierTransform<Float>
     private var hannWindow: [Float]
     private var sampleRate: Double = 48000
 
@@ -134,16 +134,20 @@ final class SpectrumAnalyzer: ObservableObject {
     var onLevelUpdate: ((_ dBA: Float) -> Void)?
 
     init() {
-        guard let setup = vDSP.DFT<Float>(
-            previous: nil,
-            count: Self.fftSize,
-            direction: .forward,
-            transformType: .complexComplex,
-            ofType: Float.self
-        ) else {
-            fatalError("Could not allocate vDSP DFT")
+        // `vDSP.DiscreteFourierTransform` replaced the deprecated `vDSP.DFT`.
+        // The new initializer throws (rather than failable) — fatalError on
+        // the throw because we can't run without an FFT.
+        do {
+            self.dftSetup = try vDSP.DiscreteFourierTransform<Float>(
+                previous: nil,
+                count: Self.fftSize,
+                direction: .forward,
+                transformType: .complexComplex,
+                ofType: Float.self
+            )
+        } catch {
+            fatalError("Could not allocate vDSP DiscreteFourierTransform: \(error)")
         }
-        self.dftSetup = setup
         var window = [Float](repeating: 0, count: Self.fftSize)
         vDSP_hann_window(&window, vDSP_Length(Self.fftSize), Int32(vDSP_HANN_NORM))
         self.hannWindow = window

@@ -702,16 +702,22 @@ extension CATapEngine {
     }
 
     nonisolated static func deviceName(_ deviceID: AudioDeviceID) throws -> String {
-        var name: CFString = "" as CFString
-        var size = UInt32(MemoryLayout<CFString>.size)
+        // CoreAudio writes a +1-retained CFStringRef into the out-pointer.
+        // Receive via Unmanaged<CFString>? so we can `takeRetainedValue()`
+        // explicitly; passing `&someCFString` where someCFString is a value
+        // type warns because CFString may carry an object reference.
+        var name: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<CFString?>.size)
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioObjectPropertyName,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
         let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &name)
-        guard status == noErr else { throw TapError.deviceUIDUnavailable(status) }
-        return name as String
+        guard status == noErr, let cf = name?.takeRetainedValue() else {
+            throw TapError.deviceUIDUnavailable(status)
+        }
+        return cf as String
     }
 
     /// Output device's nominal sample rate. **This is the rate the IOProc
@@ -735,16 +741,18 @@ extension CATapEngine {
     }
 
     nonisolated static func deviceUID(_ deviceID: AudioDeviceID) throws -> String {
-        var uid: CFString = "" as CFString
-        var size = UInt32(MemoryLayout<CFString>.size)
+        var uid: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<CFString?>.size)
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyDeviceUID,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
         let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &uid)
-        guard status == noErr else { throw TapError.deviceUIDUnavailable(status) }
-        return uid as String
+        guard status == noErr, let cf = uid?.takeRetainedValue() else {
+            throw TapError.deviceUIDUnavailable(status)
+        }
+        return cf as String
     }
 
     /// Lightweight descriptor for the output-device picker.
@@ -804,16 +812,18 @@ extension CATapEngine {
     }
 
     nonisolated static func tapUIDString(_ tapID: AudioObjectID) throws -> String {
-        var uid: CFString = "" as CFString
-        var size = UInt32(MemoryLayout<CFString>.size)
+        var uid: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<CFString?>.size)
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioTapPropertyUID,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
         let status = AudioObjectGetPropertyData(tapID, &address, 0, nil, &size, &uid)
-        guard status == noErr else { throw TapError.tapUIDUnavailable(status) }
-        return uid as String
+        guard status == noErr, let cf = uid?.takeRetainedValue() else {
+            throw TapError.tapUIDUnavailable(status)
+        }
+        return cf as String
     }
 
     nonisolated static func inputStreamFormat(_ deviceID: AudioDeviceID) throws -> AudioStreamBasicDescription {
