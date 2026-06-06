@@ -170,6 +170,72 @@ final class AudioState: ObservableObject {
         }
     }
 
+    /// Master bypass for the whole AuditumEQ chain. Distinct from
+    /// Reference Mode (which is the transient ⌘B A/B toggle) — this
+    /// is the user's durable on/off preference, persisted across
+    /// launches. When off, every stage passes through unmodified and
+    /// the per-stage toggles below are visually disabled (their
+    /// stored values stay intact so flipping back restores the chain).
+    @Published var auditumEQEnabled: Bool = AudioState.loadBool(
+        key: AudioState.auditumEQEnabledKey,
+        default: true
+    ) {
+        didSet {
+            UserDefaults.standard.set(auditumEQEnabled, forKey: Self.auditumEQEnabledKey)
+            applyActiveProfile()
+        }
+    }
+
+    /// Per-stage toggle for AutoEQ headphone correction. On by
+    /// default — if the user loaded a correction they almost
+    /// certainly want it active.
+    @Published var autoEQEnabled: Bool = AudioState.loadBool(
+        key: AudioState.autoEQEnabledKey,
+        default: true
+    ) {
+        didSet {
+            UserDefaults.standard.set(autoEQEnabled, forKey: Self.autoEQEnabledKey)
+            applyActiveProfile()
+        }
+    }
+
+    /// Per-stage toggle for the tinnitus notch. Profile-stored notch
+    /// frequency/depth/Q are preserved when this is off, so flipping
+    /// back restores the user's dialed-in settings.
+    @Published var notchFilterEnabled: Bool = AudioState.loadBool(
+        key: AudioState.notchFilterEnabledKey,
+        default: true
+    ) {
+        didSet {
+            UserDefaults.standard.set(notchFilterEnabled, forKey: Self.notchFilterEnabledKey)
+            applyActiveProfile()
+        }
+    }
+
+    /// Per-stage toggle for the manual parametric EQ (Stage 4 — the
+    /// bands the user dialed in via Simple / Speech / Advanced /
+    /// Expert). When off, the profile's own bands drop out of the
+    /// chain while AutoEQ correction and the notch keep working.
+    @Published var manualEQEnabled: Bool = AudioState.loadBool(
+        key: AudioState.manualEQEnabledKey,
+        default: true
+    ) {
+        didSet {
+            UserDefaults.standard.set(manualEQEnabled, forKey: Self.manualEQEnabledKey)
+            applyActiveProfile()
+        }
+    }
+
+    /// One-shot reminder banner shown the first time the user
+    /// disables the notch stage. The copy lives in the view layer;
+    /// this flag just guards re-display.
+    @Published var hasShownNotchOffReminder: Bool = AudioState.loadBool(
+        key: AudioState.hasShownNotchOffReminderKey,
+        default: false
+    ) {
+        didSet { UserDefaults.standard.set(hasShownNotchOffReminder, forKey: Self.hasShownNotchOffReminderKey) }
+    }
+
     private static let masterGainKey = "auditumeq.masterGainDB"
     private static let limiterAttackKey = "auditumeq.limiterAttackMs"
     private static let limiterDecayKey = "auditumeq.limiterDecayMs"
@@ -179,6 +245,11 @@ final class AudioState: ObservableObject {
     private static let hideFromDockKey = "auditumeq.hideFromDock"
     private static let globalReferenceShortcutKey = "auditumeq.globalReferenceShortcut"
     private static let autoEQLibraryKey = "auditumeq.autoEQLibraryFolder"
+    private static let auditumEQEnabledKey = "auditumeq.auditumEQEnabled"
+    private static let autoEQEnabledKey = "auditumeq.autoEQEnabled"
+    private static let notchFilterEnabledKey = "auditumeq.notchFilterEnabled"
+    private static let manualEQEnabledKey = "auditumeq.manualEQEnabled"
+    private static let hasShownNotchOffReminderKey = "auditumeq.hasShownNotchOffReminder"
 
     private static func loadDouble(key: String, default defaultValue: Double) -> Double {
         let raw = UserDefaults.standard.object(forKey: key) as? Double
@@ -307,11 +378,48 @@ final class AudioState: ObservableObject {
     /// Look up the active profile in the connected store and push it to the
     /// engine. No-op if no store is connected, no profile is active, the test
     /// curve is currently overriding, or the engine graph isn't attached yet.
+    ///
+    /// Applies the four-stage bypass mask before handing off to the
+    /// engine. The store's profile stays untouched — toggles flatten
+    /// a local copy so flipping a stage back on restores immediately
+    /// without re-reading anything from disk.
     private func applyActiveProfile() {
         guard !testCurveEnabled else { return }
         guard let store = connectedStore,
-              let profile = activeProfile(in: store) else { return }
-        audio.applyProfile(profile)
+              let original = activeProfile(in: store) else { return }
+        audio.applyProfile(applyBypassMask(to: original))
+    }
+
+    /// Return a copy of `profile` with the appropriate stages zeroed
+    /// per the current per-stage toggle state. Master `auditumEQEnabled`
+    /// short-circuits everything (mirrors Reference Mode behavior for
+    /// the durable toggle). Individual toggles flatten just their
+    /// stage so other stages keep working.
+    private func applyBypassMask(to profile: HearingProfile) -> HearingProfile {
+        var copy = profile
+        if !auditumEQEnabled {
+            copy.autoEQBands = nil
+            copy.autoEQPreampDB = nil
+            copy.leftNotch.enabled = false
+            copy.rightNotch.enabled = false
+            copy.leftEar.bands = []
+            copy.rightEar.bands = []
+            copy.globalTrimDB = 0
+            return copy
+        }
+        if !autoEQEnabled {
+            copy.autoEQBands = nil
+            copy.autoEQPreampDB = nil
+        }
+        if !notchFilterEnabled {
+            copy.leftNotch.enabled = false
+            copy.rightNotch.enabled = false
+        }
+        if !manualEQEnabled {
+            copy.leftEar.bands = []
+            copy.rightEar.bands = []
+        }
+        return copy
     }
 
     private var tapObserver: AnyCancellable?

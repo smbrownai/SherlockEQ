@@ -9,6 +9,8 @@ struct AuditumEQApp: App {
             MainPopoverView()
                 .environmentObject(appDelegate.audioState)
                 .environmentObject(appDelegate.profileStore)
+                .environmentObject(appDelegate.autoEQRemote)
+                .environmentObject(appDelegate.autoEQSavedProfiles)
         } label: {
             MenuBarIcon(audioState: appDelegate.audioState)
         }

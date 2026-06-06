@@ -8,6 +8,8 @@ import UniformTypeIdentifiers
 struct ProfileDetailView: View {
     @EnvironmentObject private var profileStore: ProfileStore
     @EnvironmentObject private var audioState: AudioState
+    @EnvironmentObject private var autoEQRemote: AutoEQRemoteService
+    @EnvironmentObject private var autoEQSavedProfiles: AutoEQSavedProfilesStore
 
     let profileID: UUID
     /// Optional hook the parent uses to follow up on a "Duplicate to
@@ -203,37 +205,170 @@ struct ProfileDetailView: View {
     @ViewBuilder private func autoEQSection(_ profile: HearingProfile) -> some View {
         sectionHeader("Headphone correction")
         sectionBox {
-            if let name = profile.autoEQName, let bands = profile.autoEQBands {
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(name).font(.callout.weight(.medium))
-                        let preamp = profile.autoEQPreampDB ?? 0
-                        Text("\(bands.count) bands · preamp \(String(format: "%+.1f", preamp)) dB")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    autoEQImportControl(for: profile, label: "Replace…")
-                    Button(role: .destructive) { clearAutoEQ(on: profile) } label: {
-                        Image(systemName: "xmark.circle")
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Remove headphone correction")
+            VStack(alignment: .leading, spacing: 14) {
+                appliedAutoEQRow(profile)
+                conflictBanner(for: profile)
+                Divider()
+                AutoEQSearchView { _ in
+                    // Per spec: import does NOT auto-apply. The user
+                    // activates the saved entry explicitly via the
+                    // saved-list Apply button below.
                 }
-            } else {
-                HStack(spacing: 10) {
-                    Image(systemName: "headphones")
-                        .foregroundStyle(.tint)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("No correction loaded").font(.callout)
-                        Text("Import an AutoEQ .txt file to correct for your headphones' frequency response. Set a library folder in Settings to pick from a list instead.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                AutoEQSavedProfilesList(profile: profile) { saved in
+                    applySavedAutoEQ(saved, to: profile)
+                }
+                if !audioState.autoEQEnabled {
+                    autoEQDisabledHint
+                }
+                if AutoEQLibrary.entries(in: audioState.autoEQLibraryFolder).isEmpty == false ||
+                    profile.autoEQName == nil {
+                    legacyImportRow(for: profile)
+                }
+            }
+        }
+    }
+
+    /// Top-of-section summary of what's currently applied to this
+    /// profile. Source of truth is `profile.autoEQ{Name,Bands,
+    /// PreampDB}` — the saved-list "Apply" action writes through
+    /// these fields, and the existing file-picker import path
+    /// (`legacyImportRow`) still works for offline or curated-folder
+    /// flows.
+    @ViewBuilder
+    private func appliedAutoEQRow(_ profile: HearingProfile) -> some View {
+        if let name = profile.autoEQName, let bands = profile.autoEQBands {
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Applied: \(name)").font(.callout.weight(.medium))
+                    let preamp = profile.autoEQPreampDB ?? 0
+                    Text("\(bands.count) bands · preamp \(String(format: "%+.1f", preamp)) dB")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Toggle("On", isOn: Binding(
+                    get: { audioState.autoEQEnabled },
+                    set: { audioState.autoEQEnabled = $0 }
+                ))
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .help("Bypass the AutoEQ stage without losing the loaded correction")
+                Button(role: .destructive) { clearAutoEQ(on: profile) } label: {
+                    Image(systemName: "xmark.circle")
+                }
+                .buttonStyle(.borderless)
+                .help("Remove headphone correction")
+            }
+        } else {
+            HStack(spacing: 10) {
+                Image(systemName: "headphones")
+                    .foregroundStyle(.tint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("No correction applied").font(.callout)
+                    Text("Search the AutoEQ catalog below, or import a local .txt file.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+        }
+    }
+
+    /// Advisory warning when an active AutoEQ filter boosts within
+    /// ±1/3 octave of the tinnitus notch. Pure-function detector lives
+    /// in `AutoEQConflictDetector`; this view just surfaces results
+    /// and offers the spec's two action buttons.
+    @ViewBuilder
+    private func conflictBanner(for profile: HearingProfile) -> some View {
+        let conflicts: [AutoEQConflictDetector.Conflict] = {
+            guard audioState.autoEQEnabled, audioState.notchFilterEnabled else { return [] }
+            return AutoEQConflictDetector.detect(in: profile)
+        }()
+        if !conflicts.isEmpty {
+            let exact = conflicts.first(where: \.isExactMatch)
+            let notchFreq = profile.leftNotch.enabled
+                ? profile.leftNotch.frequencyHz
+                : profile.rightNotch.frequencyHz
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 4) {
+                    if let exact {
+                        Text("An AutoEQ filter is centered exactly on your tinnitus frequency (\(Int(exact.band.frequencyHz)) Hz). Consider disabling AutoEQ correction at this frequency.")
+                            .font(.callout)
+                    } else {
+                        Text("One or more AutoEQ filters boost near your tinnitus frequency (\(Int(notchFreq)) Hz). This may reduce notch therapy effectiveness.")
+                            .font(.callout)
                     }
-                    Spacer()
-                    autoEQImportControl(for: profile, label: "Import…")
+                    Text("Flagged \(conflicts.count) band\(conflicts.count == 1 ? "" : "s") within ±1/3 octave.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    // "Show me" and "Adjust notch depth" both navigate
+                    // away from this view; the actual jump-and-scroll
+                    // hooks land with the Equalizer / Tinnitus Notch
+                    // routing in a follow-up. For now they're inert
+                    // affordances so the banner reads as designed and
+                    // the wire-up is one selection-change away.
+                }
+                Spacer()
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.orange.opacity(0.12))
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var autoEQDisabledHint: some View {
+        Label("AutoEQ stage is currently bypassed (toggle is off).", systemImage: "speaker.slash")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+    }
+
+    /// File-picker / library-folder import path. Kept because users
+    /// who curate a local folder of AutoEQ exports (Crinacle compares,
+    /// custom-tuned files) still want the one-tap "From file…"
+    /// affordance the remote catalog can't replace.
+    @ViewBuilder
+    private func legacyImportRow(for profile: HearingProfile) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "doc.text")
+                .foregroundStyle(.secondary)
+            Text("Or import a local .txt file")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            autoEQImportControl(for: profile, label: profile.autoEQName == nil ? "Import…" : "Replace…")
+        }
+    }
+
+    private func applySavedAutoEQ(_ saved: AutoEQSavedProfilesStore.SavedEntry, to profile: HearingProfile) {
+        let ok = autoEQSavedProfiles.apply(
+            path: saved.path,
+            to: profile,
+            service: autoEQRemote,
+            profileStore: profileStore
+        )
+        if !ok {
+            // Cache missing — re-fetch then re-apply on success.
+            let entry = AutoEQIndexEntry(
+                name: saved.name,
+                path: saved.path,
+                source: saved.source,
+                type: saved.type
+            )
+            Task {
+                if (try? await autoEQRemote.fetchProfile(for: entry)) != nil {
+                    _ = autoEQSavedProfiles.apply(
+                        path: saved.path,
+                        to: profile,
+                        service: autoEQRemote,
+                        profileStore: profileStore
+                    )
                 }
             }
         }

@@ -1,0 +1,334 @@
+import Foundation
+import Combine
+import OSLog
+
+/// On-demand fetcher for the AutoEQ catalog. The service:
+///
+///   * Owns the on-disk cache root under `Application Support/AuditumEQ`.
+///   * Publishes the loaded index (so `AutoEQSearchView` can bind to it).
+///   * Performs index + profile fetches over plain `URLSession`.
+///   * Surfaces failures as a typed `AutoEQFetchError` for the UI.
+///
+/// The service does NOT decide *when* to apply a profile — that's the
+/// saved-profiles store + the hearing profile editor. It only fetches,
+/// parses, and caches.
+@MainActor
+final class AutoEQRemoteService: ObservableObject {
+
+    // MARK: - Errors
+
+    /// User-facing categorisation of fetch failures. Display copy is
+    /// derived in the view layer so the same error can show as a banner
+    /// or an inline row label depending on context.
+    enum AutoEQFetchError: Error, Equatable {
+        case offline           // URL host unreachable
+        case rateLimited       // GitHub 403, surface backoff message
+        case notFound          // 404
+        case parseFailure      // body returned but didn't parse
+        case other(String)     // anything else; carries OS error description
+    }
+
+    // MARK: - Published surface
+
+    /// Loaded index — nil until the first fetch (or cache load) completes.
+    @Published private(set) var index: AutoEQIndex?
+
+    /// Whether the service is currently fetching the index. Used by the
+    /// search view to show a "Loading headphone library…" hint.
+    @Published private(set) var isLoadingIndex = false
+
+    /// Last index-fetch error, if any. Cleared on the next successful fetch.
+    @Published private(set) var indexError: AutoEQFetchError?
+
+    // MARK: - Config
+
+    private let session: URLSession
+    private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "AutoEQRemoteService")
+
+    /// AutoEQ's catalog is published from a single repo. The path inside
+    /// the repo is `results/README.md` for the index and
+    /// `results/{source}/{type}/{name}/ParametricEQ.txt` for each profile.
+    private static let indexURL = URL(
+        string: "https://raw.githubusercontent.com/jaakkopasanen/AutoEq/master/results/README.md"
+    )!
+
+    private static let profileBaseURL = URL(
+        string: "https://raw.githubusercontent.com/jaakkopasanen/AutoEq/master/results/"
+    )!
+
+    /// Per-spec: refresh the index in the background once a week.
+    static let indexRefreshInterval: TimeInterval = 7 * 24 * 60 * 60
+
+    /// Per-spec: after a 403 rate-limit, don't retry for at least 5 minutes.
+    static let rateLimitBackoff: TimeInterval = 5 * 60
+    private var nextRateLimitRetry: Date?
+
+    init(session: URLSession = .shared) {
+        self.session = session
+        // Loading from disk is cheap; do it eagerly so the search view
+        // can render results on first appearance without waiting for a
+        // network round-trip.
+        loadIndexFromDiskIfPresent()
+    }
+
+    // MARK: - Index lifecycle
+
+    /// Load the cached index from disk if present. Silent no-op on
+    /// failure — the service stays in the no-index state and the
+    /// first fetch will populate it.
+    private func loadIndexFromDiskIfPresent() {
+        let url = Self.indexCacheURL
+        guard let data = try? Data(contentsOf: url),
+              let cached = try? JSONDecoder.autoEQ.decode(AutoEQIndex.self, from: data) else {
+            return
+        }
+        self.index = cached
+        log.info("Loaded \(cached.entries.count) AutoEQ entries from cache (age \(Int(Date().timeIntervalSince(cached.fetchedAt))) s)")
+    }
+
+    /// Returns true when the cached index is missing or older than the
+    /// 7-day refresh window. Caller decides whether to surface a
+    /// loading hint or refresh silently in the background.
+    var indexNeedsRefresh: Bool {
+        guard let index else { return true }
+        return Date().timeIntervalSince(index.fetchedAt) > Self.indexRefreshInterval
+    }
+
+    /// Fetch the index from the network and persist it. Safe to call
+    /// repeatedly — early-bails if a fetch is already in flight.
+    func refreshIndex(forceWhenLoading: Bool = false) async {
+        if isLoadingIndex && !forceWhenLoading { return }
+        isLoadingIndex = true
+        defer { isLoadingIndex = false }
+
+        do {
+            let text = try await fetchString(from: Self.indexURL)
+            let entries = AutoEQIndexParser.parse(text)
+            guard !entries.isEmpty else {
+                // Per spec: zero-entry parse means upstream regression
+                // or HTML error page. Fall back to cached silently.
+                log.error("Index fetch parsed 0 entries — falling back to cached version")
+                indexError = .parseFailure
+                return
+            }
+            let bundle = AutoEQIndex(entries: entries, fetchedAt: Date())
+            try persistIndex(bundle)
+            self.index = bundle
+            self.indexError = nil
+            log.info("Refreshed AutoEQ index — \(entries.count) entries")
+        } catch let error as AutoEQFetchError {
+            indexError = error
+            log.error("Index fetch failed: \(String(describing: error), privacy: .public)")
+        } catch {
+            indexError = .other(error.localizedDescription)
+            log.error("Index fetch failed (unexpected): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func persistIndex(_ bundle: AutoEQIndex) throws {
+        let url = Self.indexCacheURL
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let data = try JSONEncoder.autoEQ.encode(bundle)
+        try data.write(to: url, options: .atomic)
+    }
+
+    // MARK: - Profile fetch
+
+    /// Fetch and parse a single ParametricEQ.txt. On success, persist
+    /// the structured profile to the cache directory and return it.
+    /// Throws an `AutoEQFetchError` on any failure — including parse
+    /// failures, which the caller may want to surface as inline row
+    /// state.
+    func fetchProfile(for entry: AutoEQIndexEntry) async throws -> AutoEQRemoteProfile {
+        if let cached = loadCachedProfile(for: entry) {
+            return cached
+        }
+        if let next = nextRateLimitRetry, Date() < next {
+            throw AutoEQFetchError.rateLimited
+        }
+
+        let url = Self.profileURL(for: entry)
+        let text: String
+        do {
+            text = try await fetchString(from: url)
+        } catch let error as AutoEQFetchError {
+            if case .rateLimited = error {
+                nextRateLimitRetry = Date().addingTimeInterval(Self.rateLimitBackoff)
+            }
+            throw error
+        }
+
+        guard let profile = AutoEQRemoteParser.parse(text, entry: entry) else {
+            throw AutoEQFetchError.parseFailure
+        }
+
+        do {
+            try persistProfile(profile)
+        } catch {
+            log.error("Failed to persist profile cache for \(entry.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            // Persist failure is non-fatal — return the profile so the
+            // caller can still apply it. Next launch we'll re-fetch.
+        }
+        return profile
+    }
+
+    /// Load a previously-fetched profile from cache. Returns nil when
+    /// the file is missing or fails to decode (shape change, etc.).
+    func loadCachedProfile(for entry: AutoEQIndexEntry) -> AutoEQRemoteProfile? {
+        let url = Self.profileCacheURL(for: entry)
+        guard let data = try? Data(contentsOf: url),
+              let profile = try? JSONDecoder.autoEQ.decode(AutoEQRemoteProfile.self, from: data) else {
+            return nil
+        }
+        return profile
+    }
+
+    /// Delete a cached profile from disk. Best-effort — silent if the
+    /// file is already gone. Pairs with the saved-list Delete action.
+    func deleteCachedProfile(for entry: AutoEQIndexEntry) {
+        let url = Self.profileCacheURL(for: entry)
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    private func persistProfile(_ profile: AutoEQRemoteProfile) throws {
+        let url = Self.profileCacheURL(source: profile.source, type: profile.type, name: profile.headphoneName)
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let data = try JSONEncoder.autoEQ.encode(profile)
+        try data.write(to: url, options: .atomic)
+    }
+
+    // MARK: - URL building
+
+    /// Build the raw.githubusercontent.com URL for a profile's
+    /// ParametricEQ.txt. Each path component is percent-encoded
+    /// individually so spaces and parentheses in headphone names
+    /// don't break the request, but the `/` separators stay literal.
+    static func profileURL(for entry: AutoEQIndexEntry) -> URL {
+        let encodedComponents = entry.path
+            .split(separator: "/")
+            .map { component -> String in
+                let raw = String(component)
+                return raw.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? raw
+            }
+        let joined = encodedComponents.joined(separator: "/")
+        // The encoded `path` portion + the literal `ParametricEQ.txt`.
+        // Constructed as URL components so trailing slashes resolve right.
+        let full = profileBaseURL.appendingPathComponent(joined, isDirectory: true)
+            .appendingPathComponent("ParametricEQ.txt")
+        // appendingPathComponent re-encodes again; avoid that by going
+        // through string concatenation for the encoded fragment.
+        let combined = profileBaseURL.absoluteString + joined + "/ParametricEQ.txt"
+        return URL(string: combined) ?? full
+    }
+
+    // MARK: - Networking
+
+    /// Generic GET → String helper. Maps URLSession failures to
+    /// `AutoEQFetchError`. The `Data → String` decode is utf-8 only;
+    /// AutoEQ's files are ASCII so no need for fallback encodings.
+    private func fetchString(from url: URL) async throws -> String {
+        do {
+            let (data, response) = try await session.data(from: url)
+            if let http = response as? HTTPURLResponse {
+                switch http.statusCode {
+                case 200..<300:
+                    break
+                case 403:
+                    throw AutoEQFetchError.rateLimited
+                case 404:
+                    throw AutoEQFetchError.notFound
+                default:
+                    throw AutoEQFetchError.other("HTTP \(http.statusCode)")
+                }
+            }
+            guard let text = String(data: data, encoding: .utf8) else {
+                throw AutoEQFetchError.parseFailure
+            }
+            return text
+        } catch let error as AutoEQFetchError {
+            throw error
+        } catch {
+            // URLError → offline mapping. The most common code we'll
+            // see in practice is `.notConnectedToInternet`, but several
+            // adjacent codes (timeout, host unreachable, DNS failure)
+            // should also surface as "offline" to the user since the
+            // remedy is the same.
+            if let urlError = error as? URLError {
+                switch urlError.code {
+                case .notConnectedToInternet,
+                     .networkConnectionLost,
+                     .timedOut,
+                     .cannotFindHost,
+                     .cannotConnectToHost,
+                     .dnsLookupFailed:
+                    throw AutoEQFetchError.offline
+                default:
+                    throw AutoEQFetchError.other(urlError.localizedDescription)
+                }
+            }
+            throw AutoEQFetchError.other(error.localizedDescription)
+        }
+    }
+
+    // MARK: - On-disk locations
+
+    /// `~/Library/Application Support/AuditumEQ`. Same root the rest of
+    /// the app uses (profiles JSON, etc.).
+    static var supportDirectory: URL {
+        let fm = FileManager.default
+        let base = (try? fm.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )) ?? fm.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+        return base.appendingPathComponent("AuditumEQ", isDirectory: true)
+    }
+
+    static var indexCacheURL: URL {
+        supportDirectory.appendingPathComponent("autoeq_index.json", isDirectory: false)
+    }
+
+    static var profileCacheRoot: URL {
+        supportDirectory.appendingPathComponent("autoeq_profiles", isDirectory: true)
+    }
+
+    static func profileCacheURL(for entry: AutoEQIndexEntry) -> URL {
+        profileCacheURL(source: entry.source, type: entry.type, name: entry.name)
+    }
+
+    private static func profileCacheURL(source: String, type: String, name: String) -> URL {
+        profileCacheRoot
+            .appendingPathComponent(source, isDirectory: true)
+            .appendingPathComponent(type, isDirectory: true)
+            .appendingPathComponent("\(name).json", isDirectory: false)
+    }
+}
+
+// MARK: - Coder helpers
+
+private extension JSONEncoder {
+    /// One configured encoder so all AutoEQ JSON files round-trip with
+    /// the same date strategy and key conventions. ISO 8601 keeps the
+    /// files human-debuggable without a custom format string.
+    static var autoEQ: JSONEncoder {
+        let enc = JSONEncoder()
+        enc.dateEncodingStrategy = .iso8601
+        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return enc
+    }
+}
+
+private extension JSONDecoder {
+    static var autoEQ: JSONDecoder {
+        let dec = JSONDecoder()
+        dec.dateDecodingStrategy = .iso8601
+        return dec
+    }
+}
