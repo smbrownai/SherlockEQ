@@ -115,9 +115,11 @@ final class StereoMonitor: ObservableObject {
     /// Last logged channel count from the audio tap. Logged once on change
     /// so the system Console shows whether the tap is delivering stereo
     /// (expected) or mono (would explain L≈R on the VU even when balance
-    /// is offset). Touched only from the audio thread, no synchronisation
-    /// needed since it's a single-writer Bool-like value.
-    nonisolated(unsafe) private static var lastLoggedChannelCount: Int = 0
+    /// is offset). Behind an unfair lock — single-writer in practice, but
+    /// `nonisolated(unsafe)` papered over the fact that multiple StereoMonitor
+    /// instances could share writers, and Swift 6 strict-concurrency wants
+    /// the contract spelled out.
+    private static let lastLoggedChannelCount = OSAllocatedUnfairLock<Int>(initialState: 0)
     private static let monitorLog = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "StereoMonitor")
 
     /// Called from the audio tap callback. Realtime-safe — bounded
@@ -133,8 +135,14 @@ final class StereoMonitor: ObservableObject {
         // shows `1`, the mainMixer's output is mono and both VU bars
         // would necessarily read the same data — that's the most likely
         // explanation for L≈R on the meter regardless of balance.
-        if chCount != Self.lastLoggedChannelCount {
-            Self.lastLoggedChannelCount = chCount
+        // Check-and-set under the lock so the "changed?" decision and
+        // the update happen atomically across threads.
+        let changed = Self.lastLoggedChannelCount.withLock { stored -> Bool in
+            guard stored != chCount else { return false }
+            stored = chCount
+            return true
+        }
+        if changed {
             Self.monitorLog.info("StereoMonitor tap channel count = \(chCount)")
         }
 
