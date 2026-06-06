@@ -278,16 +278,50 @@ final class ProfileStore: ObservableObject {
 
             if moveExisting, fm.fileExists(atPath: oldDirectory.path) {
                 let oldURLs = (try? fm.contentsOfDirectory(at: oldDirectory, includingPropertiesForKeys: nil)) ?? []
-                for src in oldURLs where src.pathExtension == "json" {
-                    let dst = newDirectory.appendingPathComponent(src.lastPathComponent)
-                    if fm.fileExists(atPath: dst.path) {
+                let sources = oldURLs.filter { $0.pathExtension == "json" }
+
+                // Two-phase commit so a mid-flight failure can't split the
+                // user's data across two directories:
+                //
+                //   Phase 1 — copy every profile JSON from old → new.
+                //   If any copy throws, roll back the partial new-dir
+                //   contents and bail; the old directory is untouched
+                //   so the user's data is preserved exactly as it was.
+                //
+                //   Phase 2 — delete the originals from the old dir.
+                //   A failure here leaves duplicate files in both
+                //   directories (no data loss), so we log the offending
+                //   names rather than throw — the new dir is canonical
+                //   and the relocation is functionally complete.
+                var copiedDestinations: [URL] = []
+                do {
+                    for src in sources {
+                        let dst = newDirectory.appendingPathComponent(src.lastPathComponent)
+                        if fm.fileExists(atPath: dst.path) {
+                            try fm.removeItem(at: dst)
+                        }
+                        try fm.copyItem(at: src, to: dst)
+                        copiedDestinations.append(dst)
+                    }
+                } catch {
+                    for dst in copiedDestinations {
                         try? fm.removeItem(at: dst)
                     }
+                    throw RelocationError.moveFailed(error.localizedDescription)
+                }
+
+                var phase2Failures: [String] = []
+                for src in sources {
                     do {
-                        try fm.moveItem(at: src, to: dst)
+                        try fm.removeItem(at: src)
                     } catch {
-                        throw RelocationError.moveFailed(error.localizedDescription)
+                        phase2Failures.append(src.lastPathComponent)
                     }
+                }
+                if !phase2Failures.isEmpty {
+                    log.error(
+                        "Relocate phase-2 left \(phase2Failures.count, privacy: .public) file(s) in old dir: \(phase2Failures.joined(separator: ", "), privacy: .public)"
+                    )
                 }
             }
 

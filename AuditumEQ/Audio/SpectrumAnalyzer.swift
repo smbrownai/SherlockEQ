@@ -6,11 +6,17 @@ import Combine
 /// vDSP-backed FFT spectrum analyzer that:
 ///   1. Installs a buffer tap on `AVAudioEngine.mainMixerNode` (post-EQ)
 ///   2. Accumulates mono samples into FFT-sized frames
-///   3. Hann-windows, FFTs, magnitudes, A-weights
-///   4. Publishes an A-weighted dBA estimate and the raw spectrum bins
+///   3. Hann-windows, FFTs, magnitudes
+///   4. Publishes a broadband RMS dBFS / dBA estimate and the raw bins
 ///
 /// The FFT runs on a background queue; results are republished on the main
 /// actor. Render-thread work is just memcpy into a small accumulator.
+///
+/// NOTE on "A-weighting": the dBA estimate published here is a broadband
+/// RMS plus a fixed `calibrationOffsetDBA`. It is NOT a frequency-weighted
+/// dBA per IEC 61672 — see the comment in `drainAndProcess` for the
+/// rationale. The static `aWeightDB(frequencyHz:)` helper is exposed for
+/// the canvas's per-bin safety threshold curve.
 @MainActor
 final class SpectrumAnalyzer: ObservableObject {
 
@@ -41,7 +47,9 @@ final class SpectrumAnalyzer: ObservableObject {
     /// at index 0, newest at end. Capped at `spectrogramHistoryLength`.
     @Published private(set) var spectrogramHistory: [[Float]] = []
     static let spectrogramHistoryLength: Int = 180
-    /// A-weighted RMS over the most recent FFT frame, in dBFS.
+    /// Broadband RMS over the most recent FFT frame, in dBFS. Name is
+    /// historical — see the file header note; this is not frequency-
+    /// weighted, but the dose tracker only needs a stable level estimate.
     @Published private(set) var aWeightedDBFS: Float = -120
     /// dBA estimate = dBFS + calibrationOffsetDBA.
     @Published private(set) var estimateDBA: Float = 0
@@ -66,8 +74,6 @@ final class SpectrumAnalyzer: ObservableObject {
     // FFT state (created once, reused per frame).
     private let dftSetup: vDSP.DFT<Float>
     private var hannWindow: [Float]
-    private var aWeights: [Float] = []
-    private var aWeightsSquared: [Float] = []
     private var sampleRate: Double = 48000
 
     // Sample accumulation across multiple tap callbacks.
@@ -289,10 +295,9 @@ final class SpectrumAnalyzer: ObservableObject {
     }
 
     /// Configure tap-installation. The engine wrapper calls back with the
-    /// buffer format so we can precompute A-weights at the right SR.
+    /// buffer format so the log-bucket map can be rebuilt at the right SR.
     func configureForSampleRate(_ sr: Double) {
         sampleRate = sr
-        precomputeAWeights()
         rebuildLogBucketMap()
         accumulatorLock.lock()
         accumulator.removeAll(keepingCapacity: true)
@@ -543,36 +548,10 @@ final class SpectrumAnalyzer: ObservableObject {
 
     // MARK: - A-weighting
 
-    private func precomputeAWeights() {
-        let N = Self.halfFFT
-        aWeights = [Float](repeating: 0, count: N)
-        aWeightsSquared = [Float](repeating: 0, count: N)
-        for k in 0..<N {
-            let f = Double(k) * sampleRate / Double(Self.fftSize)
-            let w = Self.aWeightLinear(frequencyHz: f)
-            aWeights[k] = w
-            aWeightsSquared[k] = w * w
-        }
-    }
-
-    /// Linear (not dB) A-weighting gain for frequency `f`, per IEC 61672-1.
-    static func aWeightLinear(frequencyHz f: Double) -> Float {
-        if f < 1 { return 0 }
-        let f2 = f * f
-        let num = pow(12_194.0, 2) * f2 * f2
-        let den = (f2 + pow(20.6, 2))
-            * sqrt((f2 + pow(107.7, 2)) * (f2 + pow(737.9, 2)))
-            * (f2 + pow(12_194.0, 2))
-        let R_A = num / den
-        let A_dB = 20 * log10(R_A) + 2.0
-        return Float(pow(10.0, A_dB / 20.0))
-    }
-
-    /// A-weighting in DECIBELS at frequency `f`, per IEC 61672-1. Same
-    /// formula as `aWeightLinear` but returns the dB value directly so
-    /// callers (e.g. the safety threshold curve) don't have to round-trip
-    /// through linear amplitude. At 1 kHz the result is 0 dB; below ~100 Hz
-    /// and above ~12 kHz the values are strongly negative.
+    /// A-weighting in DECIBELS at frequency `f`, per IEC 61672-1. Used by
+    /// the canvas's per-bin safety threshold curve. At 1 kHz the result
+    /// is 0 dB; below ~100 Hz and above ~12 kHz the values are strongly
+    /// negative.
     static func aWeightDB(frequencyHz f: Double) -> Double {
         if f < 1 { return -200 }
         let f2 = f * f

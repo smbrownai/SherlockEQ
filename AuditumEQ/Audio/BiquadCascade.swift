@@ -49,13 +49,19 @@ final class BiquadCascade {
         initialState: CoefficientState()
     )
 
+    /// Hard ceiling on per-cascade biquad sections. AutoEQ + profile +
+    /// notch chains typically run <20 active bands; 64 sits well past
+    /// any realistic ceiling. `setBands` truncates beyond this.
+    static let maxSections: Int = 64
+
     /// Per-section storage taps (z1, z2) for the single channel this
     /// cascade processes. Touched only from the audio render thread, so
-    /// no synchronisation. Sized to match the current section count;
-    /// reallocated on coefficient changes and zeroed at that time so
-    /// state doesn't blow up against the new filter set.
-    private var z1: [Float] = []
-    private var z2: [Float] = []
+    /// no synchronisation. Pre-allocated to `maxSections` so a profile
+    /// change never triggers a heap allocation on the audio thread —
+    /// the render block just memsets the active prefix when the section
+    /// count changes.
+    private var z1: [Float] = Array(repeating: 0, count: BiquadCascade.maxSections)
+    private var z2: [Float] = Array(repeating: 0, count: BiquadCascade.maxSections)
     private var stateSectionCount: Int = 0
 
     init() {}
@@ -69,8 +75,14 @@ final class BiquadCascade {
     func setBands(_ bands: [EQBand], preampDB: Double, sampleRate: Double) {
         // Build immutably so the `withLock` closure captures by value
         // rather than by reference (Swift 6 strict-concurrency clean).
-        let sections: [Section] = bands.compactMap {
+        // Cap at `maxSections` so the audio thread's preallocated state
+        // buffers can't be over-run — any band beyond the cap is silently
+        // dropped (an unrealistic case in practice; see maxSections docs).
+        var sections: [Section] = bands.compactMap {
             Self.makeSection(for: $0, sampleRate: sampleRate)
+        }
+        if sections.count > Self.maxSections {
+            sections.removeLast(sections.count - Self.maxSections)
         }
         let preGain = Float(pow(10.0, preampDB / 20.0))
         stateLock.withLock { state in
@@ -101,11 +113,23 @@ final class BiquadCascade {
         let nSections = snapshot.sections.count
         let preGain = snapshot.preGain
 
-        // Ensure per-section state buffers match the current count.
-        // Reallocates + zeros on change; steady-state is alloc-free.
+        // On section count change, zero the active prefix of z1/z2 so
+        // stale state from a longer (or different-shape) cascade can't
+        // leak into the new filter set. Tail indices past nSections are
+        // never read, so they don't need clearing. The buffers are
+        // pre-allocated to `maxSections` at init — no heap work here.
         if nSections != stateSectionCount {
-            z1 = Array(repeating: 0, count: nSections)
-            z2 = Array(repeating: 0, count: nSections)
+            let clearCount = max(nSections, stateSectionCount)
+            z1.withUnsafeMutableBufferPointer { buf in
+                if let base = buf.baseAddress {
+                    memset(base, 0, clearCount * MemoryLayout<Float>.size)
+                }
+            }
+            z2.withUnsafeMutableBufferPointer { buf in
+                if let base = buf.baseAddress {
+                    memset(base, 0, clearCount * MemoryLayout<Float>.size)
+                }
+            }
             stateSectionCount = nSections
         }
 

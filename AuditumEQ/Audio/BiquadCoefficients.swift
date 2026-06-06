@@ -13,14 +13,24 @@ struct BiquadCoefficients {
     var a1: Double
     var a2: Double
 
+    /// Hard limit on `gaindB` accepted into the cookbook. The UI clamps
+    /// to ±12 / ±24 dB depending on view, but imported AutoEQ profiles
+    /// can carry larger values. Past ~±40 dB `A` (= 10^(gain/40)) drives
+    /// `a0` close to zero and the cascade can NaN-propagate forever
+    /// through `z1` / `z2`. ±30 dB sits well past any musically useful
+    /// range while still keeping the filter numerically stable.
+    static let gainClampDB: Double = 30.0
+
     /// Cookbook coefficients for one EQ band. `bandwidth` is interpreted
     /// as Q (matching AVAudioUnitEQ's parametric/notch model and the
     /// shelf slope conventions used elsewhere in this codebase).
-    /// `frequencyHz` is clamped to [20, Nyquist−1] so callers passing in
-    /// out-of-range values get a stable filter rather than NaNs.
+    /// `frequencyHz` is clamped to [20, Nyquist−1] and `gaindB` is clamped
+    /// to ±`gainClampDB` so callers passing in out-of-range values get a
+    /// stable filter rather than NaNs.
     static func cookbook(for band: EQBand, sampleRate: Double) -> BiquadCoefficients {
         let f0 = max(20.0, min(sampleRate / 2 - 1, band.frequencyHz))
-        let A = pow(10.0, band.gaindB / 40.0)
+        let gainDB = max(-gainClampDB, min(gainClampDB, band.gaindB))
+        let A = pow(10.0, gainDB / 40.0)
         let w0 = 2.0 * .pi * f0 / sampleRate
         let cosW0 = cos(w0)
         let sinW0 = sin(w0)
