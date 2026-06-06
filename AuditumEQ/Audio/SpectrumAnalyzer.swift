@@ -89,8 +89,10 @@ final class SpectrumAnalyzer: ObservableObject {
     /// Inflight-publish guard. Only one publish hops to the main actor at
     /// a time; further FFT results merge their smoothing in place and
     /// publish on the next available tick rather than queueing up.
-    private var publishPending = false
-    private let publishPendingLock = NSLock()
+    /// `OSAllocatedUnfairLock` is async-safe — NSLock would warn (then
+    /// error in Swift 6) about its lock/unlock methods being called
+    /// inside `Task { @MainActor in ... }` blocks.
+    private let publishPending = OSAllocatedUnfairLock<Bool>(initialState: false)
 
     /// Number of attached observers. When zero, `ingest` returns immediately
     /// — no sample accumulation, no FFT, no publish, no allocation. The
@@ -426,18 +428,17 @@ final class SpectrumAnalyzer: ObservableObject {
         // Drop publishes if one is already on the main queue. The newer FFT
         // frame still gets folded in via smoothing as soon as the current
         // publish completes; we just don't pile up a backlog of stale ones.
-        publishPendingLock.lock()
-        let shouldPublish = !publishPending
-        if shouldPublish { publishPending = true }
-        publishPendingLock.unlock()
+        let shouldPublish = publishPending.withLock { pending -> Bool in
+            guard !pending else { return false }
+            pending = true
+            return true
+        }
         guard shouldPublish else { return }
 
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.publishSmoothed(rawDB: dbBins, dbfs: dbfs, dba: dba)
-            self.publishPendingLock.lock()
-            self.publishPending = false
-            self.publishPendingLock.unlock()
+            self.publishPending.withLock { $0 = false }
         }
     }
 

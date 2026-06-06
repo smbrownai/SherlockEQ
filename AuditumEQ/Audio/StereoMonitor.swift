@@ -13,7 +13,7 @@ import os
 /// state. That same Timer drives the needle physics.
 final class StereoMonitor: ObservableObject {
 
-    static let scopeSampleCount: Int = 512
+    nonisolated static let scopeSampleCount: Int = 512
 
     @Published private(set) var scopeSamples: [SamplePair]
     @Published private(set) var leftPeak: Float = 0
@@ -119,8 +119,8 @@ final class StereoMonitor: ObservableObject {
     /// `nonisolated(unsafe)` papered over the fact that multiple StereoMonitor
     /// instances could share writers, and Swift 6 strict-concurrency wants
     /// the contract spelled out.
-    private static let lastLoggedChannelCount = OSAllocatedUnfairLock<Int>(initialState: 0)
-    private static let monitorLog = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "StereoMonitor")
+    nonisolated private static let lastLoggedChannelCount = OSAllocatedUnfairLock<Int>(initialState: 0)
+    nonisolated private static let monitorLog = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "StereoMonitor")
 
     /// Called from the audio tap callback. Realtime-safe — bounded
     /// memcpy + one lock release. No `@Published` mutation here, so we
@@ -167,17 +167,32 @@ final class StereoMonitor: ObservableObject {
         let lRMS = sqrt(lSq * invN)
         let rRMS = sqrt(rSq * invN)
 
+        // The `withLock` closure is `@Sendable`, and `UnsafeMutablePointer`
+        // isn't `Sendable`, so capturing `left` / `right` directly would
+        // be a Swift-6 error. Wrap them in a small `@unchecked Sendable`
+        // view — safe because the pointers are valid for this call's
+        // lifetime and the only reader is this thread.
+        struct ChannelPointers: @unchecked Sendable {
+            let left: UnsafePointer<Float>
+            let right: UnsafePointer<Float>
+        }
+        let pointers = ChannelPointers(
+            left: UnsafePointer(left),
+            right: UnsafePointer(right)
+        )
+
         // Write the decimated scope trace straight into staging.samples
         // under the lock. Staging owns the only reference to its sample
-        // buffer (tick takes an explicit Array() copy on drain), so the
-        // mutable buffer pointer doesn't trigger COW — no allocation on
-        // the audio thread.
+        // buffer (tick takes an explicit Array() copy on drain), so
+        // subscript writes don't trigger COW — no allocation on the
+        // audio thread.
         stagingLock.withLock { staging in
-            staging.samples.withUnsafeMutableBufferPointer { buf in
-                for i in 0..<target {
-                    let srcIdx = min(frames - 1, i * stride)
-                    buf[i] = SamplePair(l: left[srcIdx], r: right[srcIdx])
-                }
+            for i in 0..<target {
+                let srcIdx = min(frames - 1, i * stride)
+                staging.samples[i] = SamplePair(
+                    l: pointers.left[srcIdx],
+                    r: pointers.right[srcIdx]
+                )
             }
             staging.samplesValid = true
             staging.leftPeakLinear = max(lRMS, staging.leftPeakLinear)

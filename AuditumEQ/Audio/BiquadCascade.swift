@@ -73,17 +73,18 @@ final class BiquadCascade {
     /// on its next render block call. Pass `[]` for bands to make the
     /// cascade pure pre-gain (or, with preampDB == 0, identity).
     func setBands(_ bands: [EQBand], preampDB: Double, sampleRate: Double) {
-        // Build immutably so the `withLock` closure captures by value
-        // rather than by reference (Swift 6 strict-concurrency clean).
-        // Cap at `maxSections` so the audio thread's preallocated state
-        // buffers can't be over-run — any band beyond the cap is silently
-        // dropped (an unrealistic case in practice; see maxSections docs).
-        var sections: [Section] = bands.compactMap {
+        // Build into a `let` so the `withLock` closure (which is `@Sendable`)
+        // captures by value — Swift 6 strict-concurrency forbids `@Sendable`
+        // capture of `var`. Cap at `maxSections` so the audio thread's
+        // preallocated state buffers can't be over-run — any band beyond
+        // the cap is silently dropped (an unrealistic case in practice;
+        // see maxSections docs).
+        let mapped: [Section] = bands.compactMap {
             Self.makeSection(for: $0, sampleRate: sampleRate)
         }
-        if sections.count > Self.maxSections {
-            sections.removeLast(sections.count - Self.maxSections)
-        }
+        let sections: [Section] = mapped.count > Self.maxSections
+            ? Array(mapped.prefix(Self.maxSections))
+            : mapped
         let preGain = Float(pow(10.0, preampDB / 20.0))
         stateLock.withLock { state in
             state.sections = sections
