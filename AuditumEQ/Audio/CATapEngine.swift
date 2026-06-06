@@ -48,23 +48,58 @@ final class CATapEngine: ObservableObject {
 
     var onOutputDeviceChanged: ((AudioDeviceID) -> Void)?
 
-    /// Side-channel for the pre-EQ spectrum analyzer. We can't store this as
-    /// a plain property on a @MainActor type and have the audio-thread render
-    /// block read it — access from outside the actor returns stale state.
-    /// A bare reference class with a single mutable property avoids the
-    /// isolation hop entirely: the render block captures `preIngest`
-    /// strongly, then reads its callback field directly each frame.
+    /// Side-channel for the pre-EQ spectrum analyzer. The render block
+    /// captures this strongly and reads the callback through it each
+    /// frame — but the field needs synchronisation: a closure is two
+    /// words (function pointer + context) and a write from the main
+    /// thread during a render-block read could tear and crash the
+    /// IOProc. The slot wraps its state in `OSAllocatedUnfairLock`
+    /// (same pattern as `AudioCounter` / `BiquadCascade`).
     let preIngest = PreSpectrumIngestSlot()
 
-    /// Plain class holding a single nullable callback. Lives outside any
-    /// actor so the audio thread can read its `callback` field without an
-    /// isolation hop. Writers (AudioState) just assign to `.callback`.
-    final class PreSpectrumIngestSlot {
-        var callback: ((UnsafePointer<Float>, Int, Double) -> Void)?
-        /// Bumped from the audio thread whenever the callback path runs.
-        /// Racy on purpose — for diagnostics only.
-        var renderBlockEntries: Int = 0
-        var callbackInvocations: Int = 0
+    /// Cross-thread holder for the pre-EQ ingest callback plus its
+    /// diagnostic counters. Writers (main thread) call `setCallback`;
+    /// the audio render block calls `snapshotCallbackForRender` to
+    /// atomically read the callback and bump the entry counter, then
+    /// invokes the closure OUTSIDE the lock so a contended write from
+    /// main never stalls the IOProc for the duration of the ingest.
+    ///
+    /// `nonisolated` because the outer `CATapEngine` is `@MainActor` —
+    /// without this, the nested class would inherit that isolation and
+    /// the audio render block couldn't legally touch it.
+    nonisolated final class PreSpectrumIngestSlot: @unchecked Sendable {
+        typealias Callback = (UnsafePointer<Float>, Int, Double) -> Void
+
+        private struct State {
+            var callback: Callback?
+            var renderBlockEntries: Int = 0
+            var callbackInvocations: Int = 0
+        }
+        private let stateLock = OSAllocatedUnfairLock<State>(initialState: State())
+
+        /// Assign a new callback (or `nil` to detach). Main-thread API.
+        func setCallback(_ callback: Callback?) {
+            stateLock.withLock { $0.callback = callback }
+        }
+
+        /// Bump the render-block entry counter and return the current
+        /// callback. Called once per render block from the audio thread.
+        func snapshotCallbackForRender() -> Callback? {
+            stateLock.withLock { state in
+                state.renderBlockEntries &+= 1
+                return state.callback
+            }
+        }
+
+        /// Record that a callback invocation completed. Called after
+        /// the snapshot callback runs (outside the lock).
+        func recordCallbackInvocation() {
+            stateLock.withLock { $0.callbackInvocations &+= 1 }
+        }
+
+        /// Diagnostic reads — DebugView samples at ~10 Hz.
+        var renderBlockEntries: Int { stateLock.withLock { $0.renderBlockEntries } }
+        var callbackInvocations: Int { stateLock.withLock { $0.callbackInvocations } }
     }
 
     /// Diagnostic counters. Sampled from the UI; updated from realtime threads.
@@ -343,12 +378,13 @@ final class CATapEngine: ObservableObject {
             }
             leftCounter.add(Int(frameCount))
             Self.recordPeak(abl: audioBufferList, frameCount: frameCount, into: outPeak)
-            preIngest.renderBlockEntries &+= 1
-            if let callback = preIngest.callback {
-                if let lPtr = buffers[0].mData?.assumingMemoryBound(to: Float.self) {
-                    callback(lPtr, Int(frameCount), sourceSR)
-                    preIngest.callbackInvocations &+= 1
-                }
+            // Snapshot under the lock (bumps the entry counter atomically
+            // with the read), then invoke OUTSIDE the lock so main-thread
+            // writers don't get stalled waiting for the callback to run.
+            if let callback = preIngest.snapshotCallbackForRender(),
+               let lPtr = buffers[0].mData?.assumingMemoryBound(to: Float.self) {
+                callback(lPtr, Int(frameCount), sourceSR)
+                preIngest.recordCallbackInvocation()
             }
             return status
         }

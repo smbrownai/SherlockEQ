@@ -533,7 +533,7 @@ final class AudioState: ObservableObject {
     private func installPreSpectrumTap(tapSR: Double) {
         preSpectrum.configureForSampleRate(tapSR)
         let preSpectrum = self.preSpectrum
-        tap.preIngest.callback = { ptr, frames, sr in
+        tap.preIngest.setCallback { ptr, frames, sr in
             preSpectrum.ingest(monoSamples: ptr, frameCount: frames, sampleRate: sr)
         }
     }
