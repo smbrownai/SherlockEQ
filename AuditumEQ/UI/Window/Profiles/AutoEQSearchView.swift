@@ -270,14 +270,28 @@ struct AutoEQSearchView: View {
         guard let entries = remote.index?.entries else {
             return FilteredMatches(visible: [], totalCount: 0)
         }
-        let needle = query.lowercased()
+        // Tokenize on whitespace and AND every substring match. A
+        // single-substring contains was too brittle against catalog
+        // entries with quirky spacing — typing "DT 770 Pro X" missed
+        // "Beyerdynamic DT770 Pro X Limited Edition" because of the
+        // joined "DT770". Tokenizing both sides treats whitespace as
+        // ignorable in the user's intent.
+        let tokens = query
+            .lowercased()
+            .split(whereSeparator: \.isWhitespace)
+            .map(String.init)
+        guard !tokens.isEmpty else {
+            return FilteredMatches(visible: [], totalCount: 0)
+        }
         var matches: [AutoEQIndexEntry] = []
         for entry in entries {
-            let nameHit = entry.name.lowercased().contains(needle)
-            let sourceHit = entry.source.lowercased().contains(needle)
-            if nameHit || sourceHit {
-                matches.append(entry)
+            let haystack = "\(entry.name.lowercased()) \(entry.source.lowercased())"
+            var allHit = true
+            for token in tokens where !haystack.contains(token) {
+                allHit = false
+                break
             }
+            if allHit { matches.append(entry) }
         }
         let visible = Array(matches.prefix(Self.maxVisibleResults))
         return FilteredMatches(visible: visible, totalCount: matches.count)
