@@ -56,7 +56,7 @@ struct DebugView: View {
         Text("Tap").font(.subheadline).foregroundStyle(.secondary)
         labeled("State", value: tapStateLabel)
         labeled("Permission", value: state.tap.permissionGranted ? "granted" : "not granted")
-        labeled("Output device", value: "\(state.tap.currentOutputDeviceName) (#\(state.tap.currentOutputDeviceID))")
+        labeled("Output device", value: state.tap.currentOutputDeviceDescription)
         labeled("Tap format", value: state.tap.tapFormat.map { "\(Int($0.sampleRate)) Hz · \($0.channelCount) ch" } ?? "—")
     }
 

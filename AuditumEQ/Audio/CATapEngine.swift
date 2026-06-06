@@ -19,8 +19,20 @@ final class CATapEngine: ObservableObject {
 
     @Published private(set) var state: State = .idle
     @Published private(set) var permissionGranted: Bool = false
+    /// Raw CoreAudio handle for the device the tap is bound to. Kept for
+    /// internal use (change-detection on the default-output listener,
+    /// the `onOutputDeviceChanged` callback signature, OSLog statements);
+    /// the UI should prefer `currentOutputDeviceDescription` so the
+    /// CoreAudio type doesn't leak into the view layer.
     @Published private(set) var currentOutputDeviceID: AudioDeviceID = kAudioObjectUnknown
     @Published private(set) var currentOutputDeviceName: String = "—"
+
+    /// Pre-formatted "Name (#id)" string for diagnostic UI. DebugView
+    /// reads this instead of touching `currentOutputDeviceID` directly,
+    /// so the CoreAudio `AudioDeviceID` type stays out of the view layer.
+    var currentOutputDeviceDescription: String {
+        "\(currentOutputDeviceName) (#\(currentOutputDeviceID))"
+    }
 
     /// Mono source node for the left channel of the captured stream.
     /// Emits **stereo** with L = tapped L, R = 0 — so a downstream EQ can process
