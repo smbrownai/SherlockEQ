@@ -224,7 +224,53 @@ final class CATapEngine: ObservableObject {
         await start()
     }
 
+    /// Strict-FIFO serializer for `start` / `stop` / device-topology
+    /// rebuilds. Every triggering path (UI startAll, default-output
+    /// listener, stream-config listener, sample-rate listener, wake
+    /// handler) awaits the previous in-flight Task before running its
+    /// own body. Without this, two rapid device-change notifications
+    /// would each run `tearDownTapAndAggregate()` followed by
+    /// `performStart()` interleaved against the other, leaking the
+    /// first invocation's CoreAudio handles when its `applyTapPrep`
+    /// overwrites them.
+    private var inFlight: Task<Void, Never>?
+
+    private func enqueue(_ work: @escaping @MainActor @Sendable () async -> Void) async {
+        // Chain each new work item after the previous one so they run
+        // in strict FIFO. A completed Task is harmless to leave pinned
+        // — its memory is trivial and the next enqueue replaces it —
+        // so we don't bother trying to clear `inFlight` back to nil
+        // after our work finishes (Task is a value type, no `===` to
+        // match against the slot atomically).
+        let previous = inFlight
+        let task = Task { @MainActor in
+            await previous?.value
+            await work()
+        }
+        inFlight = task
+        await task.value
+    }
+
     func start() async {
+        await enqueue { [weak self] in
+            guard let self else { return }
+            // Re-entrancy guard: if we became `.running` while waiting
+            // in the queue (e.g. another caller's start() landed
+            // first), don't redo the work.
+            if case .running = self.state { return }
+            await self.performStart()
+        }
+    }
+
+    func stop() async {
+        await enqueue { [weak self] in
+            guard let self else { return }
+            self.tearDown()
+            self.state = .idle
+        }
+    }
+
+    private func performStart() async {
         state = .starting
         do {
             let prep = try await Task.detached(priority: .userInitiated) {
@@ -240,11 +286,6 @@ final class CATapEngine: ObservableObject {
             log.error("CATapEngine start failed: \(String(describing: error))")
             tearDown()
         }
-    }
-
-    func stop() {
-        tearDown()
-        state = .idle
     }
 
     // MARK: - Build
@@ -685,11 +726,21 @@ final class CATapEngine: ObservableObject {
     }
 
     private func handleDefaultOutputDeviceChanged() async {
-        guard let newID = try? Self.defaultOutputDeviceID(), newID != currentOutputDeviceID else { return }
-        log.info("Default output device changed: \(self.currentOutputDeviceID) → \(newID)")
-        tearDownTapAndAggregate()
-        await start()
-        onOutputDeviceChanged?(currentOutputDeviceID)
+        // Guard runs *inside* the serialized block so a burst of
+        // listener fires doesn't queue up redundant rebuilds — by the
+        // time the second one runs, `currentOutputDeviceID` has
+        // already been updated and the guard short-circuits.
+        await enqueue { [weak self] in
+            guard let self else { return }
+            guard
+                let newID = try? Self.defaultOutputDeviceID(),
+                newID != self.currentOutputDeviceID
+            else { return }
+            self.log.info("Default output device changed: \(self.currentOutputDeviceID) → \(newID)")
+            self.tearDownTapAndAggregate()
+            await self.performStart()
+            self.onOutputDeviceChanged?(self.currentOutputDeviceID)
+        }
     }
 
     /// Same shape as a device-change for the AVAudioEngine graph: the
@@ -697,10 +748,13 @@ final class CATapEngine: ObservableObject {
     /// changed under us, and the aggregate + source-node formats are
     /// now stale. Rebuild against the new shape.
     private func handleDeviceTopologyChanged(reason: String) async {
-        log.info("Output device topology change (\(reason, privacy: .public)) — rebuilding")
-        tearDownTapAndAggregate()
-        await start()
-        onOutputDeviceChanged?(currentOutputDeviceID)
+        await enqueue { [weak self] in
+            guard let self else { return }
+            self.log.info("Output device topology change (\(reason, privacy: .public)) — rebuilding")
+            self.tearDownTapAndAggregate()
+            await self.performStart()
+            self.onOutputDeviceChanged?(self.currentOutputDeviceID)
+        }
     }
 
     // MARK: - Teardown

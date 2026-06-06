@@ -117,7 +117,7 @@ struct DebugView: View {
         HStack(spacing: 12) {
             Button("Start") { Task { await state.startAll() } }
                 .keyboardShortcut(.defaultAction)
-            Button("Stop") { state.stopAll() }
+            Button("Stop") { Task { await state.stopAll() } }
         }
 
         HStack(spacing: 12) {

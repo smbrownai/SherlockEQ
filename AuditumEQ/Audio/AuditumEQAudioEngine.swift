@@ -400,6 +400,18 @@ final class AuditumEQAudioEngine: ObservableObject {
         }
     }
 
+    /// Flatten both per-ear cascades to identity. Used when the active
+    /// profile is deleted or otherwise disappears — without this, the
+    /// previously-applied profile's bands would stay live and the user
+    /// would still be hearing the deleted profile's EQ even though the
+    /// UI shows "no profile selected".
+    func flattenChain() {
+        leftBalanceMixer?.outputVolume = 1
+        rightBalanceMixer?.outputVolume = 1
+        leftEQCascade?.setBands([], preampDB: 0, sampleRate: tapSampleRate)
+        rightEQCascade?.setBands([], preampDB: 0, sampleRate: tapSampleRate)
+    }
+
     /// Apply a hearing profile's per-ear bands + global trim to the chain.
     /// Folds AutoEQ + profile bands + tinnitus notch + global trim into
     /// a single biquad cascade per ear, processed in the source-node

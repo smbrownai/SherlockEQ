@@ -376,8 +376,11 @@ final class AudioState: ObservableObject {
     }
 
     /// Look up the active profile in the connected store and push it to the
-    /// engine. No-op if no store is connected, no profile is active, the test
-    /// curve is currently overriding, or the engine graph isn't attached yet.
+    /// engine. No-op if a store isn't connected yet or the test curve is
+    /// currently overriding. When the active profile resolves to nil (the
+    /// user deleted the active profile, or no profile has been picked
+    /// yet) the cascade is flattened so the user doesn't keep hearing the
+    /// previously-applied bands while the popover shows "no profile".
     ///
     /// Applies the four-stage bypass mask before handing off to the
     /// engine. The store's profile stays untouched — toggles flatten
@@ -385,8 +388,11 @@ final class AudioState: ObservableObject {
     /// without re-reading anything from disk.
     private func applyActiveProfile() {
         guard !testCurveEnabled else { return }
-        guard let store = connectedStore,
-              let original = activeProfile(in: store) else { return }
+        guard let store = connectedStore else { return }
+        guard let original = activeProfile(in: store) else {
+            audio.flattenChain()
+            return
+        }
         audio.applyProfile(applyBypassMask(to: original))
     }
 
@@ -570,7 +576,21 @@ final class AudioState: ObservableObject {
     }
 
     private func handleWillSleep() {
-        wasRunningBeforeSleep = audio.isRunning
+        // Resume on wake if EITHER the AVAudioEngine was running OR
+        // the tap was mid-startup. Previously we only checked
+        // `audio.isRunning`, so a sleep landing while `tap.state ==
+        // .starting` (e.g. user puts the lid down during the first
+        // launch sequence) left `wasRunningBeforeSleep = false` and
+        // the half-built tap stranded on wake — the user got silence
+        // with no recovery path until they manually restarted from
+        // Debug.
+        let tapBusyOrUp: Bool = {
+            switch tap.state {
+            case .running, .starting: return true
+            default:                  return false
+            }
+        }()
+        wasRunningBeforeSleep = audio.isRunning || tapBusyOrUp
         if audio.isRunning {
             log.info("System sleeping — stopping AVAudioEngine")
             audio.stop()
@@ -619,9 +639,9 @@ final class AudioState: ObservableObject {
         rebuildAudioGraph()
     }
 
-    func stopAll() {
+    func stopAll() async {
         audio.teardown()
-        tap.stop()
+        await tap.stop()
     }
 
     private func rebuildAudioGraph() {
