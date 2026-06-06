@@ -4,6 +4,7 @@ import SwiftUI
 /// on macOS System Settings (spec §8.3). Sections beyond Debug are placeholders
 /// in Session 6; Sessions 7–17 fill them in incrementally.
 struct MainWindowView: View {
+    @EnvironmentObject private var audioState: AudioState
     @State private var selection: SidebarSection? = .profiles
     /// Visibility of the right-hand monitoring sidebar. Persistent across
     /// launches via @AppStorage — users who dismiss it stay dismissed
@@ -17,21 +18,33 @@ struct MainWindowView: View {
             SidebarView(selection: $selection)
                 .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 300)
         } detail: {
-            HStack(spacing: 0) {
-                detail
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                if monitorSidebarVisible {
-                    Divider()
-                    MonitorSidebar()
-                        .frame(width: 220)
-                        // Slide in / out smoothly when the toolbar toggle
-                        // flips. The transition is purely visual; the
-                        // underlying StereoMonitor subscription is keyed
-                        // on the view's lifecycle (onAppear/onDisappear).
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
+            VStack(spacing: 0) {
+                if let notice = audioState.userVisibleNotice {
+                    NoticeBannerView(notice: notice) {
+                        audioState.dismissNotice()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+                    .padding(.bottom, 4)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+                HStack(spacing: 0) {
+                    detail
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if monitorSidebarVisible {
+                        Divider()
+                        MonitorSidebar()
+                            .frame(width: 220)
+                            // Slide in / out smoothly when the toolbar toggle
+                            // flips. The transition is purely visual; the
+                            // underlying StereoMonitor subscription is keyed
+                            // on the view's lifecycle (onAppear/onDisappear).
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
                 }
             }
             .animation(.easeInOut(duration: 0.22), value: monitorSidebarVisible)
+            .animation(.easeInOut(duration: 0.18), value: audioState.userVisibleNotice)
             .navigationSplitViewColumnWidth(min: 760, ideal: 820)
         }
         .toolbar {

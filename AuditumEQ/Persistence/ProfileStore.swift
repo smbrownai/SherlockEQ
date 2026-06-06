@@ -60,25 +60,33 @@ final class ProfileStore: ObservableObject {
     func loadAll() -> [HearingProfile] {
         ensureDirectory()
         let fm = FileManager.default
-        guard let urls = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else {
-            log.error("Could not enumerate profiles directory")
+        do {
+            let urls = try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            var loaded: [HearingProfile] = []
+            for url in urls where url.pathExtension == "json" {
+                do {
+                    let data = try Data(contentsOf: url)
+                    let profile = try decoder.decode(HearingProfile.self, from: data)
+                    loaded.append(profile)
+                } catch {
+                    log.error("Skipping \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                }
+            }
+            loaded.sort { $0.createdAt < $1.createdAt }
+            profiles = loaded
+            lastError = nil
+            return loaded
+        } catch {
+            // Empty result but surface the reason so DebugView (and any
+            // future user-facing surface) can explain what happened —
+            // most commonly the user deleted ~/Library/Application
+            // Support/AuditumEQ/profiles out from under us, or the disk
+            // is on an ejected volume.
+            log.error("Could not enumerate profiles directory: \(error.localizedDescription, privacy: .public)")
+            lastError = "Load failed: \(error.localizedDescription)"
             profiles = []
             return []
         }
-        var loaded: [HearingProfile] = []
-        for url in urls where url.pathExtension == "json" {
-            do {
-                let data = try Data(contentsOf: url)
-                let profile = try decoder.decode(HearingProfile.self, from: data)
-                loaded.append(profile)
-            } catch {
-                log.error("Skipping \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            }
-        }
-        loaded.sort { $0.createdAt < $1.createdAt }
-        profiles = loaded
-        lastError = nil
-        return loaded
     }
 
     /// Write `profile` to its `<uuid>.json` file (atomic via temp + rename).
@@ -216,7 +224,15 @@ final class ProfileStore: ObservableObject {
             do {
                 try fm.createDirectory(at: directory, withIntermediateDirectories: true)
             } catch {
+                // Subsequent save / loadAll calls will fail with less-
+                // actionable I/O errors; capture the underlying cause
+                // here so DebugView (and any future user-facing
+                // surface) can explain it. Common causes: the path is
+                // a regular file rather than a directory, the volume
+                // is read-only, or the user pointed `relocate` at a
+                // path they no longer have write access to.
                 log.error("Could not create profiles dir: \(error.localizedDescription, privacy: .public)")
+                lastError = "Could not create profiles directory: \(error.localizedDescription)"
             }
         }
     }

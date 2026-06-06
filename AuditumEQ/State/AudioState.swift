@@ -6,6 +6,7 @@ import CoreAudio
 import OSLog
 import ServiceManagement
 import SwiftUI
+import UserNotifications
 
 /// Single source of truth for audio lifecycle, injected as `@EnvironmentObject`
 /// into both popover and main-window hierarchies (Session 4+). Currently wires
@@ -293,6 +294,15 @@ final class AudioState: ObservableObject {
     @Published var sessionDosePercent: Double = 0
     @Published var remainingMinutes: Double?
 
+    /// User-visible status banner — surfaces save failures, permission
+    /// revocations, and other transient conditions the user can act on.
+    /// `MainWindowView` reads this and renders `NoticeBannerView` when
+    /// non-nil. Set via `showNotice(_:)` which also schedules
+    /// auto-dismiss for warnings. Errors stay until the user taps the
+    /// dismiss control.
+    @Published var userVisibleNotice: TransientNotice?
+    private var noticeDismissTask: Task<Void, Never>?
+
     /// SPL calibration in dB: the dB SPL the user actually hears when a
     /// 0 dBFS signal plays through the current output device at their
     /// current volume. Drives the dBFS → dBA conversion used by the dose
@@ -359,7 +369,52 @@ final class AudioState: ObservableObject {
             }
             .store(in: &profileSubscriptions)
 
+        // Surface persistence errors in the main-window banner. The
+        // store sets `lastError` from its `tracking` wrapper, so we
+        // get a notification at the exact moment any save / delete /
+        // import / export / relocate / loadAll fails. We don't show
+        // anything when `lastError` clears (nil) — that's the normal
+        // post-success state and would just flash an empty banner.
+        profileStore.$lastError
+            .compactMap { $0 }
+            .sink { [weak self] message in
+                Task { @MainActor in
+                    self?.showNotice(
+                        TransientNotice(severity: .error, message: message)
+                    )
+                }
+            }
+            .store(in: &profileSubscriptions)
+
         applyActiveProfile()
+    }
+
+    /// Show a transient banner notice. Errors stay until the user
+    /// dismisses; warnings auto-dismiss per the notice's
+    /// `autoDismissAfter`. Replacing the current notice cancels any
+    /// pending auto-dismiss for the previous one.
+    func showNotice(_ notice: TransientNotice) {
+        noticeDismissTask?.cancel()
+        userVisibleNotice = notice
+        if let delay = notice.autoDismissAfter {
+            let noticeID = notice.id
+            noticeDismissTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                // Only dismiss if the same notice is still up — a
+                // newer one would have replaced it via showNotice's
+                // cancel-then-set, but defensive belt-and-braces.
+                if self?.userVisibleNotice?.id == noticeID {
+                    self?.userVisibleNotice = nil
+                }
+            }
+        }
+    }
+
+    /// User-initiated dismiss from the banner's close control.
+    func dismissNotice() {
+        noticeDismissTask?.cancel()
+        userVisibleNotice = nil
     }
 
     /// When the system output device changes, switch the active profile to
@@ -571,8 +626,27 @@ final class AudioState: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.tap.recheckScreenCapturePermission() }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.tap.recheckScreenCapturePermission()
+                self.recoverIfAudioFailed()
+                await NotificationManager.shared.refreshAuthorizationStatus()
+            }
         }
+    }
+
+    /// One-shot recovery for a non-running AVAudioEngine carrying a
+    /// surfaced `lastError`. Called when the app becomes active — the
+    /// natural moment something the user changed in System Settings
+    /// (output device, audio session priority, etc.) might have made
+    /// the previously-failed start retryable. Idempotent: if the
+    /// engine is already running, no error, or the tap isn't ready,
+    /// this is a no-op.
+    private func recoverIfAudioFailed() {
+        guard audio.lastError != nil, !audio.isRunning else { return }
+        guard case .running = tap.state else { return }
+        log.info("Engine carries a lastError on didBecomeActive — retrying rebuild")
+        rebuildAudioGraph()
     }
 
     private func handleWillSleep() {
@@ -621,6 +695,34 @@ final class AudioState: ObservableObject {
         if sessionDosePercent != newDose { sessionDosePercent = newDose }
         let newRemaining = safeListening.remainingMinutes
         if remainingMinutes != newRemaining { remainingMinutes = newRemaining }
+        checkNotificationsDeniedAtAmberDose()
+    }
+
+    /// Flips true the first time we warn about denied notifications
+    /// while at-or-above amber dose; reset to false when dose drops
+    /// back to .safe (e.g. resetDose, midnight rollover) so the
+    /// warning fires again at most once per safe-listening cycle.
+    private var warnedAboutDeniedNotifications: Bool = false
+
+    /// If safe-listening dose has reached amber/red AND the user has
+    /// denied notifications, the threshold warnings will never reach
+    /// them through the usual channel. Surface the same warning via
+    /// the in-app banner so the safe-listening promise holds even
+    /// when the system path is blocked. Shows at most once per cycle.
+    private func checkNotificationsDeniedAtAmberDose() {
+        if safeListening.doseSeverity == .safe {
+            warnedAboutDeniedNotifications = false
+            return
+        }
+        guard !warnedAboutDeniedNotifications else { return }
+        let status = NotificationManager.shared.authorizationStatus
+        guard status == .denied || status == .notDetermined else { return }
+        warnedAboutDeniedNotifications = true
+        showNotice(TransientNotice(
+            severity: .warning,
+            message: "Notifications are off — you won't get safe-listening alerts. Enable them in System Settings → Notifications → AuditumEQ.",
+            autoDismissAfter: 12
+        ))
     }
 
     func startAll() async {
