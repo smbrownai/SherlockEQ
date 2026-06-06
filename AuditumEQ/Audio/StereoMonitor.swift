@@ -44,12 +44,28 @@ final class StereoMonitor: ObservableObject {
 
     /// Staging buffer written by `ingest` (audio thread), drained by the
     /// display timer (main). Lock window is microseconds; both producer
-    /// and consumer hold it only long enough to swap-out a small array.
+    /// and consumer hold it only long enough to fill / copy the small
+    /// `samples` array.
+    ///
+    /// `samples` is pre-sized to `scopeSampleCount` and treated as
+    /// owned-by-staging — `ingest` writes through `withUnsafeMutableBufferPointer`
+    /// in place (so the audio thread does no allocation per buffer), and
+    /// `tick` takes an explicit `Array(...)` copy so the published value
+    /// detaches from staging and the next ingest doesn't trigger COW.
+    /// `samplesValid` tracks whether the buffer carries fresh data so
+    /// the consumer can hold its prior published value when no new audio
+    /// arrived (matches the previous `if !snapshot.samples.isEmpty` gate).
     private let stagingLock = OSAllocatedUnfairLock<Staging>(
-        initialState: Staging(samples: [], leftPeakLinear: 0, rightPeakLinear: 0)
+        initialState: Staging(
+            samples: Array(repeating: SamplePair(l: 0, r: 0), count: StereoMonitor.scopeSampleCount),
+            samplesValid: false,
+            leftPeakLinear: 0,
+            rightPeakLinear: 0
+        )
     )
     private struct Staging {
         var samples: [SamplePair]
+        var samplesValid: Bool
         var leftPeakLinear: Float
         var rightPeakLinear: Float
     }
@@ -129,11 +145,6 @@ final class StereoMonitor: ObservableObject {
         // shape stable across sample rates.
         let target = Self.scopeSampleCount
         let stride = max(1, frames / target)
-        var pairs = [SamplePair](repeating: SamplePair(l: 0, r: 0), count: target)
-        for i in 0..<target {
-            let srcIdx = min(frames - 1, i * stride)
-            pairs[i] = SamplePair(l: left[srcIdx], r: right[srcIdx])
-        }
 
         // Per-buffer RMS over ALL frames — this is what a real VU meter
         // integrates, not the peak. Combined with the 60-fps envelope
@@ -148,8 +159,19 @@ final class StereoMonitor: ObservableObject {
         let lRMS = sqrt(lSq * invN)
         let rRMS = sqrt(rSq * invN)
 
+        // Write the decimated scope trace straight into staging.samples
+        // under the lock. Staging owns the only reference to its sample
+        // buffer (tick takes an explicit Array() copy on drain), so the
+        // mutable buffer pointer doesn't trigger COW — no allocation on
+        // the audio thread.
         stagingLock.withLock { staging in
-            staging.samples = pairs
+            staging.samples.withUnsafeMutableBufferPointer { buf in
+                for i in 0..<target {
+                    let srcIdx = min(frames - 1, i * stride)
+                    buf[i] = SamplePair(l: left[srcIdx], r: right[srcIdx])
+                }
+            }
+            staging.samplesValid = true
             staging.leftPeakLinear = max(lRMS, staging.leftPeakLinear)
             staging.rightPeakLinear = max(rRMS, staging.rightPeakLinear)
         }
@@ -165,7 +187,15 @@ final class StereoMonitor: ObservableObject {
         leftNeedle = 0; rightNeedle = 0
         leftNeedleVelocity = 0; rightNeedleVelocity = 0
         stagingLock.withLock { staging in
-            staging = Staging(samples: [], leftPeakLinear: 0, rightPeakLinear: 0)
+            // Keep the pre-allocated samples buffer (just clear it) so
+            // the next ingest still has the owned-by-staging invariant
+            // that lets it write in place without allocating.
+            staging.samples.withUnsafeMutableBufferPointer { buf in
+                for i in buf.indices { buf[i] = SamplePair(l: 0, r: 0) }
+            }
+            staging.samplesValid = false
+            staging.leftPeakLinear = 0
+            staging.rightPeakLinear = 0
         }
     }
 
@@ -184,17 +214,38 @@ final class StereoMonitor: ObservableObject {
     /// Drain the staging buffer and publish on main. Combine sees the
     /// `@Published` set happen on the main thread because the Timer
     /// fires on the runloop it was scheduled on (main).
+    private struct TickSnapshot {
+        var samples: [SamplePair]
+        var samplesValid: Bool
+        var leftPeakLinear: Float
+        var rightPeakLinear: Float
+    }
+
     private func tick() {
-        let snapshot = stagingLock.withLock { staging -> Staging in
-            let s = staging
-            // Reset peak inside the lock so the next audio tick can
-            // observe a fresh max. Decay is folded in below.
+        // Take an EXPLICIT copy of staging.samples here on the main
+        // thread. That detaches the published buffer from staging so
+        // the next audio-thread ingest can keep mutating staging.samples
+        // in place without triggering COW. The samples-allocation cost
+        // moves from realtime (per audio buffer, ~200 Hz) to main
+        // (per display tick, 60 Hz).
+        let snapshot: TickSnapshot = stagingLock.withLock { staging in
+            let copy = TickSnapshot(
+                samples: staging.samplesValid ? Array(staging.samples) : [],
+                samplesValid: staging.samplesValid,
+                leftPeakLinear: staging.leftPeakLinear,
+                rightPeakLinear: staging.rightPeakLinear
+            )
+            // Reset peaks inside the lock so the next audio tick can
+            // observe a fresh max. The samples buffer stays allocated
+            // and owned by staging; `samplesValid` flips false until
+            // the next ingest writes fresh data.
+            staging.samplesValid = false
             staging.leftPeakLinear = 0
             staging.rightPeakLinear = 0
-            return s
+            return copy
         }
 
-        if !snapshot.samples.isEmpty {
+        if snapshot.samplesValid {
             scopeSamples = snapshot.samples
         }
         // Per-tick RMS for `AnalogVUMeter`'s ballistics. The audio tap

@@ -114,6 +114,13 @@ final class SpectrumAnalyzer: ObservableObject {
     /// one audio thread, so no lock is needed here.
     private var lastLevelEmitTime: CFTimeInterval = 0
 
+    /// Pre-allocated mono mixdown buffer for the channel-mix ingest path.
+    /// Sized to comfortably hold any audio buffer we'll see (fftSize · 2
+    /// = 4096 frames); grown on the off chance a buffer arrives larger.
+    /// Touched only from the single audio-thread caller (same invariant as
+    /// `lastLevelEmitTime`), so it doesn't need synchronisation.
+    private var monoScratch: [Float] = Array(repeating: 0, count: fftSize * 2)
+
     /// Callback for downstream consumers (SafeListeningTracker). Fires once
     /// per FFT frame with the most recent A-weighted level.
     var onLevelUpdate: ((_ dBA: Float) -> Void)?
@@ -132,6 +139,9 @@ final class SpectrumAnalyzer: ObservableObject {
         var window = [Float](repeating: 0, count: Self.fftSize)
         vDSP_hann_window(&window, vDSP_Length(Self.fftSize), Int32(vDSP_HANN_NORM))
         self.hannWindow = window
+        // Reserve once so subsequent `append(contentsOf:)` calls on the
+        // audio thread don't reallocate when the array grows.
+        accumulator.reserveCapacity(Self.maxAccumulatorSamples)
     }
 
     /// Feed a freshly-captured buffer. Realtime-safe — does no allocation
@@ -159,30 +169,25 @@ final class SpectrumAnalyzer: ObservableObject {
         accumulatorLock.unlock()
         guard active else { return }
 
-        // Mix to mono — average of available channels.
-        var mono = [Float](repeating: 0, count: frames)
-        let weight: Float = 1.0 / Float(chCount)
-        for ch in 0..<chCount {
-            let ptr = channels[ch]
-            for i in 0..<frames {
-                mono[i] += ptr[i] * weight
-            }
+        // Mix to mono — average of available channels. Write into the
+        // pre-allocated scratch buffer rather than allocating fresh on
+        // every ingest. vDSP_vsma does (src * w) + dst → dst per channel,
+        // so we zero the scratch first and then accumulate.
+        if monoScratch.count < frames {
+            monoScratch = Array(repeating: 0, count: frames)
         }
-
-        let captureSampleRate = buffer.format.sampleRate
-
-        accumulatorLock.lock()
-        accumulator.append(contentsOf: mono)
-        if accumulator.count > Self.maxAccumulatorSamples {
-            accumulator.removeFirst(accumulator.count - Self.maxAccumulatorSamples)
-        }
-        let shouldDispatch = shouldDispatchLocked()
-        accumulatorLock.unlock()
-
-        if shouldDispatch {
-            processingQueue.async { [weak self] in
-                self?.drainAndProcess(sampleRate: captureSampleRate)
+        var weight: Float = 1.0 / Float(chCount)
+        monoScratch.withUnsafeMutableBufferPointer { mPtr in
+            guard let base = mPtr.baseAddress else { return }
+            memset(base, 0, frames * MemoryLayout<Float>.size)
+            for ch in 0..<chCount {
+                vDSP_vsma(channels[ch], 1, &weight, base, 1, base, 1, vDSP_Length(frames))
             }
+            let captureSampleRate = buffer.format.sampleRate
+            appendToAccumulatorAndDispatch(
+                source: UnsafeBufferPointer(start: base, count: frames),
+                captureSampleRate: captureSampleRate
+            )
         }
     }
 
@@ -203,11 +208,25 @@ final class SpectrumAnalyzer: ObservableObject {
         accumulatorLock.unlock()
         guard active else { return }
 
-        var mono = [Float](repeating: 0, count: frameCount)
-        memcpy(&mono, monoSamples, frameCount * MemoryLayout<Float>.size)
+        // Already mono — no scratch needed. Append straight from the
+        // caller's pointer. The accumulator's reserved capacity (set at
+        // init) keeps the append from reallocating in steady state.
+        appendToAccumulatorAndDispatch(
+            source: UnsafeBufferPointer(start: monoSamples, count: frameCount),
+            captureSampleRate: captureSR
+        )
+    }
 
+    /// Append a buffer of samples to the accumulator under the lock,
+    /// trim to the high-water mark, and dispatch an FFT if due. Shared
+    /// tail between the two ingest paths so the accumulator's hot path
+    /// has one definition.
+    private func appendToAccumulatorAndDispatch(
+        source: UnsafeBufferPointer<Float>,
+        captureSampleRate: Double
+    ) {
         accumulatorLock.lock()
-        accumulator.append(contentsOf: mono)
+        accumulator.append(contentsOf: source)
         if accumulator.count > Self.maxAccumulatorSamples {
             accumulator.removeFirst(accumulator.count - Self.maxAccumulatorSamples)
         }
@@ -216,7 +235,7 @@ final class SpectrumAnalyzer: ObservableObject {
 
         if shouldDispatch {
             processingQueue.async { [weak self] in
-                self?.drainAndProcess(sampleRate: captureSR)
+                self?.drainAndProcess(sampleRate: captureSampleRate)
             }
         }
     }
