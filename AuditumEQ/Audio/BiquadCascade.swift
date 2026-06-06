@@ -159,6 +159,21 @@ final class BiquadCascade {
                         }
                         samples[i] = x
                     }
+
+                    // Denormal flush. Float32 IIR state can drift into
+                    // denormal range during long silent fade-outs or a
+                    // pause; on x86_64 each denormal operation traps to
+                    // microcode and the per-sample loop above takes a
+                    // 30-100× slowdown. Apple Silicon handles denormals
+                    // in hardware at full speed, but flushing once per
+                    // buffer (O(nSections), not O(count)) keeps the
+                    // cascade safe on Intel and on any future hardware
+                    // that treats denormals slowly.
+                    let denormalThreshold: Float = 1e-25
+                    for k in 0..<nSections {
+                        if abs(z1Buf[k]) < denormalThreshold { z1Buf[k] = 0 }
+                        if abs(z2Buf[k]) < denormalThreshold { z2Buf[k] = 0 }
+                    }
                 }
             }
         }

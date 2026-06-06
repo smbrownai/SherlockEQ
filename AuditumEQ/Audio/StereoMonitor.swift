@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import AVFoundation
 import Combine
 import os
@@ -75,10 +76,20 @@ final class StereoMonitor: ObservableObject {
             repeating: SamplePair(l: 0, r: 0),
             count: Self.scopeSampleCount
         )
+        installScreenSleepObservers()
         // No auto-start. The 60 Hz display loop only runs while a Meters
         // view is actually on screen — see `subscribe()` / `unsubscribe()`.
         // Audio ingestion (`ingest`) keeps running regardless so the staging
         // buffer is always fresh when a Meters view appears.
+    }
+
+    deinit {
+        if let t = screensDidSleepToken {
+            NSWorkspace.shared.notificationCenter.removeObserver(t)
+        }
+        if let t = screensDidWakeToken {
+            NSWorkspace.shared.notificationCenter.removeObserver(t)
+        }
     }
 
     /// Number of currently-attached views. Each `subscribe()` increments;
@@ -86,12 +97,57 @@ final class StereoMonitor: ObservableObject {
     /// this is > 0. Touched only from the main thread (SwiftUI lifecycle).
     private var subscriberCount: Int = 0
 
+    /// Tracks whether the displays are currently lit. When false (Mac
+    /// is locked / display sleep / clamshell) the 60 Hz display loop is
+    /// paused even with subscribers present — Combine would otherwise
+    /// keep publishing to views that nothing is drawing, burning
+    /// laptop battery for no visible effect.
+    private var screensAwake: Bool = true
+    private var screensDidSleepToken: NSObjectProtocol?
+    private var screensDidWakeToken: NSObjectProtocol?
+
+    private func installScreenSleepObservers() {
+        let center = NSWorkspace.shared.notificationCenter
+        screensDidSleepToken = center.addObserver(
+            forName: NSWorkspace.screensDidSleepNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.handleScreensSlept() }
+        }
+        screensDidWakeToken = center.addObserver(
+            forName: NSWorkspace.screensDidWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.handleScreensWoke() }
+        }
+    }
+
+    @MainActor
+    private func handleScreensSlept() {
+        screensAwake = false
+        // Tear down the timer without touching subscriberCount — when
+        // the user wakes the display, screensDidWake restarts it iff
+        // someone's still subscribed.
+        displayTimer?.invalidate()
+        displayTimer = nil
+    }
+
+    @MainActor
+    private func handleScreensWoke() {
+        screensAwake = true
+        if subscriberCount > 0, displayTimer == nil {
+            startDisplayLoop()
+        }
+    }
+
     /// Called from a Meters view's `.onAppear`. Spins up the 60 Hz display
     /// loop on first subscriber. Idempotent for additional subscribers.
     @MainActor
     func subscribe() {
         subscriberCount += 1
-        if subscriberCount == 1, displayTimer == nil {
+        if subscriberCount == 1, displayTimer == nil, screensAwake {
             startDisplayLoop()
         }
     }
