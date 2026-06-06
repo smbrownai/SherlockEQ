@@ -144,14 +144,25 @@ struct MainPopoverView: View {
 
     private func formatGain(_ dB: Double) -> String {
         let abs = Swift.abs(dB)
-        if abs < 0.05 { return "0 dB" }
+        if abs < 0.05 {
+            return String(localized: "0 dB", comment: "Master-gain readout when at unity (zero)")
+        }
+        // Number formatting (decimal separator, sign glyph) here still
+        // uses ASCII via String(format:). Replacing with FormatStyle-based
+        // formatting is the next pass.
         return String(format: "%@%.1f dB", dB > 0 ? "+" : "−", abs)
     }
 
     private func balanceLabel(_ b: Double) -> String {
-        if abs(b) < 0.005 { return "Center" }
+        if abs(b) < 0.005 {
+            return String(localized: "Center", comment: "Balance label when centred")
+        }
         let pct = Int((abs(b) * 100).rounded())
-        return b < 0 ? "L \(pct)%" : "R \(pct)%"
+        // "L" / "R" are channel abbreviations; some locales may prefer
+        // localised forms. Placeholder \(pct) is the absolute % off-centre.
+        return b < 0
+            ? String(localized: "L \(pct)%", comment: "Balance label, panned left")
+            : String(localized: "R \(pct)%", comment: "Balance label, panned right")
     }
 
     /// Open (or focus) the main window. Handed off to `AppDelegate`, which

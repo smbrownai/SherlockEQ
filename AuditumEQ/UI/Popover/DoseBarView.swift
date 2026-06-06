@@ -48,12 +48,20 @@ struct DoseBarView: View {
 
     private var remainingLabel: String {
         guard let minutes = remainingMinutes, minutes.isFinite else { return "—" }
-        if minutes >= 24 * 60 { return "all day" }
+        if minutes >= 24 * 60 {
+            return String(localized: "all day", comment: "Dose bar: remaining safe-listening time when above a day")
+        }
         if minutes >= 60 {
             let h = Int(minutes) / 60
             let m = Int(minutes) % 60
-            return "~\(h)h \(m)m"
+            return String(
+                localized: "~\(h)h \(m)m",
+                comment: "Dose bar: hours + minutes remaining"
+            )
         }
-        return "~\(Int(minutes))m"
+        return String(
+            localized: "~\(Int(minutes))m",
+            comment: "Dose bar: minutes remaining"
+        )
     }
 }
