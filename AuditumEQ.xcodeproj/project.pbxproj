@@ -6,11 +6,27 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		977681282FD473BF00F6CE2F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9789EF072FCF6BC6008D3A9A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9789EF0E2FCF6BC6008D3A9A;
+			remoteInfo = AuditumEQ;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		977681242FD473BF00F6CE2F /* AuditumEQTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AuditumEQTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9789EF0F2FCF6BC6008D3A9A /* AuditumEQ.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AuditumEQ.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		977681252FD473BF00F6CE2F /* AuditumEQTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AuditumEQTests;
+			sourceTree = "<group>";
+		};
 		9789EF112FCF6BC6008D3A9A /* AuditumEQ */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = AuditumEQ;
@@ -19,6 +35,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		977681212FD473BF00F6CE2F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9789EF0C2FCF6BC6008D3A9A /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -33,6 +56,7 @@
 			isa = PBXGroup;
 			children = (
 				9789EF112FCF6BC6008D3A9A /* AuditumEQ */,
+				977681252FD473BF00F6CE2F /* AuditumEQTests */,
 				9789EF102FCF6BC6008D3A9A /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				9789EF0F2FCF6BC6008D3A9A /* AuditumEQ.app */,
+				977681242FD473BF00F6CE2F /* AuditumEQTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -48,6 +73,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		977681232FD473BF00F6CE2F /* AuditumEQTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9776812A2FD473BF00F6CE2F /* Build configuration list for PBXNativeTarget "AuditumEQTests" */;
+			buildPhases = (
+				977681202FD473BF00F6CE2F /* Sources */,
+				977681212FD473BF00F6CE2F /* Frameworks */,
+				977681222FD473BF00F6CE2F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				977681292FD473BF00F6CE2F /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				977681252FD473BF00F6CE2F /* AuditumEQTests */,
+			);
+			name = AuditumEQTests;
+			packageProductDependencies = (
+			);
+			productName = AuditumEQTests;
+			productReference = 977681242FD473BF00F6CE2F /* AuditumEQTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		9789EF0E2FCF6BC6008D3A9A /* AuditumEQ */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 9789EF1A2FCF6BC7008D3A9A /* Build configuration list for PBXNativeTarget "AuditumEQ" */;
@@ -80,6 +128,10 @@
 				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
+					977681232FD473BF00F6CE2F = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = 9789EF0E2FCF6BC6008D3A9A;
+					};
 					9789EF0E2FCF6BC6008D3A9A = {
 						CreatedOnToolsVersion = 26.5;
 					};
@@ -100,11 +152,19 @@
 			projectRoot = "";
 			targets = (
 				9789EF0E2FCF6BC6008D3A9A /* AuditumEQ */,
+				977681232FD473BF00F6CE2F /* AuditumEQTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		977681222FD473BF00F6CE2F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9789EF0D2FCF6BC6008D3A9A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -115,6 +175,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		977681202FD473BF00F6CE2F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9789EF0B2FCF6BC6008D3A9A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -124,7 +191,59 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		977681292FD473BF00F6CE2F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9789EF0E2FCF6BC6008D3A9A /* AuditumEQ */;
+			targetProxy = 977681282FD473BF00F6CE2F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		9776812B2FD473BF00F6CE2F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = YRB6VBTSRV;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shawnbrown.AuditumEQTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AuditumEQ.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AuditumEQ";
+			};
+			name = Debug;
+		};
+		9776812C2FD473BF00F6CE2F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = YRB6VBTSRV;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shawnbrown.AuditumEQTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AuditumEQ.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AuditumEQ";
+			};
+			name = Release;
+		};
 		9789EF182FCF6BC7008D3A9A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -360,6 +479,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		9776812A2FD473BF00F6CE2F /* Build configuration list for PBXNativeTarget "AuditumEQTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9776812B2FD473BF00F6CE2F /* Debug */,
+				9776812C2FD473BF00F6CE2F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		9789EF0A2FCF6BC6008D3A9A /* Build configuration list for PBXProject "AuditumEQ" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
