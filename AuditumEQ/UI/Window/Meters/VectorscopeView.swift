@@ -23,6 +23,12 @@ struct VectorscopeView: View {
                 .fill(Color.black.opacity(0.92))
         )
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        // Purely visual surface — there's no actionable state for VO
+        // users to read or adjust, and the trace shape doesn't have a
+        // useful one-sentence summary. Hide rather than emit a
+        // misleading element. The numeric channel levels are already
+        // exposed by DigitalLRMeter / PopoverLevelStrip.
+        .accessibilityHidden(true)
     }
 
     private func drawBackground(_ ctx: GraphicsContext, size: CGSize) {

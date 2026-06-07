@@ -163,20 +163,23 @@ struct AdvancedEQView: View {
                     VerticalGainSlider(
                         value: gainBinding(profile: profile, frequency: frequency, ear: .left),
                         range: -12...12,
-                        tint: audioState.leftEarColor
+                        tint: audioState.leftEarColor,
+                        accessibilityLabel: "\(formatFreq(frequency)) hertz, both ears"
                     )
                     .frame(width: 40)
                 } else {
                     VerticalGainSlider(
                         value: gainBinding(profile: profile, frequency: frequency, ear: .left),
                         range: -12...12,
-                        tint: audioState.leftEarColor
+                        tint: audioState.leftEarColor,
+                        accessibilityLabel: "\(formatFreq(frequency)) hertz, left ear"
                     )
                     .frame(width: 26)
                     VerticalGainSlider(
                         value: gainBinding(profile: profile, frequency: frequency, ear: .right),
                         range: -12...12,
-                        tint: audioState.rightEarColor
+                        tint: audioState.rightEarColor,
+                        accessibilityLabel: "\(formatFreq(frequency)) hertz, right ear"
                     )
                     .frame(width: 26)
                 }
@@ -267,6 +270,10 @@ private struct VerticalGainSlider: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
     var tint: Color = .blue
+    /// VoiceOver / focus label. Caller supplies the band's frequency
+    /// + ear ("1 kHz, left ear"); the slider exposes the dB value
+    /// itself via `.accessibilityValue`.
+    var accessibilityLabel: String = "Gain"
 
     var body: some View {
         GeometryReader { geo in
@@ -331,6 +338,23 @@ private struct VerticalGainSlider: View {
                         value = max(range.lowerBound, min(range.upperBound, newValue))
                     }
             )
+            // Accessibility: arrow keys / VO swipes nudge ±0.5 dB
+            // (matches the on-screen tick spacing — the major ticks
+            // sit every 0.5 dB). Custom drag-only control was
+            // entirely unreachable without a pointing device before.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityValue(String(format: "%+.1f dB", clampedValue))
+            .accessibilityAdjustableAction { direction in
+                let step = 0.5
+                let target: Double
+                switch direction {
+                case .increment: target = value + step
+                case .decrement: target = value - step
+                @unknown default: return
+                }
+                value = max(range.lowerBound, min(range.upperBound, (target * 10).rounded() / 10))
+            }
         }
     }
 

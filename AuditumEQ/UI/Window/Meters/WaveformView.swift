@@ -22,6 +22,10 @@ struct WaveformView: View {
                 .fill(Color.black.opacity(0.92))
         )
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        // Visual-only oscilloscope trace — same rationale as
+        // VectorscopeView. Numeric channel levels are exposed
+        // elsewhere; the trace shape has no useful VO summary.
+        .accessibilityHidden(true)
     }
 
     private func drawBackground(_ ctx: GraphicsContext, size: CGSize) {
