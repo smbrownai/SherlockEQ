@@ -1,0 +1,314 @@
+/* ==========================================================================
+   smbrownai / shawnnext.ai — design tokens
+   ==========================================================================
+   Single source of truth for colors, type, spacing, radii, shadows, motion.
+   All UI surfaces should reference these vars; no raw hex in production CSS.
+   ========================================================================== */
+
+/* ---- Fonts ------------------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* ---- Color: neutrals (warm-cool, slightly blue-cast) -------------- */
+  --ink:        #0B0D10;  /* near-black, base foreground on light */
+  --ink-2:      #14171C;  /* panel on dark */
+  --ink-3:      #1E2126;  /* hover/border on dark */
+  --ink-4:      #2A2E35;  /* subtle divider on dark */
+
+  --paper:      #FAFAF7;  /* near-white, base background on light */
+  --paper-2:    #F3F3EE;  /* raised surface on light */
+  --paper-3:    #EAEAE3;  /* hover on light */
+  --paper-4:    #DDDDD4;  /* strong border on light */
+
+  --gray-900:   #15181D;
+  --gray-800:   #23272E;
+  --gray-700:   #3A3F48;
+  --gray-600:   #555B66;
+  --gray-500:   #767C86;
+  --gray-400:   #9BA0A8;
+  --gray-300:   #BEC2C8;
+  --gray-200:   #DADCE0;
+  --gray-100:   #EDEEF0;
+  --gray-50:    #F5F6F7;
+
+  /* ---- Color: accents ---------------------------------------------- */
+  /* Primary signal — muted cobalt. Used for focus, links, primary CTA. */
+  --signal:       #3B5BDB;
+  --signal-ink:   #2842B8;   /* press / active */
+  --signal-soft:  #E3E8FA;   /* tint for selected rows, badges */
+  --signal-line:  #B5C2EF;   /* border on signal-soft surfaces */
+
+  /* Secondary — muted teal. One-purpose accent per surface. */
+  --teal:         #2E8B8B;
+  --teal-ink:     #21706F;
+  --teal-soft:    #DDEDEC;
+
+  /* Tertiary — muted violet. Reserved; use sparingly. */
+  --violet:       #6B5BD6;
+  --violet-soft:  #E6E2F6;
+
+  /* ---- Color: semantic --------------------------------------------- */
+  --ok:           #2F8F5E;   /* healthy / success */
+  --ok-soft:      #DDEFE4;
+  --warn:         #B98530;   /* degraded / warning */
+  --warn-soft:    #F4E9D4;
+  --err:          #B84A43;   /* failing / error */
+  --err-soft:     #F4DCDA;
+  --info:         var(--signal);
+  --info-soft:    var(--signal-soft);
+
+  /* ---- Color: foreground/background tokens (light mode default) ---- */
+  --bg-1:   var(--paper);     /* page background */
+  --bg-2:   var(--paper-2);   /* raised card / panel */
+  --bg-3:   var(--paper-3);   /* hover on raised */
+  --bg-4:   var(--paper-4);   /* pressed on raised */
+
+  --fg-1:   var(--ink);       /* primary text */
+  --fg-2:   var(--gray-600);  /* secondary text */
+  --fg-3:   var(--gray-500);  /* muted / meta */
+  --fg-4:   var(--gray-400);  /* disabled / placeholder */
+
+  --line:      #E6E6E1;       /* default 1px border */
+  --line-2:    #D0D0C9;       /* stronger border */
+  --line-soft: #F0F0EA;       /* faint divider */
+
+  /* ---- Type -------------------------------------------------------- */
+  --font-sans: 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Menlo', 'Consolas', monospace;
+
+  /* Size scale (px) */
+  --fs-12: 12px;
+  --fs-13: 13px;
+  --fs-14: 14px;
+  --fs-16: 16px;
+  --fs-18: 18px;
+  --fs-22: 22px;
+  --fs-28: 28px;
+  --fs-36: 36px;
+  --fs-48: 48px;
+  --fs-64: 64px;
+
+  /* Line-heights */
+  --lh-tight:   1.2;   /* headings */
+  --lh-snug:    1.35;
+  --lh-ui:      1.4;   /* UI controls, labels */
+  --lh-body:    1.5;   /* body copy */
+  --lh-loose:   1.65;  /* long-form reading */
+
+  /* Letter-spacing */
+  --ls-tight:   -0.01em;   /* headings >= 28px */
+  --ls-normal:   0em;
+  --ls-label:    0.08em;   /* uppercase eyebrows */
+  --ls-mono:    -0.01em;   /* mono reads wider; tighten slightly */
+
+  /* Weights */
+  --w-regular:  400;
+  --w-medium:   500;
+  --w-semibold: 600;
+
+  /* ---- Spacing (4px grid) ------------------------------------------ */
+  --s-0:  0;
+  --s-1:  2px;
+  --s-2:  4px;
+  --s-3:  6px;
+  --s-4:  8px;
+  --s-5:  12px;
+  --s-6:  16px;
+  --s-7:  20px;
+  --s-8:  24px;
+  --s-9:  32px;
+  --s-10: 40px;
+  --s-11: 48px;
+  --s-12: 64px;
+  --s-13: 80px;
+  --s-14: 96px;
+
+  /* ---- Radii ------------------------------------------------------- */
+  --r-sm:   4px;
+  --r-md:   6px;
+  --r-lg:   8px;
+  --r-pill: 999px;
+
+  /* ---- Shadows (cool-tinted) --------------------------------------- */
+  --shadow-0: 0 0 0 1px rgba(11, 13, 16, 0.06);
+  --shadow-1: 0 1px 0 rgba(11, 13, 16, 0.04), 0 1px 2px rgba(11, 13, 16, 0.04);
+  --shadow-2: 0 4px 12px rgba(11, 13, 16, 0.08), 0 1px 3px rgba(11, 13, 16, 0.06);
+  --ring-focus: 0 0 0 2px var(--paper), 0 0 0 4px var(--signal);
+
+  /* ---- Motion ------------------------------------------------------ */
+  --dur-micro: 120ms;
+  --dur-std:   200ms;
+  --dur-ovl:   320ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit:     cubic-bezier(0.4, 0, 1, 1);
+
+  /* ---- Z-index ----------------------------------------------------- */
+  --z-nav:     10;
+  --z-sticky:  20;
+  --z-overlay: 100;
+  --z-modal:   200;
+  --z-toast:   300;
+}
+
+/* ---- Dark mode (opt-in via [data-theme="dark"]) -------------------- */
+[data-theme="dark"] {
+  --bg-1: var(--ink);
+  --bg-2: var(--ink-2);
+  --bg-3: var(--ink-3);
+  --bg-4: var(--ink-4);
+
+  --fg-1: var(--paper);
+  --fg-2: var(--gray-300);
+  --fg-3: var(--gray-400);
+  --fg-4: var(--gray-500);
+
+  --line:      #1E2126;
+  --line-2:    #2A2E35;
+  --line-soft: #16191E;
+
+  --signal-soft: #1B2450;
+  --signal-line: #2F3E8A;
+  --teal-soft:   #143535;
+  --ok-soft:     #143525;
+  --warn-soft:   #3A2B12;
+  --err-soft:    #3A1916;
+
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --ring-focus: 0 0 0 2px var(--ink), 0 0 0 4px var(--signal);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-1: var(--ink);
+    --bg-2: var(--ink-2);
+    --bg-3: var(--ink-3);
+    --bg-4: var(--ink-4);
+
+    --fg-1: var(--paper);
+    --fg-2: var(--gray-300);
+    --fg-3: var(--gray-400);
+    --fg-4: var(--gray-500);
+
+    --line:      #1E2126;
+    --line-2:    #2A2E35;
+    --line-soft: #16191E;
+  }
+}
+
+/* ==========================================================================
+   Semantic element styles
+   ========================================================================== */
+
+html, body {
+  background: var(--bg-1);
+  color: var(--fg-1);
+  font-family: var(--font-sans);
+  font-size: var(--fs-16);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-sans);
+  font-weight: var(--w-semibold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tight);
+  color: var(--fg-1);
+  margin: 0;
+}
+
+h1 { font-size: var(--fs-48); }
+h2 { font-size: var(--fs-36); }
+h3 { font-size: var(--fs-28); }
+h4 { font-size: var(--fs-22); letter-spacing: var(--ls-normal); }
+h5 { font-size: var(--fs-18); letter-spacing: var(--ls-normal); font-weight: var(--w-medium); }
+h6 { font-size: var(--fs-14); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--fg-2); font-weight: var(--w-medium); }
+
+p {
+  font-size: var(--fs-16);
+  line-height: var(--lh-body);
+  color: var(--fg-1);
+  margin: 0 0 1em 0;
+  text-wrap: pretty;
+}
+
+small, .text-meta {
+  font-size: var(--fs-13);
+  color: var(--fg-3);
+  line-height: var(--lh-ui);
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--fs-12);
+  font-weight: var(--w-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-label);
+  color: var(--fg-3);
+}
+
+code, kbd, pre, samp, .mono {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  letter-spacing: var(--ls-mono);
+}
+
+code {
+  background: var(--bg-2);
+  padding: 1px 5px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  color: var(--fg-1);
+}
+
+pre {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--s-6);
+  overflow: auto;
+  line-height: var(--lh-ui);
+}
+
+pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+a {
+  color: var(--signal);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: var(--s-8) 0;
+}
+
+::selection {
+  background: var(--signal-soft);
+  color: var(--signal-ink);
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+  border-radius: var(--r-sm);
+}
+
+/* ---- Reduced motion ------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+  }
+}

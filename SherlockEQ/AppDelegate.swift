@@ -207,6 +207,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "About \(appName)",
                      action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
                      keyEquivalent: "")
+
+        if UpdaterController.shared.hasUpdater {
+            let check = NSMenuItem(title: "Check for Updates…",
+                                   action: #selector(UpdaterController.checkForUpdates(_:)),
+                                   keyEquivalent: "")
+            check.target = UpdaterController.shared
+            menu.addItem(check)
+        }
+
         menu.addItem(.separator())
 
         let hide = NSMenuItem(title: "Hide \(appName)",

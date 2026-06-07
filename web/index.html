@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SherlockEQ — hearing-correction equalizer for macOS</title>
+  <meta name="description" content="A hearing-correction equalizer for macOS. Locate a tinnitus tone, interpret an audiogram, and shape system audio per ear with precision other apps don't expose." />
+
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+
+  <style>
+    :root {
+      --container: 880px;
+      --gutter: 32px;
+    }
+
+    body { margin: 0; }
+
+    .container {
+      max-width: var(--container);
+      margin: 0 auto;
+      padding-left: var(--gutter);
+      padding-right: var(--gutter);
+    }
+
+    /* ---- Nav ---------------------------------------------------------- */
+    header.nav {
+      padding-top: var(--s-9);
+    }
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      gap: var(--s-7);
+    }
+    .nav-mark {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--s-4);
+      text-decoration: none;
+      color: var(--fg-1);
+    }
+    .nav-mark img {
+      width: 22px;
+      height: 22px;
+      border-radius: var(--r-sm);
+    }
+    .nav-mark .name {
+      font-family: var(--font-mono);
+      font-size: var(--fs-14);
+      font-weight: var(--w-medium);
+      letter-spacing: -0.01em;
+    }
+    .nav-spacer { flex: 1; }
+    .nav-links {
+      display: flex;
+      gap: var(--s-7);
+      font-size: var(--fs-14);
+    }
+    .nav-links a {
+      color: var(--fg-2);
+      text-decoration: none;
+    }
+    .nav-links a:hover { color: var(--fg-1); text-decoration: underline; text-underline-offset: 3px; }
+
+    /* ---- Hero --------------------------------------------------------- */
+    section.hero {
+      padding-top: var(--s-13);
+      padding-bottom: var(--s-12);
+    }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 192px 1fr;
+      gap: var(--s-11);
+      align-items: start;
+    }
+    .hero-icon {
+      width: 192px;
+      height: 192px;
+      border-radius: 36px;
+      box-shadow: var(--shadow-2);
+      background: #161B2E;
+      display: block;
+      object-fit: cover;
+    }
+    .hero h1 {
+      font-size: var(--fs-48);
+      font-weight: var(--w-semibold);
+      line-height: 1.1;
+      letter-spacing: -0.015em;
+      margin: 0 0 var(--s-7);
+      text-wrap: balance;
+    }
+    .hero p.lede {
+      font-size: var(--fs-18);
+      color: var(--fg-2);
+      line-height: var(--lh-body);
+      max-width: 56ch;
+      margin: 0 0 var(--s-9);
+    }
+    .cta-row {
+      display: flex;
+      gap: var(--s-4);
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--s-3);
+      font-family: var(--font-sans);
+      font-size: var(--fs-14);
+      font-weight: var(--w-medium);
+      padding: 10px 16px;
+      border-radius: var(--r-md);
+      text-decoration: none;
+      border: 1px solid transparent;
+      transition: background-color var(--dur-std) var(--ease-standard);
+    }
+    .btn-primary {
+      background: var(--ink);
+      color: var(--paper);
+      border-color: var(--ink);
+    }
+    .btn-primary:hover { background: var(--gray-800); text-decoration: none; }
+    .btn-secondary {
+      background: transparent;
+      color: var(--fg-1);
+      border-color: var(--line-2);
+    }
+    .btn-secondary:hover { background: var(--bg-2); text-decoration: none; }
+
+    .meta-row {
+      margin-top: var(--s-6);
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+    }
+    .meta-row .dot {
+      display: inline-block;
+      width: 3px; height: 3px;
+      border-radius: 999px;
+      background: var(--fg-4);
+      vertical-align: middle;
+      margin: 0 8px;
+    }
+
+    /* ---- Section header ---------------------------------------------- */
+    section { padding-top: var(--s-11); padding-bottom: var(--s-11); }
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      gap: var(--s-7);
+      border-bottom: 1px solid var(--line);
+      padding-bottom: var(--s-5);
+      margin-bottom: var(--s-9);
+    }
+    .section-head h2 {
+      font-size: var(--fs-22);
+      font-weight: var(--w-semibold);
+      margin: 0;
+      letter-spacing: var(--ls-normal);
+    }
+    .section-head .index {
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+    }
+
+    /* ---- What it does ------------------------------------------------- */
+    .pillars {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--s-7);
+    }
+    .pillar h3 {
+      font-size: var(--fs-16);
+      font-weight: var(--w-medium);
+      letter-spacing: var(--ls-normal);
+      margin: 0 0 var(--s-3);
+      color: var(--fg-1);
+      display: flex; align-items: center; gap: var(--s-3);
+    }
+    .pillar .key {
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+      margin-bottom: var(--s-3);
+    }
+    .pillar p {
+      font-size: var(--fs-14);
+      color: var(--fg-2);
+      line-height: var(--lh-body);
+      margin: 0;
+    }
+
+    /* ---- Audience list ------------------------------------------------ */
+    .audience {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      border-top: 1px solid var(--line-soft);
+    }
+    .audience li {
+      padding: var(--s-6) 0;
+      border-bottom: 1px solid var(--line-soft);
+      display: flex;
+      gap: var(--s-7);
+      align-items: baseline;
+    }
+    .audience .who {
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+      width: 160px;
+      flex-shrink: 0;
+    }
+    .audience .what {
+      font-size: var(--fs-15, 15px);
+      color: var(--fg-1);
+      line-height: var(--lh-body);
+      max-width: 60ch;
+    }
+
+    /* ---- Install ----------------------------------------------------- */
+    .install-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--s-7);
+    }
+    .install-card {
+      background: var(--bg-1);
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow-1);
+      padding: var(--s-7);
+    }
+    .install-card h3 {
+      font-size: var(--fs-14);
+      font-weight: var(--w-medium);
+      margin: 0 0 var(--s-3);
+      color: var(--fg-1);
+      letter-spacing: var(--ls-normal);
+      display: flex; align-items: center; gap: var(--s-3);
+    }
+    .install-card p {
+      font-size: var(--fs-13);
+      color: var(--fg-2);
+      margin: 0 0 var(--s-6);
+      line-height: var(--lh-ui);
+    }
+    .install-card pre {
+      margin: 0;
+      font-size: var(--fs-13);
+    }
+    .install-card .btn {
+      margin-top: var(--s-6);
+    }
+
+    /* ---- Requirements ------------------------------------------------- */
+    .req-grid {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      row-gap: var(--s-5);
+      column-gap: var(--s-7);
+      font-family: var(--font-mono);
+      font-size: var(--fs-13);
+      color: var(--fg-1);
+    }
+    .req-grid dt {
+      color: var(--fg-3);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+      font-size: var(--fs-12);
+    }
+    .req-grid dd { margin: 0; }
+    .req-grid .note {
+      color: var(--fg-3);
+      font-family: var(--font-sans);
+      font-size: var(--fs-13);
+      display: block;
+      margin-top: 2px;
+    }
+
+    /* ---- Notes / inside joke ----------------------------------------- */
+    .notes {
+      font-family: var(--font-mono);
+      font-size: var(--fs-13);
+      color: var(--fg-3);
+      max-width: 60ch;
+      line-height: var(--lh-body);
+    }
+    .notes em {
+      font-style: normal;
+      color: var(--fg-2);
+    }
+
+    /* ---- Footer ------------------------------------------------------- */
+    footer.site-footer {
+      border-top: 1px solid var(--line);
+      margin-top: var(--s-12);
+      padding: var(--s-8) 0;
+    }
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      gap: var(--s-7);
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+    }
+    .footer-inner a {
+      color: var(--fg-3);
+      text-decoration: none;
+    }
+    .footer-inner a:hover { color: var(--fg-1); text-decoration: underline; text-underline-offset: 3px; }
+    .footer-spacer { flex: 1; }
+
+    /* ---- Responsive --------------------------------------------------- */
+    @media (max-width: 720px) {
+      .hero-grid { grid-template-columns: 1fr; gap: var(--s-9); }
+      .hero-icon { width: 128px; height: 128px; border-radius: 24px; }
+      .hero h1 { font-size: var(--fs-36); }
+      .pillars { grid-template-columns: 1fr; }
+      .install-grid { grid-template-columns: 1fr; }
+      .audience li { flex-direction: column; gap: var(--s-3); }
+      .audience .who { width: auto; }
+      .req-grid { grid-template-columns: 1fr; row-gap: var(--s-3); }
+      .req-grid dt { margin-top: var(--s-3); }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="nav-mark" href="#">
+        <img src="assets/sherlockeq.png" alt="" onerror="this.style.background='#161B2E'; this.src='assets/favicon.svg';" />
+        <span class="name">SherlockEQ</span>
+      </a>
+      <div class="nav-spacer"></div>
+      <nav class="nav-links">
+        <a href="#what">What it does</a>
+        <a href="#install">Install</a>
+        <a href="#requirements">Requirements</a>
+        <a href="https://github.com/shawnbrown/SherlockEQ">Source <i data-lucide="arrow-up-right" style="width:12px;height:12px"></i></a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- =================================================================
+       Hero
+       ================================================================= -->
+  <section class="hero">
+    <div class="container hero-grid">
+      <img class="hero-icon" src="assets/sherlockeq.png" alt="SherlockEQ app icon — a gold magnifying glass over an audio waveform on a navy field." />
+      <div>
+        <div class="eyebrow" style="margin-bottom: var(--s-6);">MACOS · SYSTEM-AUDIO EQUALIZER</div>
+        <h1>Notice what other equalizers don't expose.</h1>
+        <p class="lede">
+          SherlockEQ is a hearing-correction equalizer for macOS. It taps system audio, splits the chain per ear, and gives you the controls to locate a tinnitus tone, interpret an audiogram, and refine an EQ to your actual hearing — not the version most apps and streaming services let you reach.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#install">
+            <i data-lucide="arrow-down-to-line" style="width:16px;height:16px"></i>
+            Download for macOS
+          </a>
+          <a class="btn btn-secondary" href="#what">
+            How it works
+          </a>
+        </div>
+        <div class="meta-row">
+          v1.0 <span class="dot"></span> macOS 14.6+ <span class="dot"></span> Apple Silicon and Intel <span class="dot"></span> 8.2 MB
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       What it does
+       ================================================================= -->
+  <section id="what">
+    <div class="container">
+      <div class="section-head">
+        <h2>What it does</h2>
+        <div class="nav-spacer"></div>
+        <span class="index">THREE INVESTIGATIONS</span>
+      </div>
+
+      <div class="pillars">
+        <div class="pillar">
+          <div class="key">01 · LOCATE</div>
+          <h3>Find a tinnitus tone</h3>
+          <p>
+            A continuous-phase sine sweep across the audible range, fine-tunable to one hertz. When the tone matches, set it as a per-ear notch and remove only that frequency from playback.
+          </p>
+        </div>
+        <div class="pillar">
+          <div class="key">02 · INTERPRET</div>
+          <h3>Translate an audiogram</h3>
+          <p>
+            Drag thresholds on a log-frequency chart for each ear. SherlockEQ converts them into a biquad EQ that compensates only where you actually have loss, and shows the resulting curve in real time.
+          </p>
+        </div>
+        <div class="pillar">
+          <div class="key">03 · REFINE</div>
+          <h3>Shape any frequency, per ear</h3>
+          <p>
+            Four EQ modes from one-knob shelves to a fully parametric canvas. Independent left and right chains. Headphone correction via AutoEQ profiles. A live spectrum with safety overlays and dose tracking on top.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       Who it's for
+       ================================================================= -->
+  <section id="who">
+    <div class="container">
+      <div class="section-head">
+        <h2>Who it is for</h2>
+      </div>
+
+      <ul class="audience">
+        <li>
+          <span class="who">HEARING LOSS</span>
+          <span class="what">For listeners whose loss is asymmetric, frequency-specific, or under-served by a single tone control. Better sound is rarely louder sound.</span>
+        </li>
+        <li>
+          <span class="who">TINNITUS</span>
+          <span class="what">A workflow to find the pitch, set a per-ear notch, and stop fatiguing it. The notch travels with every profile and survives device changes.</span>
+        </li>
+        <li>
+          <span class="who">CRITICAL LISTENERS</span>
+          <span class="what">For anyone chasing harshness, muddiness, or fatigue who wants more than a five-band slider. Operates on the system bus, not per-app.</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       Install
+       ================================================================= -->
+  <section id="install">
+    <div class="container">
+      <div class="section-head">
+        <h2>Install</h2>
+        <div class="nav-spacer"></div>
+        <span class="index">SIGNED · NOTARIZED</span>
+      </div>
+
+      <div class="install-grid">
+        <div class="install-card">
+          <h3><i data-lucide="arrow-down-to-line" style="width:14px;height:14px;color:var(--fg-2)"></i> Direct download</h3>
+          <p>Signed and notarized .dmg from GitHub Releases. Drag SherlockEQ into Applications and launch.</p>
+          <pre><code>SherlockEQ-1.0.0.dmg
+8.2 MB · sha256 a1b2c3…</code></pre>
+          <a class="btn btn-primary" href="https://github.com/shawnbrown/SherlockEQ/releases/latest">
+            Download .dmg
+            <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i>
+          </a>
+        </div>
+
+        <div class="install-card">
+          <h3><i data-lucide="terminal" style="width:14px;height:14px;color:var(--fg-2)"></i> Homebrew</h3>
+          <p>Installs the same notarized bundle and tracks updates via <code>brew upgrade</code>. The in-app updater stands down when installed this way.</p>
+          <pre><code>brew tap shawnbrown/sherlockeq
+brew install --cask sherlockeq</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       Requirements
+       ================================================================= -->
+  <section id="requirements">
+    <div class="container">
+      <div class="section-head">
+        <h2>Requirements</h2>
+      </div>
+
+      <dl class="req-grid">
+        <dt>OS</dt>
+        <dd>
+          macOS 14.6 or later
+          <span class="note">Core Audio process taps require Sonoma 14.2 minimum; 14.6 is the engine's tested floor.</span>
+        </dd>
+
+        <dt>HARDWARE</dt>
+        <dd>
+          Apple Silicon and Intel
+          <span class="note">Universal binary. The audio path is vectorized via Accelerate on both architectures.</span>
+        </dd>
+
+        <dt>PERMISSIONS</dt>
+        <dd>
+          Microphone · Screen &amp; System Audio Recording
+          <span class="note">Screen Recording is what macOS requires to capture audio from other processes. SherlockEQ does not record video or screen contents.</span>
+        </dd>
+
+        <dt>PRIVACY</dt>
+        <dd>
+          No telemetry, no account
+          <span class="note">Profiles and settings live in <code>~/Library/Application Support/SherlockEQ/</code>. Nothing leaves the machine unless you export it.</span>
+        </dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       Notes
+       ================================================================= -->
+  <section id="notes">
+    <div class="container">
+      <div class="section-head">
+        <h2>Notes</h2>
+      </div>
+
+      <p class="notes">
+        <em>On the name.</em> Sherlocking is what happens when Apple ships a feature that copies an independent app. SherlockEQ is built around exactly the kind of system audio processing macOS does not expose. So: Apple, sherlock this. The author would consider that a win.
+      </p>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       Footer
+       ================================================================= -->
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <span>SherlockEQ · built by <a href="https://shawnnext.ai">shawnnext.ai</a></span>
+      <div class="footer-spacer"></div>
+      <a href="https://github.com/shawnbrown/SherlockEQ">Source</a>
+      <span>·</span>
+      <a href="mailto:hi@shawnnext.ai">hi@shawnnext.ai</a>
+    </div>
+  </footer>
+
+  <script>
+    if (window.lucide) window.lucide.createIcons();
+    else window.addEventListener('load', () => window.lucide && window.lucide.createIcons());
+  </script>
+</body>
+</html>

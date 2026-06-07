@@ -1,0 +1,23 @@
+<?xml version="1.0" standalone="yes"?>
+<!--
+  SherlockEQ Sparkle appcast.
+
+  Hosted at:  https://sherlockeq.app/appcast.xml
+  Updated by: dist/appcast-publish.sh on each release.
+
+  Sparkle reads <item> entries newest-first. New releases prepend a fresh
+  <item> above the previous ones; keep old entries indefinitely so users
+  on older versions can still see the changelog of what they're missing.
+-->
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
+     xmlns:dc="http://purl.org/dc/elements/1.1/"
+     version="2.0">
+  <channel>
+    <title>SherlockEQ</title>
+    <link>https://sherlockeq.app/appcast.xml</link>
+    <description>Updates for SherlockEQ.</description>
+    <language>en</language>
+
+    <!-- NEW RELEASES GO BELOW THIS LINE -->
+  </channel>
+</rss>
