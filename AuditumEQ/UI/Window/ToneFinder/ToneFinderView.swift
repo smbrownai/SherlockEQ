@@ -214,6 +214,23 @@ struct ToneFinderView: View {
                         generator.targetFrequencyHz = hzFor(x: value.location.x, width: geo.size.width)
                     }
             )
+            // Tone Finder's whole purpose is "what frequency matches
+            // my tinnitus" — without an adjustable accessibility
+            // surface, VO users and no-mouse users couldn't operate
+            // the screen at all. .accessibilityAdjustableAction wires
+            // arrow keys / VO swipes to ±10 Hz coarse nudges (matches
+            // the fine-tune buttons below); the +/− 1 / 100 buttons
+            // remain as standard controls for finer / coarser steps.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Tone frequency")
+            .accessibilityValue("\(Int(currentHz.rounded())) hertz")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: nudge(10)
+                case .decrement: nudge(-10)
+                @unknown default: break
+                }
+            }
         }
         .frame(height: 120)
     }
