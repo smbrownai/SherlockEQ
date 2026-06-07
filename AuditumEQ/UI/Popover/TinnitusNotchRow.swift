@@ -11,7 +11,8 @@ struct TinnitusNotchRow: View {
             Text("Tinnitus Notch")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
-                .frame(width: 100, alignment: .leading)
+                .frame(minWidth: 100, alignment: .leading)
+                .layoutPriority(1)
 
             Toggle("", isOn: toggleBinding)
                 .toggleStyle(.switch)

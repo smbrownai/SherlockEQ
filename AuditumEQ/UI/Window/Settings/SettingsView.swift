@@ -111,7 +111,7 @@ struct SettingsView: View {
         return HStack {
             Text("Master gain")
                 .foregroundStyle(.secondary)
-                .frame(width: 120, alignment: .leading)
+                .frame(minWidth: 120, alignment: .leading).layoutPriority(1)
             Slider(
                 value: Binding(
                     get: { audioState.masterGainDB },
@@ -194,7 +194,7 @@ struct SettingsView: View {
         return HStack {
             Text(label)
                 .foregroundStyle(.secondary)
-                .frame(width: 120, alignment: .leading)
+                .frame(minWidth: 120, alignment: .leading).layoutPriority(1)
             Slider(value: Binding(get: { value }, set: set), in: range)
                 .controlSize(.small)
             Text(format(value))
@@ -243,7 +243,7 @@ struct SettingsView: View {
         return HStack {
             Text(label)
                 .foregroundStyle(.secondary)
-                .frame(width: 120, alignment: .leading)
+                .frame(minWidth: 120, alignment: .leading).layoutPriority(1)
             ColorPicker("", selection: binding, supportsOpacity: false)
                 .labelsHidden()
                 .frame(width: 44)

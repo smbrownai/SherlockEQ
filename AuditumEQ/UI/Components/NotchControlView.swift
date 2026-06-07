@@ -46,7 +46,7 @@ struct NotchControlView: View {
 
             HStack {
                 Text("Width")
-                    .frame(width: 100, alignment: .leading)
+                    .frame(minWidth: 100, alignment: .leading).layoutPriority(1)
                 Picker("", selection: Binding(
                     get: { notch.qWidth },
                     set: { notch.qWidth = $0 }
@@ -76,12 +76,12 @@ struct NotchControlView: View {
         format: @escaping (Double) -> String
     ) -> some View {
         HStack {
-            Text(label).frame(width: 100, alignment: .leading)
+            Text(label).frame(minWidth: 100, alignment: .leading).layoutPriority(1)
             Slider(value: value, in: range)
                 .controlSize(.small)
             Text(format(value.wrappedValue))
                 .font(.callout.monospaced())
-                .frame(width: 88, alignment: .trailing)
+                .frame(minWidth: 88, alignment: .trailing)
         }
         .disabled(!notch.enabled)
     }
