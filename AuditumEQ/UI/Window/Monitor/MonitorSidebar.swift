@@ -198,10 +198,13 @@ struct MonitorSidebar: View {
 
     @ViewBuilder private var doseSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
+            HStack(spacing: 4) {
                 Text("Today's Dose")
                     .font(.caption.weight(.semibold))
                 Spacer()
+                Image(systemName: doseZoneSymbol)
+                    .foregroundStyle(doseColor)
+                    .font(.caption.weight(.semibold))
                 Text(String(format: "%.0f %%", audioState.sessionDosePercent * 100))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(doseColor)
@@ -216,6 +219,9 @@ struct MonitorSidebar: View {
             }
             .frame(height: 5)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Today's listening dose")
+        .accessibilityValue(doseAccessibilityValue)
     }
 
     private var doseColor: Color {
@@ -224,6 +230,28 @@ struct MonitorSidebar: View {
         case .amber: return .orange
         case .red:   return .red
         }
+    }
+
+    /// Non-color redundant encoding paired with `doseColor` so the
+    /// severity reads for colorblind users without relying on tint.
+    private var doseZoneSymbol: String {
+        switch audioState.safeListening.doseSeverity {
+        case .safe:  return "checkmark.shield.fill"
+        case .amber: return "exclamationmark.triangle.fill"
+        case .red:   return "exclamationmark.octagon.fill"
+        }
+    }
+
+    private var doseAccessibilityValue: String {
+        let percent = Int(audioState.sessionDosePercent * 100)
+        let zone: String = {
+            switch audioState.safeListening.doseSeverity {
+            case .safe:  return "safe"
+            case .amber: return "approaching limit"
+            case .red:   return "at or past limit"
+            }
+        }()
+        return "\(percent)%, \(zone)"
     }
 }
 
@@ -253,6 +281,14 @@ struct DigitalLRMeter: View {
 
     @ViewBuilder
     private func channelColumn(label: String, peak: Float) -> some View {
+        let peakDB = peak > 1e-5 ? 20 * log10(Double(peak)) : -60.0
+        let zone: String = {
+            let yellowBoundary = 70 - calibrationOffsetDBA
+            let redBoundary = 85 - calibrationOffsetDBA
+            if peakDB >= redBoundary { return "very loud" }
+            if peakDB >= yellowBoundary { return "loud" }
+            return "moderate"
+        }()
         VStack(spacing: 5) {
             Text(label)
                 .font(.caption2.monospaced().weight(.bold))
@@ -260,6 +296,9 @@ struct DigitalLRMeter: View {
             meterBar(peak: peak)
                 .frame(width: 18)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label) channel peak level")
+        .accessibilityValue(String(format: "%.0f dBFS, %@", peakDB, zone))
     }
 
     /// dBFS scale alongside the L/R bars. Calibration-independent —
@@ -349,6 +388,20 @@ struct DigitalLRMeter: View {
                         .frame(height: yRed - yPeak)
                         .offset(y: yPeak)
                 }
+
+                // Zone-boundary tick marks. Non-color redundant
+                // encoding so colorblind users can locate the
+                // moderate / loud / very-loud thresholds without
+                // relying on the green / yellow / red transitions.
+                // LevelMeterView already draws equivalent ticks.
+                Rectangle()
+                    .fill(Color.primary.opacity(0.55))
+                    .frame(height: 1)
+                    .offset(y: yYellow)
+                Rectangle()
+                    .fill(Color.primary.opacity(0.55))
+                    .frame(height: 1)
+                    .offset(y: yRed)
             }
             .clipShape(RoundedRectangle(cornerRadius: 3))
         }
