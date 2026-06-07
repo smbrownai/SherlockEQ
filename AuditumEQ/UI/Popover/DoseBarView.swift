@@ -17,12 +17,28 @@ struct DoseBarView: View {
         }
     }
 
+    /// Redundant non-color encoding paired with `tint`. Colorblind
+    /// users see the icon shape distinguish safe / approaching / at-
+    /// limit without relying on green vs orange vs red. Same pattern
+    /// LevelMeterView uses for its zone labels.
+    private var zoneSymbol: String {
+        switch clamped {
+        case ..<0.6:  return "checkmark.shield.fill"
+        case ..<0.85: return "exclamationmark.triangle.fill"
+        default:      return "exclamationmark.octagon.fill"
+        }
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             Text("Today's Dose")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
-                .frame(width: 80, alignment: .leading)
+                // minWidth instead of width so localized strings
+                // ("Heutige Dosis", "Dose du jour") can grow past 80pt
+                // at large Dynamic Type without truncating.
+                .frame(minWidth: 80, alignment: .leading)
+                .layoutPriority(1)
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
@@ -34,16 +50,42 @@ struct DoseBarView: View {
             }
             .frame(height: 8)
 
-            Text("\(Int(clamped * 100))%")
-                .font(.caption.monospaced())
-                .frame(width: 38, alignment: .trailing)
+            // Icon paired with the percent value gives colorblind
+            // users the same severity signal the bar tint carries.
+            HStack(spacing: 4) {
+                Image(systemName: zoneSymbol)
+                    .foregroundStyle(tint)
+                    .font(.caption.weight(.semibold))
+                Text("\(Int(clamped * 100))%")
+                    .font(.caption.monospaced())
+            }
+            .frame(minWidth: 56, alignment: .trailing)
 
             Text(remainingLabel)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .frame(width: 64, alignment: .trailing)
+                .frame(minWidth: 64, alignment: .trailing)
         }
+        // Roll the four sibling Texts into one VO element so the
+        // bar reads as "Today's listening dose: 47%, ~3h 12m
+        // remaining" instead of four separate fragments in unspecified
+        // order. Safety-critical surface — needs to read as one thing.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Today's listening dose")
+        .accessibilityValue(accessibilityValueString)
+    }
+
+    private var accessibilityValueString: String {
+        let percentStr = "\(Int(clamped * 100))%"
+        let zone: String = {
+            switch clamped {
+            case ..<0.6:  return "safe"
+            case ..<0.85: return "approaching limit"
+            default:      return "at or past limit"
+            }
+        }()
+        return "\(percentStr), \(zone), \(remainingLabel)"
     }
 
     private var remainingLabel: String {
