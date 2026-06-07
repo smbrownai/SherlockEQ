@@ -176,7 +176,7 @@ final class StereoMonitor: ObservableObject {
     /// instances could share writers, and Swift 6 strict-concurrency wants
     /// the contract spelled out.
     nonisolated private static let lastLoggedChannelCount = OSAllocatedUnfairLock<Int>(initialState: 0)
-    nonisolated private static let monitorLog = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "StereoMonitor")
+    nonisolated private static let monitorLog = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "StereoMonitor")
 
     /// Called from the audio tap callback. Realtime-safe — bounded
     /// memcpy + one lock release. No `@Published` mutation here, so we

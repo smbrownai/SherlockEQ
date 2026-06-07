@@ -11,7 +11,7 @@
 import Testing
 @testable import AuditumEQ
 
-struct AuditumEQModuleTests {
+struct SherlockEQModuleTests {
 
     @Test func canImportInternals() {
         // Smoke — if @testable import compiles and we can reach internal

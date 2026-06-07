@@ -45,7 +45,7 @@ final class SafeListeningTracker: ObservableObject {
     private var lastUpdateTime: Date?
     private var quietStartTime: Date?
     private var currentResetDay: Date = Calendar.current.startOfDay(for: Date())
-    private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "SafeListening")
+    private let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "SafeListening")
 
     /// Power-domain rolling average of A-weighted level over the last
     /// ~minute (linear units, 10^(dBA/10)). Used to estimate "remaining

@@ -1,5 +1,5 @@
-# AuditumEQ — Specification
-**Name:** AuditumEQ
+# SherlockEQ — Specification
+**Name:** SherlockEQ
 **Type:** macOS hybrid app — menu bar popover + full main window
 **Target OS:** macOS 14.2 (Sonoma) and later
 **Language:** Swift 5.9+ / SwiftUI
@@ -10,7 +10,7 @@
 
 ## 1. Positioning
 
-AuditumEQ is a **system-wide audio personalization tool** for macOS users whose hearing
+SherlockEQ is a **system-wide audio personalization tool** for macOS users whose hearing
 doesn't match factory defaults — people with mild-to-moderate hearing loss, tinnitus,
 asymmetric hearing, or simply ears that have changed over time.
 
@@ -66,11 +66,11 @@ listeners hear. Uses bypass/reference mode to A/B their mix against their hearin
 
 ## 4. UI Surface Map
 
-This is the architectural decision that shapes everything else. AuditumEQ has two surfaces
+This is the architectural decision that shapes everything else. SherlockEQ has two surfaces
 with a clean division of responsibility.
 
 ### Menu Bar Popover (~380pt wide)
-The popover is for **operating** AuditumEQ, not configuring it. It is what you interact
+The popover is for **operating** SherlockEQ, not configuring it. It is what you interact
 with a dozen times a day without thinking. It dismisses when you click away.
 
 What belongs here:
@@ -80,7 +80,7 @@ What belongs here:
 - Tinnitus notch on/off toggle
 - Reference mode button (prominent, hold or click)
 - Output device picker
-- "Open AuditumEQ" button → opens the main window
+- "Open SherlockEQ" button → opens the main window
 
 What does NOT belong here:
 - Audiogram entry
@@ -91,7 +91,7 @@ What does NOT belong here:
 - Settings
 
 ### Main Window (~860 × 600pt, resizable)
-The window is for **configuring** AuditumEQ. It is opened deliberately. It appears in the
+The window is for **configuring** SherlockEQ. It is opened deliberately. It appears in the
 Dock and CMD+Tab while open. It has a sidebar-based navigation modeled on System
 Settings — clear sections, no nested sheets required for primary tasks.
 
@@ -130,7 +130,7 @@ Each profile contains:
 - Creation date and last modified date
 - Optional: linked output device (auto-activates when device connects)
 
-Profiles are stored as JSON in `~/Library/Application Support/AuditumEQ/profiles/`.
+Profiles are stored as JSON in `~/Library/Application Support/SherlockEQ/profiles/`.
 Optional iCloud Drive sync via `NSUbiquitousKeyValueStore` (lightweight, for v2).
 
 ---
@@ -159,7 +159,7 @@ Values entered in **dB HL** (hearing level, as reported on audiograms).
 
 **Caveat messaging (non-clinical):**
 > "For losses above 40 dB, an EQ alone may not fully restore clarity — a hearing
-> professional can discuss additional options. AuditumEQ is not a substitute for hearing aids."
+> professional can discuss additional options. SherlockEQ is not a substitute for hearing aids."
 
 **Per-ear independence:**
 Left and right ears are configured separately. Most hearing loss is asymmetric. The
@@ -173,7 +173,7 @@ A narrow frequency cut applied at the user's tinnitus pitch. Research on tailor-
 notch training (TMNT) shows that sustained reduction of stimulation around the tinnitus
 frequency can reduce perceived loudness over time.
 
-**AuditumEQ makes no therapeutic claims.** The notch filter is presented simply as a way
+**SherlockEQ makes no therapeutic claims.** The notch filter is presented simply as a way
 to reduce the presence of frequencies that are already mentally fatiguing to the user.
 
 **Popover:** On/off toggle + frequency label only.
@@ -185,7 +185,7 @@ visible notch on the EQ curve in the parametric canvas.
 
 ### 5.4 Safe Listening Monitor
 
-AuditumEQ estimates output loudness using FFT analysis on the post-EQ audio stream and
+SherlockEQ estimates output loudness using FFT analysis on the post-EQ audio stream and
 tracks a session dose based on NIOSH's 3 dB exchange rate standard:
 
 | Level (dBA) | Safe Duration |
@@ -477,7 +477,7 @@ A-weighting coefficients. Called at ~1 Hz from the analysis loop.
 - Icon: `waveform.and.magnifyingglass` or a custom waveform-with-notch asset
 - Tinted amber or red when dose warning is active
 - Left-click: open/close popover
-- Right-click: quick menu — active profile name, Reference Mode toggle, Open AuditumEQ,
+- Right-click: quick menu — active profile name, Reference Mode toggle, Open SherlockEQ,
   Quit
 
 ---
@@ -488,7 +488,7 @@ The 5-second surface. Dismisses on click-outside. Never shows charts or canvases
 
 ```
 ┌──────────────────────────────────────────┐
-│  ≋ AuditumEQ        [AirPods Pro ▾]  [↗]  │  ← [↗] opens main window
+│  ≋ SherlockEQ        [AirPods Pro ▾]  [↗]  │  ← [↗] opens main window
 ├──────────────────────────────────────────┤
 │  Session  ████████░░░░  67%  ~1h 20m    │  ← dose bar
 ├──────────────────────────────────────────┤
@@ -503,7 +503,7 @@ The 5-second surface. Dismisses on click-outside. Never shows charts or canvases
 └──────────────────────────────────────────┘
 ```
 
-The "Open AuditumEQ" button (↗) in the header opens the main window and brings it to
+The "Open SherlockEQ" button (↗) in the header opens the main window and brings it to
 front. If the window is already open, it focuses it.
 
 ---
@@ -588,7 +588,7 @@ Opens as a separate window (not a sheet over the main window). Covers:
    - "Set up manually" → opens main window at Profiles section
 
 2. **Permission** — before any audio starts:
-   > "AuditumEQ needs access to system audio to apply your hearing profile."
+   > "SherlockEQ needs access to system audio to apply your hearing profile."
    > [Grant Access] → triggers macOS privacy sheet
 
 3. **Wizard — Profile name + device link**
@@ -601,7 +601,7 @@ Opens as a separate window (not a sheet over the main window). Covers:
 
 7. **Wizard — Safe listening ceiling** (slider, explanation of the NIOSH standard)
 
-8. **Done** — "Your profile is active. AuditumEQ is running in your menu bar." Closes
+8. **Done** — "Your profile is active. SherlockEQ is running in your menu bar." Closes
    onboarding window, opens main window briefly to show the finished profile, then
    the main window can be dismissed.
 
@@ -610,13 +610,13 @@ Opens as a separate window (not a sheet over the main window). Covers:
 ## 9. Project File Structure
 
 ```
-AuditumEQ/
-├── AuditumEQApp.swift                      ← @main, WindowGroup, activation policy
+SherlockEQ/
+├── SherlockEQApp.swift                      ← @main, WindowGroup, activation policy
 ├── MenuBarController.swift              ← NSStatusItem, NSPopover, right-click menu
 │
 ├── Audio/
 │   ├── CATapEngine.swift                ← Core Audio Taps, device change handling
-│   ├── AuditumEQAudioEngine.swift          ← AVAudioEngine graph, L/R chains, bypass
+│   ├── SherlockEQAudioEngine.swift          ← AVAudioEngine graph, L/R chains, bypass
 │   ├── SpectrumAnalyzer.swift           ← vDSP FFT, A-weighting
 │   ├── AutoEQParser.swift               ← Parse AutoEQ .txt → [EQBand]
 │   └── ToneGenerator.swift             ← Sine sweep for Tone Finder
@@ -678,12 +678,12 @@ AuditumEQ/
 │   │   └── DevicePickerView.swift
 │   │
 │   └── Theme/
-│       └── AuditumEQTheme.swift            ← Color, font, spacing tokens
+│       └── SherlockEQTheme.swift            ← Color, font, spacing tokens
 │
 └── Resources/
     ├── Assets.xcassets
     ├── Info.plist
-    └── AuditumEQ.entitlements
+    └── SherlockEQ.entitlements
 ```
 
 ---
@@ -691,7 +691,7 @@ AuditumEQ/
 ## 10. Entitlements
 
 ```xml
-<!-- AuditumEQ.entitlements -->
+<!-- SherlockEQ.entitlements -->
 <key>com.apple.security.device.audio-input</key>
 <true/>
 ```
@@ -699,7 +699,7 @@ AuditumEQ/
 `Info.plist`:
 ```xml
 <key>NSMicrophoneUsageDescription</key>
-<string>AuditumEQ uses system audio access to apply your hearing profile to all apps on your Mac.</string>
+<string>SherlockEQ uses system audio access to apply your hearing profile to all apps on your Mac.</string>
 ```
 
 No privileged helper. No driver installation. No password prompt.
@@ -710,7 +710,7 @@ No privileged helper. No driver installation. No password prompt.
 
 ```bash
 # In Xcode: File > New > Project > macOS > App
-# Product name: AuditumEQ
+# Product name: SherlockEQ
 # Interface: SwiftUI
 # Language: Swift
 # Uncheck "Include Tests" for now
@@ -719,7 +719,7 @@ No privileged helper. No driver installation. No password prompt.
 #   This suppresses the default Dock icon at launch;
 #   MenuBarController manages activation policy dynamically.
 
-cd ~/code/auditumEQ
+cd ~/code/SherlockEQ
 git init && git add . && git commit -m "initial xcode project"
 claude
 ```
@@ -729,7 +729,7 @@ claude
 | Session | Surface   | Goal |
 |---------|-----------|------|
 | 1  | —          | `CATapEngine.swift` — permission, tap lifecycle, device change |
-| 2  | —          | `AuditumEQAudioEngine.swift` — L/R EQ chains, bypass, connect to tap |
+| 2  | —          | `SherlockEQAudioEngine.swift` — L/R EQ chains, bypass, connect to tap |
 | 3  | —          | `Models/` — Codable structs, `ProfileStore`, JSON round-trip |
 | 4  | Popover    | `MenuBarController` + `MainPopoverView` — popover opens, dose bar placeholder |
 | 5  | Popover    | `CompensationSliderView`, `ReferenceButton`, profile switcher — wired to `AudioState` |
@@ -747,7 +747,7 @@ claude
 | 17 | Both       | Device auto-switching, `SettingsView`, activation policy, polish |
 
 **Suggested first Claude Code prompt:**
-> "Create `Audio/CATapEngine.swift` in the AuditumEQ Xcode project. It should request
+> "Create `Audio/CATapEngine.swift` in the SherlockEQ Xcode project. It should request
 > system audio capture permission using `AVCaptureDevice.requestAccess(for: .audio)`,
 > create a `CATapDescription` targeting all processes on the default output device,
 > create a private aggregate device using `AudioHardwareCreateAggregateDevice`, and
@@ -761,7 +761,7 @@ claude
 
 | Item | Notes |
 |------|-------|
-| App name | "AuditumEQ" — name is set. Still confirm no App Store trademark conflicts before public release. |
+| App name | "SherlockEQ" — name is set. Still confirm no App Store trademark conflicts before public release. |
 | App Store distribution | Core Audio Taps requires `com.apple.security.device.audio-input` outside the App Store sandbox. Plan for notarized DMG distribution (same as eqMac). Worth a direct inquiry to Apple DTS about whether an entitlement exception is available. |
 | dBHL → EQ accuracy | The 0.5× compensation factor is a pragmatic heuristic. A more rigorous v2 approach would apply ISO 226 equal-loudness correction to convert dBHL thresholds to dBSPL before deriving EQ gains. |
 | Left/right EQ routing | Stereo split via `AVAudioMixerNode` requires verifying sample-accurate L/R alignment with no drift. Test during Session 2 with a phase-coherent mono test tone and confirm no comb filtering. |

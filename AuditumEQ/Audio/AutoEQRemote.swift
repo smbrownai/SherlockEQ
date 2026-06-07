@@ -11,7 +11,7 @@ import OSLog
 ///   `ParametricEQ.txt`, parse it, and cache the structured profile
 ///   alongside the index.
 ///
-/// All file I/O lives under `Application Support/AuditumEQ/`. All network
+/// All file I/O lives under `Application Support/SherlockEQ/`. All network
 /// traffic goes to `raw.githubusercontent.com`. No accounts, no tokens, no
 /// analytics — see the privacy section of the integration spec.
 
@@ -87,7 +87,7 @@ struct AutoEQRemoteFilter: Codable, Hashable {
 }
 
 /// A single fetched + parsed AutoEQ profile. This is what gets cached
-/// at `Application Support/AuditumEQ/autoeq_profiles/{source}/{type}/{name}.json`
+/// at `Application Support/SherlockEQ/autoeq_profiles/{source}/{type}/{name}.json`
 /// and surfaced through the saved-profiles list.
 struct AutoEQRemoteProfile: Codable, Hashable {
     let headphoneName: String     // "Sennheiser HD 650"
@@ -178,7 +178,7 @@ enum AutoEQIndexParser {
 /// converts to `EQBand` at the apply boundary.
 enum AutoEQRemoteParser {
 
-    private static let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "AutoEQRemoteParser")
+    private static let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "AutoEQRemoteParser")
 
     static func parse(_ text: String, entry: AutoEQIndexEntry, fetchedAt: Date = Date()) -> AutoEQRemoteProfile? {
         // We collect what we can; only the *whole* parse fails when there

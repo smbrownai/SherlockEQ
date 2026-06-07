@@ -3,7 +3,7 @@ import Carbon.HIToolbox
 import OSLog
 
 /// System-wide keyboard shortcut wrapper around Carbon's `RegisterEventHotKey`.
-/// Use this when an action needs to fire even when AuditumEQ is in the
+/// Use this when an action needs to fire even when SherlockEQ is in the
 /// background. The Carbon API is the only supported public route for global
 /// hotkeys on macOS — `NSEvent.addGlobalMonitorForEvents` can observe keys
 /// but does not consume them, so it can't replace it.
@@ -14,7 +14,7 @@ final class GlobalHotKey {
 
     private var hotKeyRef: EventHotKeyRef?
     private let id: UInt32
-    private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "GlobalHotKey")
+    private let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "GlobalHotKey")
 
     init() {
         Self.idCounter += 1
@@ -31,7 +31,7 @@ final class GlobalHotKey {
     func register(keyCode: Int, modifiers: Int, handler: @escaping () -> Void) {
         unregister()
         Self.handlers[id] = handler
-        let signature: OSType = 0x41454153  // 'AEAS' — AuditumEQ App Shortcut
+        let signature: OSType = 0x53454153  // 'SEAS' — SherlockEQ App Shortcut
         let hotKeyID = EventHotKeyID(signature: signature, id: id)
         var ref: EventHotKeyRef?
         let status = RegisterEventHotKey(

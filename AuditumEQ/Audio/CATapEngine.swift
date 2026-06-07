@@ -48,7 +48,7 @@ final class CATapEngine: ObservableObject {
     /// that introduced cross-channel content under extreme balance
     /// pans — processing the filter on a single mono Float buffer per
     /// render block keeps the L and R signal paths physically
-    /// separate. AuditumEQAudioEngine reconfigures these via
+    /// separate. SherlockEQAudioEngine reconfigures these via
     /// `setBands(...)` on every profile change.
     let leftEQCascade = BiquadCascade()
     let rightEQCascade = BiquadCascade()
@@ -134,7 +134,7 @@ final class CATapEngine: ObservableObject {
     /// Process object ID we excluded from the global tap (our own).
     let excludedProcessObjectID = AudioCounter()
 
-    private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "CATapEngine")
+    private let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "CATapEngine")
 
     private var tapID: AudioObjectID = kAudioObjectUnknown
     private var aggregateDeviceID: AudioDeviceID = kAudioObjectUnknown
@@ -186,7 +186,7 @@ final class CATapEngine: ObservableObject {
         state = .failed("""
             Screen & System Audio Recording permission was revoked. \
             Open System Settings → Privacy & Security → Screen & System Audio \
-            Recording, re-enable AuditumEQ, then quit and relaunch the app.
+            Recording, re-enable SherlockEQ, then quit and relaunch the app.
             """)
         tearDownTapAndAggregate()
     }
@@ -215,7 +215,7 @@ final class CATapEngine: ObservableObject {
                 state = .failed("""
                     Screen & System Audio Recording permission is required. \
                     Open System Settings → Privacy & Security → Screen & System Audio \
-                    Recording, enable AuditumEQ, then quit and relaunch the app.
+                    Recording, enable SherlockEQ, then quit and relaunch the app.
                     """)
                 return
             }
@@ -322,7 +322,7 @@ final class CATapEngine: ObservableObject {
         let tapDescription = CATapDescription(
             stereoGlobalTapButExcludeProcesses: [ownProcessObjectID]
         )
-        tapDescription.name = "AuditumEQ-Tap"
+        tapDescription.name = "SherlockEQ-Tap"
         tapDescription.isPrivate = false
         // Mute the original output path while the tap is being read so the user
         // hears only the AVAudioEngine-processed version, not original + ours.
@@ -343,9 +343,9 @@ final class CATapEngine: ObservableObject {
             throw error
         }
 
-        let aggUID = "com.shawnbrown.AuditumEQ.aggregate.\(UUID().uuidString)"
+        let aggUID = "com.shawnbrown.SherlockEQ.aggregate.\(UUID().uuidString)"
         let aggDescription: [String: Any] = [
-            kAudioAggregateDeviceNameKey as String: "AuditumEQ Aggregate",
+            kAudioAggregateDeviceNameKey as String: "SherlockEQ Aggregate",
             kAudioAggregateDeviceUIDKey as String: aggUID,
             kAudioAggregateDeviceMainSubDeviceKey as String: outputDeviceUID,
             kAudioAggregateDeviceIsPrivateKey as String: 1,

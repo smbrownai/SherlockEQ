@@ -8,7 +8,7 @@ import OSLog
 /// runs each through an independent 10-band `AVAudioUnitEQ`, and sums to stereo
 /// output via `mainMixerNode`.
 @MainActor
-final class AuditumEQAudioEngine: ObservableObject {
+final class SherlockEQAudioEngine: ObservableObject {
 
     @Published private(set) var isRunning = false
     @Published private(set) var lastError: String?
@@ -19,7 +19,7 @@ final class AuditumEQAudioEngine: ObservableObject {
     /// Cleared when rates match.
 
     private let engine = AVAudioEngine()
-    private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "AudioEngine")
+    private let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "AudioEngine")
 
     /// Full per-ear EQ runs as a manual biquad cascade inside the
     /// source-node render block (owned by `CATapEngine`). One cascade

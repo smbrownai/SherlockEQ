@@ -54,7 +54,7 @@ struct MainPopoverView: View {
         HStack(spacing: 8) {
             Image(systemName: "waveform.and.magnifyingglass")
                 .foregroundStyle(.tint)
-            Text("AuditumEQ").font(.headline)
+            Text("SherlockEQ").font(.headline)
             Spacer()
             // Output device — read-only label for now; full picker comes when
             // we enumerate audio devices in a follow-on session.
@@ -72,7 +72,7 @@ struct MainPopoverView: View {
                     .font(.system(size: 13))
             }
             .buttonStyle(.plain)
-            .help("Open AuditumEQ")
+            .help("Open SherlockEQ")
         }
     }
 

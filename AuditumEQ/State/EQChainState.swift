@@ -4,7 +4,7 @@ import Combine
 /// EQ-chain control surface — reference mode, test curve, the two
 /// internal tones (test + calibration), the four per-stage bypass
 /// toggles, and the one-shot notch-off reminder flag. Persists the
-/// user's durable preferences (auditumEQEnabled / autoEQEnabled /
+/// user's durable preferences (eqMasterEnabled / autoEQEnabled /
 /// notchFilterEnabled / manualEQEnabled / hasShownNotchOffReminder)
 /// to UserDefaults; the transient toggles (referenceMode,
 /// testCurveEnabled, testToneEnabled, calibrationToneEnabled) don't.
@@ -20,7 +20,7 @@ final class EQChainState: ObservableObject {
     // MARK: - Transient toggles (not persisted)
 
     /// Transient ⌘B A/B toggle that bypasses the whole EQ chain.
-    /// Distinct from `auditumEQEnabled` (the durable on/off).
+    /// Distinct from `eqMasterEnabled` (the durable on/off).
     @Published var referenceMode: Bool = false
 
     /// When on, both per-ear cascades are reconfigured with a single
@@ -40,17 +40,17 @@ final class EQChainState: ObservableObject {
 
     // MARK: - Persisted per-stage bypass
 
-    /// Master bypass for the whole AuditumEQ chain. Distinct from
+    /// Master bypass for the whole SherlockEQ chain. Distinct from
     /// `referenceMode` (transient) — this is the user's durable
     /// preference, persisted across launches. When off, every stage
     /// passes through unmodified and the per-stage toggles below
     /// are visually disabled (their stored values stay intact so
     /// flipping back restores the chain).
-    @Published var auditumEQEnabled: Bool = EQChainState.loadBool(
-        key: EQChainState.auditumEQEnabledKey,
+    @Published var eqMasterEnabled: Bool = EQChainState.loadBool(
+        key: EQChainState.eqMasterEnabledKey,
         default: true
     ) {
-        didSet { UserDefaults.standard.set(auditumEQEnabled, forKey: Self.auditumEQEnabledKey) }
+        didSet { UserDefaults.standard.set(eqMasterEnabled, forKey: Self.eqMasterEnabledKey) }
     }
 
     /// Per-stage toggle for AutoEQ headphone correction. On by
@@ -98,11 +98,11 @@ final class EQChainState: ObservableObject {
 
     // MARK: - UserDefaults plumbing
 
-    private static let auditumEQEnabledKey = "auditumeq.auditumEQEnabled"
-    private static let autoEQEnabledKey = "auditumeq.autoEQEnabled"
-    private static let notchFilterEnabledKey = "auditumeq.notchFilterEnabled"
-    private static let manualEQEnabledKey = "auditumeq.manualEQEnabled"
-    private static let hasShownNotchOffReminderKey = "auditumeq.hasShownNotchOffReminder"
+    private static let eqMasterEnabledKey = "sherlockeq.eqMasterEnabled"
+    private static let autoEQEnabledKey = "sherlockeq.autoEQEnabled"
+    private static let notchFilterEnabledKey = "sherlockeq.notchFilterEnabled"
+    private static let manualEQEnabledKey = "sherlockeq.manualEQEnabled"
+    private static let hasShownNotchOffReminderKey = "sherlockeq.hasShownNotchOffReminder"
 
     private static func loadBool(key: String, default defaultValue: Bool) -> Bool {
         UserDefaults.standard.object(forKey: key) as? Bool ?? defaultValue

@@ -129,7 +129,7 @@ struct ProfileDetailView: View {
                 deviceMenu(profile)
             }
             Divider()
-            Text("When the system output switches to the linked device, AuditumEQ activates this profile automatically. Leave \"Any device\" to keep this profile manual.")
+            Text("When the system output switches to the linked device, SherlockEQ activates this profile automatically. Leave \"Any device\" to keep this profile manual.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .padding(.vertical, 4)

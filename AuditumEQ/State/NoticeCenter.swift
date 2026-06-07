@@ -74,7 +74,7 @@ final class NoticeCenter: ObservableObject {
                     case .permissionDenied:
                         self?.showNotice(TransientNotice(
                             severity: .error,
-                            message: "Audio capture needs Microphone permission. Open System Settings → Privacy & Security → Microphone to enable AuditumEQ."
+                            message: "Audio capture needs Microphone permission. Open System Settings → Privacy & Security → Microphone to enable SherlockEQ."
                         ))
                     case .failed(let msg):
                         self?.showNotice(TransientNotice(
@@ -91,7 +91,7 @@ final class NoticeCenter: ObservableObject {
     /// Bind to the AVAudioEngine wrapper so its `lastError` shows up
     /// in the banner. Already auto-clears on successful start, so
     /// the banner reflects current state without manual dismissal.
-    func bindAudioLastError(_ audio: AuditumEQAudioEngine) {
+    func bindAudioLastError(_ audio: SherlockEQAudioEngine) {
         audioLastErrorSubscription = audio.$lastError
             .compactMap { $0 }
             .sink { [weak self] message in
@@ -117,7 +117,7 @@ final class NoticeCenter: ObservableObject {
         warnedAboutDeniedNotificationsAtStartup = true
         showNotice(TransientNotice(
             severity: .warning,
-            message: "Notifications are off — you won't get safe-listening alerts. Enable them in System Settings → Notifications → AuditumEQ.",
+            message: "Notifications are off — you won't get safe-listening alerts. Enable them in System Settings → Notifications → SherlockEQ.",
             autoDismissAfter: 12
         ))
     }

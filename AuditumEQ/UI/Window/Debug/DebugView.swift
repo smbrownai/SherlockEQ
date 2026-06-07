@@ -138,7 +138,7 @@ struct DebugView: View {
             }
             Button("Send test notification") {
                 NotificationManager.shared.send(
-                    title: "AuditumEQ test",
+                    title: "SherlockEQ test",
                     body: "If you see this banner, notifications are wired."
                 )
             }

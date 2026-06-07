@@ -1,7 +1,7 @@
 import Foundation
 
 /// Filter type for an `EQBand`. Maps 1:1 to the subset of
-/// `AVAudioUnitEQFilterType` values surfaced through the AuditumEQ UI.
+/// `AVAudioUnitEQFilterType` values surfaced through the SherlockEQ UI.
 enum EQFilterType: String, Codable, CaseIterable {
     case parametric
     case lowShelf

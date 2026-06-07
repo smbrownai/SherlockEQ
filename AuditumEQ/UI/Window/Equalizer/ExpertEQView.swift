@@ -23,24 +23,24 @@ struct ExpertEQView: View {
         !(audioState.activeProfile(in: profileStore)?.separateChannels ?? false)
     }
     /// Selected underlay visualisation, persisted across launches.
-    @AppStorage("auditumeq.expertVizMode") private var vizModeRaw: String = CanvasVizMode.spectrum.rawValue
+    @AppStorage("sherlockeq.expertVizMode") private var vizModeRaw: String = CanvasVizMode.spectrum.rawValue
 
     // Canvas layer visibility — persisted per-user via @AppStorage so the
     // layout the user picked last session is what they see next launch.
     // Each chip in the layer strip mutates one of these.
-    @AppStorage("auditumeq.layer.output")    private var showOutputLayer    = true
-    @AppStorage("auditumeq.layer.input")     private var showInputLayer     = false
-    @AppStorage("auditumeq.layer.eq")        private var showEQLayer        = true
-    @AppStorage("auditumeq.layer.audiogram") private var showAudiogramLayer = true
-    @AppStorage("auditumeq.layer.safety")    private var showSafetyLayer    = false
-    @AppStorage("auditumeq.layer.peaks")     private var showPeaksLayer     = false
+    @AppStorage("sherlockeq.layer.output")    private var showOutputLayer    = true
+    @AppStorage("sherlockeq.layer.input")     private var showInputLayer     = false
+    @AppStorage("sherlockeq.layer.eq")        private var showEQLayer        = true
+    @AppStorage("sherlockeq.layer.audiogram") private var showAudiogramLayer = true
+    @AppStorage("sherlockeq.layer.safety")    private var showSafetyLayer    = false
+    @AppStorage("sherlockeq.layer.peaks")     private var showPeaksLayer     = false
     // Spectrogram-mode layers (separate keys so toggling them doesn't
     // disturb the user's Spectrum-mode chip configuration).
-    @AppStorage("auditumeq.spectrogram.notch")       private var showNotchLineLayer    = true
-    @AppStorage("auditumeq.spectrogram.regions")     private var showRegionLabelsLayer = true
-    @AppStorage("auditumeq.spectrogram.legend")      private var showColorLegendLayer  = true
-    @AppStorage("auditumeq.spectrogram.time")        private var showTimeAxisLayer     = true
-    @AppStorage("auditumeq.spectrogram.persistence") private var showPersistenceLayer  = false
+    @AppStorage("sherlockeq.spectrogram.notch")       private var showNotchLineLayer    = true
+    @AppStorage("sherlockeq.spectrogram.regions")     private var showRegionLabelsLayer = true
+    @AppStorage("sherlockeq.spectrogram.legend")      private var showColorLegendLayer  = true
+    @AppStorage("sherlockeq.spectrogram.time")        private var showTimeAxisLayer     = true
+    @AppStorage("sherlockeq.spectrogram.persistence") private var showPersistenceLayer  = false
 
     /// Standard 8 bands at audiogram frequencies — used by Quick start
     /// to populate an empty profile with a useful working surface.

@@ -25,7 +25,7 @@ final class AutoEQPreferences: ObservableObject {
         }
     }
 
-    private static let libraryFolderKey = "auditumeq.autoEQLibraryFolder"
+    private static let libraryFolderKey = "sherlockeq.autoEQLibraryFolder"
 
     private static func loadURL(key: String) -> URL? {
         guard let path = UserDefaults.standard.string(forKey: key), !path.isEmpty else { return nil }

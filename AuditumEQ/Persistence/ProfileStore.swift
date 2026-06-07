@@ -3,7 +3,7 @@ import Combine
 import OSLog
 
 /// JSON-backed persistence for `HearingProfile`. One file per profile, named
-/// by UUID, under `~/Library/Application Support/AuditumEQ/profiles/`.
+/// by UUID, under `~/Library/Application Support/SherlockEQ/profiles/`.
 ///
 /// API is intentionally narrow: `loadAll()`, `save(_:)`, `delete(_:)`,
 /// `seedDefaultsIfEmpty()`. The store maintains a published `profiles` array
@@ -25,11 +25,11 @@ final class ProfileStore: ObservableObject {
     /// undo. nil while no main window is up.
     var undoManager: UndoManager?
 
-    private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "ProfileStore")
+    private let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "ProfileStore")
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
-    private static let directoryOverrideKey = "auditumeq.profilesDirectory"
+    private static let directoryOverrideKey = "sherlockeq.profilesDirectory"
 
     /// Per-profile timestamp of the most recent save. Saves of the same
     /// profile within `coalesceWindow` are treated as one undo step, so a
@@ -80,7 +80,7 @@ final class ProfileStore: ObservableObject {
             // Empty result but surface the reason so DebugView (and any
             // future user-facing surface) can explain what happened —
             // most commonly the user deleted ~/Library/Application
-            // Support/AuditumEQ/profiles out from under us, or the disk
+            // Support/SherlockEQ/profiles out from under us, or the disk
             // is on an ejected volume.
             log.error("Could not enumerate profiles directory: \(error.localizedDescription, privacy: .public)")
             lastError = "Load failed: \(error.localizedDescription)"
@@ -245,7 +245,7 @@ final class ProfileStore: ObservableObject {
             create: true
         )) ?? FileManager.default.temporaryDirectory
         return base
-            .appendingPathComponent("AuditumEQ", isDirectory: true)
+            .appendingPathComponent("SherlockEQ", isDirectory: true)
             .appendingPathComponent("profiles", isDirectory: true)
     }
 

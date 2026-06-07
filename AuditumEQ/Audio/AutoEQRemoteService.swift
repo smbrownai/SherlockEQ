@@ -4,7 +4,7 @@ import OSLog
 
 /// On-demand fetcher for the AutoEQ catalog. The service:
 ///
-///   * Owns the on-disk cache root under `Application Support/AuditumEQ`.
+///   * Owns the on-disk cache root under `Application Support/SherlockEQ`.
 ///   * Publishes the loaded index (so `AutoEQSearchView` can bind to it).
 ///   * Performs index + profile fetches over plain `URLSession`.
 ///   * Surfaces failures as a typed `AutoEQFetchError` for the UI.
@@ -43,7 +43,7 @@ final class AutoEQRemoteService: ObservableObject {
     // MARK: - Config
 
     private let session: URLSession
-    private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "AutoEQRemoteService")
+    private let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "AutoEQRemoteService")
 
     /// AutoEQ's catalog is published from a single repo. The path inside
     /// the repo is `results/README.md` for the index and
@@ -295,7 +295,7 @@ final class AutoEQRemoteService: ObservableObject {
 
     // MARK: - On-disk locations
 
-    /// `~/Library/Application Support/AuditumEQ`. Same root the rest of
+    /// `~/Library/Application Support/SherlockEQ`. Same root the rest of
     /// the app uses (profiles JSON, etc.).
     static var supportDirectory: URL {
         let fm = FileManager.default
@@ -305,7 +305,7 @@ final class AutoEQRemoteService: ObservableObject {
             appropriateFor: nil,
             create: true
         )) ?? fm.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
-        return base.appendingPathComponent("AuditumEQ", isDirectory: true)
+        return base.appendingPathComponent("SherlockEQ", isDirectory: true)
     }
 
     static var indexCacheURL: URL {

@@ -100,7 +100,7 @@ struct SpeechEQView: View {
     private var linkChannels: Bool {
         !(audioState.activeProfile(in: profileStore)?.separateChannels ?? false)
     }
-    @AppStorage("auditumeq.speech.showHelp") private var showHelp: Bool = true
+    @AppStorage("sherlockeq.speech.showHelp") private var showHelp: Bool = true
     @State private var dummySelection: UUID? = nil
 
     var body: some View {

@@ -58,7 +58,7 @@ struct ProfilePickerRow: View {
             if !hasActiveProfile {
                 Label(
                     profileStore.profiles.isEmpty
-                        ? "No profiles yet — open AuditumEQ to create one."
+                        ? "No profiles yet — open SherlockEQ to create one."
                         : "No profile selected — pick one above to enable EQ.",
                     systemImage: "exclamationmark.circle"
                 )
@@ -66,7 +66,7 @@ struct ProfilePickerRow: View {
                 .foregroundStyle(.secondary)
                 .accessibilityLabel(
                     profileStore.profiles.isEmpty
-                        ? "No profiles exist. Open AuditumEQ from the menu bar arrow to create one."
+                        ? "No profiles exist. Open SherlockEQ from the menu bar arrow to create one."
                         : "No profile is currently active. Pick one from the menu above to enable EQ."
                 )
             }

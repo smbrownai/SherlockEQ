@@ -1,4 +1,4 @@
-# AuditumEQ — AutoEQ Integration Spec
+# SherlockEQ — AutoEQ Integration Spec
 **Feature:** AutoEQ On-Demand Profile Fetching + Tinnitus Notch Filter Interaction  
 **For:** Claude Code implementation session  
 **Scope:** Two connected features — remote profile search/import and signal chain composition
@@ -62,7 +62,7 @@ Skip lines that do not match the pattern `- [name](./path)`.
 
 Write the parsed index to:
 ```
-Application Support/AuditumEQ/autoeq_index.json
+Application Support/SherlockEQ/autoeq_index.json
 ```
 
 Index entry schema:
@@ -103,7 +103,7 @@ URL-encode each path component individually. Do not encode the `/` separators be
 ### Cache Location
 
 ```
-Application Support/AuditumEQ/autoeq_profiles/{source}/{type}/{name}.json
+Application Support/SherlockEQ/autoeq_profiles/{source}/{type}/{name}.json
 ```
 
 The `.json` file stores the parsed `AutoEQProfile` struct (see below), not the raw `.txt`. Parse once on fetch, cache the structured result.
@@ -324,10 +324,10 @@ Four independent boolean states, each persisted in `AppStorage`:
 @AppStorage("autoEQEnabled")     var autoEQEnabled: Bool     = false
 @AppStorage("notchFilterEnabled") var notchFilterEnabled: Bool = false
 @AppStorage("manualEQEnabled")   var manualEQEnabled: Bool   = false
-@AppStorage("auditumEQEnabled")  var auditumEQEnabled: Bool  = false
+@AppStorage("eqMasterEnabled")  var eqMasterEnabled: Bool  = false
 ```
 
-`auditumEQEnabled` is the master bypass. When false, all stages pass through unmodified and all individual toggle states are visually disabled (greyed out) but their stored values are preserved.
+`eqMasterEnabled` is the master bypass. When false, all stages pass through unmodified and all individual toggle states are visually disabled (greyed out) but their stored values are preserved.
 
 **When `autoEQEnabled` → false:**
 - Remove AutoEQ filters from the processing chain.

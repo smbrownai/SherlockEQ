@@ -69,7 +69,7 @@ final class SpectrumAnalyzer: ObservableObject {
     /// 0 dBFS is a commonly used reasonable default for consumer playback.
     var calibrationOffsetDBA: Float = 100
 
-    private let processingQueue = DispatchQueue(label: "com.shawnbrown.AuditumEQ.spectrum", qos: .userInitiated)
+    private let processingQueue = DispatchQueue(label: "com.shawnbrown.SherlockEQ.spectrum", qos: .userInitiated)
 
     // FFT state (created once, reused per frame).
     private let dftSetup: vDSP.DiscreteFourierTransform<Float>

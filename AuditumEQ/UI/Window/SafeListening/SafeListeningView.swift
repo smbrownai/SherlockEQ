@@ -134,7 +134,7 @@ struct SafeListeningView: View {
                 format: { String(format: "%.0f dBA", $0) },
                 set: { state.safeListening.quietThresholdDBA = $0 }
             )
-            Text("Below this level, AuditumEQ stops counting remaining time and treats sustained quiet as a break.")
+            Text("Below this level, SherlockEQ stops counting remaining time and treats sustained quiet as a break.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
@@ -268,7 +268,7 @@ struct SafeListeningView: View {
             VStack(alignment: .leading, spacing: 8) {
                 bullet("Loudness is estimated from the digital signal level, not measured at your ear. Actual SPL depends on your hardware, headphone fit, and system volume.")
                 bullet("Dose uses the NIOSH 3 dB exchange rate: 85 dBA over 8 hours is 100 %; every +3 dBA halves the safe duration.")
-                bullet("AuditumEQ is not a medical device and makes no diagnostic claims. The dose meter is a daily-listening guide, not a clinical reading.")
+                bullet("SherlockEQ is not a medical device and makes no diagnostic claims. The dose meter is a daily-listening guide, not a clinical reading.")
                 Link(destination: URL(string: "https://www.cdc.gov/niosh/topics/noise/")!) {
                     Label("NIOSH noise & hearing-loss prevention", systemImage: "arrow.up.right.square")
                         .font(.callout)

@@ -311,7 +311,7 @@ struct ToneFinderView: View {
             Label("Non-clinical", systemImage: "info.circle")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
-            Text("AuditumEQ doesn't diagnose, measure, or treat tinnitus. This tool helps you pick a single frequency for the optional notch filter — a way to subtly de-emphasize the pitch that's mentally fatiguing. If your tinnitus changes or worsens, see a hearing professional.")
+            Text("SherlockEQ doesn't diagnose, measure, or treat tinnitus. This tool helps you pick a single frequency for the optional notch filter — a way to subtly de-emphasize the pitch that's mentally fatiguing. If your tinnitus changes or worsens, see a hearing professional.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }

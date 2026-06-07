@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Credits for the science, software, and prior art AuditumEQ stands on.
+/// Credits for the science, software, and prior art SherlockEQ stands on.
 /// Surfaced from Settings as a sheet.
 struct AcknowledgmentsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -29,7 +29,7 @@ struct AcknowledgmentsView: View {
                     )
                     section(
                         title: "Author",
-                        body: "AuditumEQ is © Shawn Brown."
+                        body: "SherlockEQ is © Shawn Brown."
                     )
                 }
                 .padding(28)

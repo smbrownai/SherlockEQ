@@ -39,7 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables: Set<AnyCancellable> = []
 
     func applicationWillFinishLaunching(_ notification: Notification) {
-        // Multi-instance guard: a second AuditumEQ binary would install
+        // Multi-instance guard: a second SherlockEQ binary would install
         // its own global CATap. Each instance only excludes its own PID
         // from the system tap, so each would capture the other's
         // processed output → AVAudioEngine → tap, creating a feedback
@@ -163,13 +163,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let hosting = NSHostingController(rootView: root)
 
         let window = NSWindow(contentViewController: hosting)
-        window.title = "AuditumEQ"
+        window.title = "SherlockEQ"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified
         window.titlebarAppearsTransparent = false
         window.setContentSize(NSSize(width: 1480, height: 820))
         window.minSize = NSSize(width: 1400, height: 740)
-        window.setFrameAutosaveName("AuditumEQ.MainWindow")
+        window.setFrameAutosaveName("SherlockEQ.MainWindow")
         window.isReleasedWhenClosed = false
         window.delegate = self
         // Visible on all Spaces is wrong for a main window; just default.
@@ -284,7 +284,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                      action: #selector(NSWindow.performZoom(_:)),
                      keyEquivalent: "")
         menu.addItem(.separator())
-        let show = NSMenuItem(title: "AuditumEQ",
+        let show = NSMenuItem(title: "SherlockEQ",
                               action: #selector(showMainWindowFromMenu(_:)),
                               keyEquivalent: "0")
         show.target = self

@@ -23,7 +23,7 @@ import SwiftUI
 /// rather than load-bearing diagnostics.
 struct MetersView: View {
     @EnvironmentObject private var audioState: AudioState
-    @AppStorage("auditumeq.metersMode") private var modeRaw: String = MetersMode.vectorscope.rawValue
+    @AppStorage("sherlockeq.metersMode") private var modeRaw: String = MetersMode.vectorscope.rawValue
 
     enum MetersMode: String, CaseIterable {
         case vectorscope

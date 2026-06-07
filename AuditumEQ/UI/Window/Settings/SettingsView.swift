@@ -73,7 +73,7 @@ struct SettingsView: View {
                         .controlSize(.small)
                     Spacer()
                 }
-                Text("When enabled, AuditumEQ starts automatically when you log in and runs in the menu bar. You can revoke this in System Settings → General → Login Items.")
+                Text("When enabled, SherlockEQ starts automatically when you log in and runs in the menu bar. You can revoke this in System Settings → General → Login Items.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 4)
@@ -84,7 +84,7 @@ struct SettingsView: View {
                         .controlSize(.small)
                     Spacer()
                 }
-                Text("When enabled, the Dock icon disappears after you close the main window — AuditumEQ keeps running in the menu bar. Turn this off if the macOS menu bar fails to redraw when you reopen the window; you'll get a permanent Dock icon in exchange.")
+                Text("When enabled, the Dock icon disappears after you close the main window — SherlockEQ keeps running in the menu bar. Turn this off if the macOS menu bar fails to redraw when you reopen the window; you'll get a permanent Dock icon in exchange.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 4)
@@ -271,7 +271,7 @@ struct SettingsView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Acknowledgments").font(.callout.weight(.medium))
-                        Text("Science, software, and prior art behind AuditumEQ.")
+                        Text("Science, software, and prior art behind SherlockEQ.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -308,7 +308,7 @@ struct SettingsView: View {
                         .controlSize(.small)
                     Spacer()
                 }
-                Text("When enabled, ⌘⇧B toggles bypass even when AuditumEQ is in the background. The local ⌘B menu item in Audio → Toggle Reference Mode keeps working when the main window is key. Off by default because system-wide shortcuts can collide with whatever app is in front.")
+                Text("When enabled, ⌘⇧B toggles bypass even when SherlockEQ is in the background. The local ⌘B menu item in Audio → Toggle Reference Mode keeps working when the main window is key. Off by default because system-wide shortcuts can collide with whatever app is in front.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 4)
@@ -414,7 +414,7 @@ struct SettingsView: View {
                         .help("Switch back to the default Application Support location")
                     }
                 }
-                Text("Point this at iCloud Drive / Dropbox / an external disk to back up or sync your profiles. Sandbox is off, so AuditumEQ can read anywhere you have access — no security-scoped bookmark needed.")
+                Text("Point this at iCloud Drive / Dropbox / an external disk to back up or sync your profiles. Sandbox is off, so SherlockEQ can read anywhere you have access — no security-scoped bookmark needed.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 4)

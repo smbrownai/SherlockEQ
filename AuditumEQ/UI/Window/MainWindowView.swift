@@ -12,7 +12,7 @@ struct MainWindowView: View {
     /// until they re-open it from the toolbar. Defaults to visible so
     /// first-launch users discover the level / volume / balance / dose
     /// monitoring panel without having to find a hidden toggle.
-    @AppStorage("auditumeq.monitorSidebarVisible") private var monitorSidebarVisible: Bool = true
+    @AppStorage("sherlockeq.monitorSidebarVisible") private var monitorSidebarVisible: Bool = true
 
     var body: some View {
         NavigationSplitView {

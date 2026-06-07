@@ -16,7 +16,7 @@ import UserNotifications
 final class AudioState: ObservableObject {
 
     @Published private(set) var tap: CATapEngine
-    @Published private(set) var audio: AuditumEQAudioEngine
+    @Published private(set) var audio: SherlockEQAudioEngine
     @Published private(set) var spectrum: SpectrumAnalyzer
     @Published private(set) var preSpectrum: SpectrumAnalyzer
     @Published private(set) var stereoMonitor: StereoMonitor
@@ -51,8 +51,8 @@ final class AudioState: ObservableObject {
 
     /// dBFS level of the calibration tone, exposed so the UI can compute
     /// the offset between the meter reading and the slider value. Always
-    /// matches `AuditumEQAudioEngine.calibrationToneDBFS`.
-    var calibrationToneLevelDBFS: Float { AuditumEQAudioEngine.calibrationToneDBFS }
+    /// matches `SherlockEQAudioEngine.calibrationToneDBFS`.
+    var calibrationToneLevelDBFS: Float { SherlockEQAudioEngine.calibrationToneDBFS }
 
     /// Master gain + AUPeakLimiter knobs — see `EngineParameters`.
     /// AudioState sinks each `$value` publisher (in init) and pushes
@@ -135,9 +135,9 @@ final class AudioState: ObservableObject {
     /// Proxy bindings for the per-stage chain toggles. Existing
     /// surfaces (popover power toggle, Settings chain toggles, the
     /// notch-off reminder check) keep working.
-    var auditumEQEnabled: Bool {
-        get { eqChain.auditumEQEnabled }
-        set { eqChain.auditumEQEnabled = newValue }
+    var eqMasterEnabled: Bool {
+        get { eqChain.eqMasterEnabled }
+        set { eqChain.eqMasterEnabled = newValue }
     }
     var autoEQEnabled: Bool {
         get { eqChain.autoEQEnabled }
@@ -214,7 +214,7 @@ final class AudioState: ObservableObject {
             UserDefaults.standard.set(calibrationOffsetDBA, forKey: Self.calibrationKey)
         }
     }
-    static let calibrationKey = "auditumeq.calibrationOffsetDBA"
+    static let calibrationKey = "sherlockeq.calibrationOffsetDBA"
 
     func activeProfile(in store: ProfileStore) -> HearingProfile? {
         guard let id = activeProfileID else { return nil }
@@ -319,13 +319,13 @@ final class AudioState: ObservableObject {
     }
 
     /// Return a copy of `profile` with the appropriate stages zeroed
-    /// per the current per-stage toggle state. Master `auditumEQEnabled`
+    /// per the current per-stage toggle state. Master `eqMasterEnabled`
     /// short-circuits everything (mirrors Reference Mode behavior for
     /// the durable toggle). Individual toggles flatten just their
     /// stage so other stages keep working.
     private func applyBypassMask(to profile: HearingProfile) -> HearingProfile {
         var copy = profile
-        if !auditumEQEnabled {
+        if !eqMasterEnabled {
             copy.autoEQBands = nil
             copy.autoEQPreampDB = nil
             copy.leftNotch.enabled = false
@@ -366,11 +366,11 @@ final class AudioState: ObservableObject {
     private var wakeObserverToken: NSObjectProtocol?
     private var didBecomeActiveObserverToken: NSObjectProtocol?
     private var wasRunningBeforeSleep = false
-    private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "AudioState")
+    private let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "AudioState")
 
     init() {
         let tap = CATapEngine()
-        let audio = AuditumEQAudioEngine()
+        let audio = SherlockEQAudioEngine()
         let spectrum = SpectrumAnalyzer()
         let preSpectrum = SpectrumAnalyzer()
         let stereoMonitor = StereoMonitor()
@@ -393,7 +393,7 @@ final class AudioState: ObservableObject {
         // change, sample-rate renegotiation, etc.) and stops rendering
         // until the graph is rebuilt. The notification can land at any
         // time — already on main via the observer's Task hop in
-        // `AuditumEQAudioEngine`, so we just kick the existing rebuild.
+        // `SherlockEQAudioEngine`, so we just kick the existing rebuild.
         audio.onConfigurationChange = { [weak self] in
             self?.rebuildAudioGraph()
         }
@@ -504,7 +504,7 @@ final class AudioState: ObservableObject {
         // The four per-stage bypass toggles share one handler — each
         // flip rebuilds the chain against the new mask.
         let applyOnFlip: (Bool) -> Void = { [weak self] _ in self?.applyActiveProfile() }
-        eqChain.$auditumEQEnabled.dropFirst().sink(receiveValue: applyOnFlip).store(in: &eqChainSubscriptions)
+        eqChain.$eqMasterEnabled.dropFirst().sink(receiveValue: applyOnFlip).store(in: &eqChainSubscriptions)
         eqChain.$autoEQEnabled.dropFirst().sink(receiveValue: applyOnFlip).store(in: &eqChainSubscriptions)
         eqChain.$notchFilterEnabled.dropFirst().sink(receiveValue: applyOnFlip).store(in: &eqChainSubscriptions)
         eqChain.$manualEQEnabled.dropFirst().sink(receiveValue: applyOnFlip).store(in: &eqChainSubscriptions)
@@ -577,7 +577,7 @@ final class AudioState: ObservableObject {
         }
 
         // The user can revoke Screen Recording (or Microphone) in
-        // System Settings while AuditumEQ is running. The IOProc then
+        // System Settings while SherlockEQ is running. The IOProc then
         // silently delivers zeros and the rest of our state has no way
         // to know. `didBecomeActiveNotification` fires when the user
         // returns from Settings (the natural moment to re-check), so
@@ -682,7 +682,7 @@ final class AudioState: ObservableObject {
         warnedAboutDeniedNotifications = true
         showNotice(TransientNotice(
             severity: .warning,
-            message: "Notifications are off — you won't get safe-listening alerts. Enable them in System Settings → Notifications → AuditumEQ.",
+            message: "Notifications are off — you won't get safe-listening alerts. Enable them in System Settings → Notifications → SherlockEQ.",
             autoDismissAfter: 12
         ))
     }

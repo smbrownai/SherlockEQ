@@ -98,14 +98,14 @@ final class AppPreferences: ObservableObject {
         }
     }
 
-    private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "AppPreferences")
+    private let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "AppPreferences")
 
     // MARK: - UserDefaults plumbing
 
-    private static let leftEarColorKey = "auditumeq.leftEarColorHex"
-    private static let rightEarColorKey = "auditumeq.rightEarColorHex"
-    private static let hideFromDockKey = "auditumeq.hideFromDock"
-    private static let globalReferenceShortcutKey = "auditumeq.globalReferenceShortcut"
+    private static let leftEarColorKey = "sherlockeq.leftEarColorHex"
+    private static let rightEarColorKey = "sherlockeq.rightEarColorHex"
+    private static let hideFromDockKey = "sherlockeq.hideFromDock"
+    private static let globalReferenceShortcutKey = "sherlockeq.globalReferenceShortcut"
 
     private static func loadBool(key: String, default defaultValue: Bool) -> Bool {
         UserDefaults.standard.object(forKey: key) as? Bool ?? defaultValue

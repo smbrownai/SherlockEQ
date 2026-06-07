@@ -34,8 +34,8 @@ final class AutoEQSavedProfilesStore: ObservableObject {
         didSet { persist() }
     }
 
-    private let storageKey = "auditumeq.autoEQSavedProfiles"
-    private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "AutoEQSavedProfilesStore")
+    private let storageKey = "sherlockeq.autoEQSavedProfiles"
+    private let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "AutoEQSavedProfilesStore")
 
     init() {
         if let data = UserDefaults.standard.data(forKey: storageKey),

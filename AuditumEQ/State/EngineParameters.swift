@@ -51,10 +51,10 @@ final class EngineParameters: ObservableObject {
         didSet { UserDefaults.standard.set(limiterPreGainDB, forKey: Self.limiterPreGainKey) }
     }
 
-    private static let masterGainKey = "auditumeq.masterGainDB"
-    private static let limiterAttackKey = "auditumeq.limiterAttackMs"
-    private static let limiterDecayKey = "auditumeq.limiterDecayMs"
-    private static let limiterPreGainKey = "auditumeq.limiterPreGainDB"
+    private static let masterGainKey = "sherlockeq.masterGainDB"
+    private static let limiterAttackKey = "sherlockeq.limiterAttackMs"
+    private static let limiterDecayKey = "sherlockeq.limiterDecayMs"
+    private static let limiterPreGainKey = "sherlockeq.limiterPreGainDB"
 
     private static func loadDouble(key: String, default defaultValue: Double) -> Double {
         UserDefaults.standard.object(forKey: key) as? Double ?? defaultValue

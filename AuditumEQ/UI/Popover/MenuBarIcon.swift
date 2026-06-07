@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Menu-bar icon for AuditumEQ. Tints based on the session safe-listening dose
+/// Menu-bar icon for SherlockEQ. Tints based on the session safe-listening dose
 /// (spec §5.4): default → amber at 80% → red at 100%. The macOS menu bar
 /// renders SF Symbols monochrome by default, so `foregroundStyle` is what
 /// actually drives the colour.

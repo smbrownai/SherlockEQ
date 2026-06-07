@@ -14,14 +14,14 @@ final class NotificationManager: NSObject, ObservableObject {
     @Published private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
     var isAuthorized: Bool { authorizationStatus == .authorized || authorizationStatus == .provisional }
 
-    private let log = Logger(subsystem: "com.shawnbrown.AuditumEQ", category: "Notifications")
+    private let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "Notifications")
     private let delegateAdapter = ForegroundDeliveryAdapter()
 
     private override init() {
         super.init()
         // macOS only displays banners while the app is in the background unless
         // the notification-center delegate explicitly opts in. We always want
-        // safe-listening warnings to surface even when AuditumEQ is foreground.
+        // safe-listening warnings to surface even when SherlockEQ is foreground.
         UNUserNotificationCenter.current().delegate = delegateAdapter
         Task { await refreshAuthorizationStatus() }
     }
@@ -44,7 +44,7 @@ final class NotificationManager: NSObject, ObservableObject {
         await refreshAuthorizationStatus()
     }
 
-    /// Adapter that lets notifications show as banners while AuditumEQ is the
+    /// Adapter that lets notifications show as banners while SherlockEQ is the
     /// frontmost app. Has to be NSObject + nonisolated to satisfy the delegate
     /// protocol; lives separate from the main MainActor type to avoid friction.
     private final class ForegroundDeliveryAdapter: NSObject, UNUserNotificationCenterDelegate {
