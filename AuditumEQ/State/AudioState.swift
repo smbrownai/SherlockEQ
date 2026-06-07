@@ -126,14 +126,15 @@ final class AudioState: ObservableObject {
     /// the "From file…" import. Nil means library disabled; user only sees
     /// the file picker. Stored as a plain path string in UserDefaults
     /// (sandbox is OFF, so we don't need security-scoped bookmarks).
-    @Published var autoEQLibraryFolder: URL? = AudioState.loadURL(key: AudioState.autoEQLibraryKey) {
-        didSet {
-            if let url = autoEQLibraryFolder {
-                UserDefaults.standard.set(url.path, forKey: Self.autoEQLibraryKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: Self.autoEQLibraryKey)
-            }
-        }
+    /// AutoEQ-specific preferences (library folder) — see `AutoEQPreferences`.
+    let autoEQPreferences = AutoEQPreferences()
+
+    /// Proxy through to `autoEQPreferences.libraryFolder`. Existing
+    /// call sites that read `audioState.autoEQLibraryFolder` keep
+    /// working; new code should depend on AutoEQPreferences directly.
+    var autoEQLibraryFolder: URL? {
+        get { autoEQPreferences.libraryFolder }
+        set { autoEQPreferences.libraryFolder = newValue }
     }
 
     /// Master bypass for the whole AuditumEQ chain. Distinct from
@@ -206,7 +207,6 @@ final class AudioState: ObservableObject {
     private static let limiterAttackKey = "auditumeq.limiterAttackMs"
     private static let limiterDecayKey = "auditumeq.limiterDecayMs"
     private static let limiterPreGainKey = "auditumeq.limiterPreGainDB"
-    private static let autoEQLibraryKey = "auditumeq.autoEQLibraryFolder"
     private static let auditumEQEnabledKey = "auditumeq.auditumEQEnabled"
     private static let autoEQEnabledKey = "auditumeq.autoEQEnabled"
     private static let notchFilterEnabledKey = "auditumeq.notchFilterEnabled"
@@ -227,11 +227,6 @@ final class AudioState: ObservableObject {
         guard let hex = UserDefaults.standard.string(forKey: key),
               let color = Color(hexString: hex) else { return defaultValue }
         return color
-    }
-
-    private static func loadURL(key: String) -> URL? {
-        guard let path = UserDefaults.standard.string(forKey: key), !path.isEmpty else { return nil }
-        return URL(fileURLWithPath: path)
     }
 
     /// ID of the currently-active hearing profile. The profile itself lives in
@@ -428,6 +423,7 @@ final class AudioState: ObservableObject {
     private var trackerObserver: AnyCancellable?
     private var noticeObserver: AnyCancellable?
     private var preferencesObserver: AnyCancellable?
+    private var autoEQPreferencesObserver: AnyCancellable?
     private var profileSubscriptions: Set<AnyCancellable> = []
     private weak var connectedStore: ProfileStore?
     private var sleepObserverToken: NSObjectProtocol?
@@ -503,6 +499,9 @@ final class AudioState: ObservableObject {
         // etc. should refresh views observing AudioState. These are
         // user-driven (low rate), so the cost is negligible.
         preferencesObserver = preferences.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+        autoEQPreferencesObserver = autoEQPreferences.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
         // Intentionally NOT rebroadcast — the two SpectrumAnalyzers and
