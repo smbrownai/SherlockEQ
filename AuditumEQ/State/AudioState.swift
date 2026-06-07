@@ -294,14 +294,19 @@ final class AudioState: ObservableObject {
     @Published var sessionDosePercent: Double = 0
     @Published var remainingMinutes: Double?
 
-    /// User-visible status banner — surfaces save failures, permission
-    /// revocations, and other transient conditions the user can act on.
-    /// `MainWindowView` reads this and renders `NoticeBannerView` when
-    /// non-nil. Set via `showNotice(_:)` which also schedules
-    /// auto-dismiss for warnings. Errors stay until the user taps the
-    /// dismiss control.
-    @Published var userVisibleNotice: TransientNotice?
-    private var noticeDismissTask: Task<Void, Never>?
+    /// Banner state lives on a dedicated `NoticeCenter` so view code
+    /// that only cares about notices doesn't pull in the whole audio
+    /// pipeline as a dependency. AudioState exposes the same surface
+    /// (`userVisibleNotice` / `showNotice` / `dismissNotice`) via
+    /// thin proxies below so existing call sites keep working until
+    /// they migrate to reading from `noticeCenter` directly.
+    let noticeCenter = NoticeCenter()
+
+    /// Proxy: `AudioState.userVisibleNotice` reads through to the
+    /// center. SwiftUI views that have AudioState as their
+    /// environment object still see changes because AudioState
+    /// republishes the center's `objectWillChange` (wired in init).
+    var userVisibleNotice: TransientNotice? { noticeCenter.userVisibleNotice }
 
     /// SPL calibration in dB: the dB SPL the user actually hears when a
     /// 0 dBFS signal plays through the current output device at their
@@ -372,49 +377,23 @@ final class AudioState: ObservableObject {
         // Surface persistence errors in the main-window banner. The
         // store sets `lastError` from its `tracking` wrapper, so we
         // get a notification at the exact moment any save / delete /
-        // import / export / relocate / loadAll fails. We don't show
-        // anything when `lastError` clears (nil) — that's the normal
-        // post-success state and would just flash an empty banner.
-        profileStore.$lastError
-            .compactMap { $0 }
-            .sink { [weak self] message in
-                Task { @MainActor in
-                    self?.showNotice(
-                        TransientNotice(severity: .error, message: message)
-                    )
-                }
-            }
-            .store(in: &profileSubscriptions)
+        // import / export / relocate / loadAll fails. NoticeCenter
+        // owns the sink so the wiring stays with the consumer.
+        noticeCenter.bind(to: profileStore)
 
         applyActiveProfile()
     }
 
-    /// Show a transient banner notice. Errors stay until the user
-    /// dismisses; warnings auto-dismiss per the notice's
-    /// `autoDismissAfter`. Replacing the current notice cancels any
-    /// pending auto-dismiss for the previous one.
+    /// Proxy through to `noticeCenter.showNotice`. Kept on AudioState
+    /// so internal callers (e.g. `checkNotificationsDeniedAtAmberDose`)
+    /// don't need to know about the indirection yet.
     func showNotice(_ notice: TransientNotice) {
-        noticeDismissTask?.cancel()
-        userVisibleNotice = notice
-        if let delay = notice.autoDismissAfter {
-            let noticeID = notice.id
-            noticeDismissTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                guard !Task.isCancelled else { return }
-                // Only dismiss if the same notice is still up — a
-                // newer one would have replaced it via showNotice's
-                // cancel-then-set, but defensive belt-and-braces.
-                if self?.userVisibleNotice?.id == noticeID {
-                    self?.userVisibleNotice = nil
-                }
-            }
-        }
+        noticeCenter.showNotice(notice)
     }
 
-    /// User-initiated dismiss from the banner's close control.
+    /// Proxy through to `noticeCenter.dismissNotice`.
     func dismissNotice() {
-        noticeDismissTask?.cancel()
-        userVisibleNotice = nil
+        noticeCenter.dismissNotice()
     }
 
     /// When the system output device changes, switch the active profile to
@@ -486,6 +465,7 @@ final class AudioState: ObservableObject {
     private var tapObserver: AnyCancellable?
     private var audioObserver: AnyCancellable?
     private var trackerObserver: AnyCancellable?
+    private var noticeObserver: AnyCancellable?
     private var profileSubscriptions: Set<AnyCancellable> = []
     private weak var connectedStore: ProfileStore?
     private var sleepObserverToken: NSObjectProtocol?
@@ -547,6 +527,14 @@ final class AudioState: ObservableObject {
             self?.objectWillChange.send()
         }
         audioObserver = audio.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+        // Rebroadcast so views still observing `audioState.userVisibleNotice`
+        // (via the proxy above) re-evaluate when the banner state changes.
+        // NoticeCenter publishes infrequently — one shot per banner — so
+        // this doesn't suffer the high-rate issue that excludes the
+        // analyzers / monitor below.
+        noticeObserver = noticeCenter.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
         // Intentionally NOT rebroadcast — the two SpectrumAnalyzers and
