@@ -1,6 +1,6 @@
 //
-//  AuditumEQTests.swift
-//  AuditumEQTests
+//  SherlockEQTests.swift
+//  SherlockEQTests
 //
 //  Module smoke check — the per-area test suites live in the sibling
 //  files (BiquadCoefficientsTests.swift, BiquadResponseTests.swift,
@@ -9,7 +9,7 @@
 //
 
 import Testing
-@testable import AuditumEQ
+@testable import SherlockEQ
 
 struct SherlockEQModuleTests {
 

@@ -1,6 +1,6 @@
 //
 //  BiquadCoefficientsTests.swift
-//  AuditumEQTests
+//  SherlockEQTests
 //
 //  Invariants for the shared Audio EQ Cookbook math. BiquadCascade
 //  (audio path) and BiquadResponse (drawn EQ curve) both route through
@@ -10,7 +10,7 @@
 
 import Testing
 import Foundation
-@testable import AuditumEQ
+@testable import SherlockEQ
 
 struct BiquadCoefficientsTests {
 

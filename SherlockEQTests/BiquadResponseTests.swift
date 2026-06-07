@@ -1,6 +1,6 @@
 //
 //  BiquadResponseTests.swift
-//  AuditumEQTests
+//  SherlockEQTests
 //
 //  Magnitude-domain invariants for the drawn EQ curve. Pairs with
 //  BiquadCoefficientsTests — those check the raw coefficients; these
@@ -9,7 +9,7 @@
 
 import Testing
 import Foundation
-@testable import AuditumEQ
+@testable import SherlockEQ
 
 struct BiquadResponseTests {
 

@@ -1,6 +1,6 @@
 //
 //  ProfileStoreTests.swift
-//  AuditumEQTests
+//  SherlockEQTests
 //
 //  Persistence + relocation + import-dedup behaviours, driven against
 //  a per-test temporary directory so nothing touches the user's real
@@ -9,7 +9,7 @@
 
 import Testing
 import Foundation
-@testable import AuditumEQ
+@testable import SherlockEQ
 
 @MainActor
 struct ProfileStoreTests {
@@ -20,7 +20,7 @@ struct ProfileStoreTests {
     /// instantiating the store with this URL.
     private static func makeTempDir() -> URL {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("AuditumEQTests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("SherlockEQTests-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }

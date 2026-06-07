@@ -1,6 +1,6 @@
 //
 //  SafeListeningTrackerTests.swift
-//  AuditumEQTests
+//  SherlockEQTests
 //
 //  NIOSH permissibleDuration math + DoseSeverity threshold behaviour
 //  (including the within-day stickiness of the didCrossAmber/Red flags).
@@ -8,7 +8,7 @@
 
 import Testing
 import Foundation
-@testable import AuditumEQ
+@testable import SherlockEQ
 
 @MainActor
 struct SafeListeningTrackerTests {

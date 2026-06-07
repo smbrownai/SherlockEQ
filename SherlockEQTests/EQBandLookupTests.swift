@@ -1,6 +1,6 @@
 //
 //  EQBandLookupTests.swift
-//  AuditumEQTests
+//  SherlockEQTests
 //
 //  The find-or-create-near-frequency machinery shared by Simple, Speech,
 //  Advanced, and Expert EQ views. Bug here corrupts every user's profile
@@ -9,7 +9,7 @@
 
 import Testing
 import Foundation
-@testable import AuditumEQ
+@testable import SherlockEQ
 
 struct EQBandLookupTests {
 

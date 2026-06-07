@@ -12,24 +12,24 @@
 			containerPortal = 9789EF072FCF6BC6008D3A9A /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 9789EF0E2FCF6BC6008D3A9A;
-			remoteInfo = AuditumEQ;
+			remoteInfo = SherlockEQ;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		977681242FD473BF00F6CE2F /* AuditumEQTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AuditumEQTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		9789EF0F2FCF6BC6008D3A9A /* AuditumEQ.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AuditumEQ.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		977681242FD473BF00F6CE2F /* SherlockEQTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SherlockEQTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		9789EF0F2FCF6BC6008D3A9A /* SherlockEQ.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SherlockEQ.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		977681252FD473BF00F6CE2F /* AuditumEQTests */ = {
+		977681252FD473BF00F6CE2F /* SherlockEQTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = AuditumEQTests;
+			path = SherlockEQTests;
 			sourceTree = "<group>";
 		};
-		9789EF112FCF6BC6008D3A9A /* AuditumEQ */ = {
+		9789EF112FCF6BC6008D3A9A /* SherlockEQ */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = AuditumEQ;
+			path = SherlockEQ;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -55,8 +55,8 @@
 		9789EF062FCF6BC6008D3A9A = {
 			isa = PBXGroup;
 			children = (
-				9789EF112FCF6BC6008D3A9A /* AuditumEQ */,
-				977681252FD473BF00F6CE2F /* AuditumEQTests */,
+				9789EF112FCF6BC6008D3A9A /* SherlockEQ */,
+				977681252FD473BF00F6CE2F /* SherlockEQTests */,
 				9789EF102FCF6BC6008D3A9A /* Products */,
 			);
 			sourceTree = "<group>";
@@ -64,8 +64,8 @@
 		9789EF102FCF6BC6008D3A9A /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				9789EF0F2FCF6BC6008D3A9A /* AuditumEQ.app */,
-				977681242FD473BF00F6CE2F /* AuditumEQTests.xctest */,
+				9789EF0F2FCF6BC6008D3A9A /* SherlockEQ.app */,
+				977681242FD473BF00F6CE2F /* SherlockEQTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -73,9 +73,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		977681232FD473BF00F6CE2F /* AuditumEQTests */ = {
+		977681232FD473BF00F6CE2F /* SherlockEQTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 9776812A2FD473BF00F6CE2F /* Build configuration list for PBXNativeTarget "AuditumEQTests" */;
+			buildConfigurationList = 9776812A2FD473BF00F6CE2F /* Build configuration list for PBXNativeTarget "SherlockEQTests" */;
 			buildPhases = (
 				977681202FD473BF00F6CE2F /* Sources */,
 				977681212FD473BF00F6CE2F /* Frameworks */,
@@ -87,18 +87,18 @@
 				977681292FD473BF00F6CE2F /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				977681252FD473BF00F6CE2F /* AuditumEQTests */,
+				977681252FD473BF00F6CE2F /* SherlockEQTests */,
 			);
-			name = AuditumEQTests;
+			name = SherlockEQTests;
 			packageProductDependencies = (
 			);
-			productName = AuditumEQTests;
-			productReference = 977681242FD473BF00F6CE2F /* AuditumEQTests.xctest */;
+			productName = SherlockEQTests;
+			productReference = 977681242FD473BF00F6CE2F /* SherlockEQTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		9789EF0E2FCF6BC6008D3A9A /* AuditumEQ */ = {
+		9789EF0E2FCF6BC6008D3A9A /* SherlockEQ */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 9789EF1A2FCF6BC7008D3A9A /* Build configuration list for PBXNativeTarget "AuditumEQ" */;
+			buildConfigurationList = 9789EF1A2FCF6BC7008D3A9A /* Build configuration list for PBXNativeTarget "SherlockEQ" */;
 			buildPhases = (
 				9789EF0B2FCF6BC6008D3A9A /* Sources */,
 				9789EF0C2FCF6BC6008D3A9A /* Frameworks */,
@@ -109,13 +109,13 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				9789EF112FCF6BC6008D3A9A /* AuditumEQ */,
+				9789EF112FCF6BC6008D3A9A /* SherlockEQ */,
 			);
-			name = AuditumEQ;
+			name = SherlockEQ;
 			packageProductDependencies = (
 			);
-			productName = AuditumEQ;
-			productReference = 9789EF0F2FCF6BC6008D3A9A /* AuditumEQ.app */;
+			productName = SherlockEQ;
+			productReference = 9789EF0F2FCF6BC6008D3A9A /* SherlockEQ.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -137,7 +137,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 9789EF0A2FCF6BC6008D3A9A /* Build configuration list for PBXProject "AuditumEQ" */;
+			buildConfigurationList = 9789EF0A2FCF6BC6008D3A9A /* Build configuration list for PBXProject "SherlockEQ" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -151,8 +151,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				9789EF0E2FCF6BC6008D3A9A /* AuditumEQ */,
-				977681232FD473BF00F6CE2F /* AuditumEQTests */,
+				9789EF0E2FCF6BC6008D3A9A /* SherlockEQ */,
+				977681232FD473BF00F6CE2F /* SherlockEQTests */,
 			);
 		};
 /* End PBXProject section */
@@ -194,7 +194,7 @@
 /* Begin PBXTargetDependency section */
 		977681292FD473BF00F6CE2F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 9789EF0E2FCF6BC6008D3A9A /* AuditumEQ */;
+			target = 9789EF0E2FCF6BC6008D3A9A /* SherlockEQ */;
 			targetProxy = 977681282FD473BF00F6CE2F /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -210,7 +210,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.shawnbrown.AuditumEQTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shawnbrown.SherlockEQTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -218,7 +218,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AuditumEQ.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AuditumEQ";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SherlockEQ.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SherlockEQ";
 			};
 			name = Debug;
 		};
@@ -232,7 +232,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.shawnbrown.AuditumEQTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shawnbrown.SherlockEQTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -240,7 +240,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AuditumEQ.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AuditumEQ";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SherlockEQ.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SherlockEQ";
 			};
 			name = Release;
 		};
@@ -396,7 +396,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.shawnbrown.AuditumEQ;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shawnbrown.SherlockEQ;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
@@ -454,7 +454,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.6;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.shawnbrown.AuditumEQ;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shawnbrown.SherlockEQ;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
@@ -479,7 +479,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		9776812A2FD473BF00F6CE2F /* Build configuration list for PBXNativeTarget "AuditumEQTests" */ = {
+		9776812A2FD473BF00F6CE2F /* Build configuration list for PBXNativeTarget "SherlockEQTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				9776812B2FD473BF00F6CE2F /* Debug */,
@@ -488,7 +488,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		9789EF0A2FCF6BC6008D3A9A /* Build configuration list for PBXProject "AuditumEQ" */ = {
+		9789EF0A2FCF6BC6008D3A9A /* Build configuration list for PBXProject "SherlockEQ" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				9789EF182FCF6BC7008D3A9A /* Debug */,
@@ -497,7 +497,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		9789EF1A2FCF6BC7008D3A9A /* Build configuration list for PBXNativeTarget "AuditumEQ" */ = {
+		9789EF1A2FCF6BC7008D3A9A /* Build configuration list for PBXNativeTarget "SherlockEQ" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				9789EF1B2FCF6BC7008D3A9A /* Debug */,

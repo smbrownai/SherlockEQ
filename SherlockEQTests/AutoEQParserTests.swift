@@ -1,6 +1,6 @@
 //
 //  AutoEQParserTests.swift
-//  AuditumEQTests
+//  SherlockEQTests
 //
 //  Real-world AutoEQ ParametricEQ.txt files are the source of every
 //  headphone correction users load. Parse failures here mean a user's
@@ -9,7 +9,7 @@
 
 import Testing
 import Foundation
-@testable import AuditumEQ
+@testable import SherlockEQ
 
 struct AutoEQParserTests {
 

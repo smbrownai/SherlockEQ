@@ -1,6 +1,6 @@
 //
 //  LogFreqAxisTests.swift
-//  AuditumEQTests
+//  SherlockEQTests
 //
 //  Round-trip + clamping invariants for the shared log-frequency
 //  helper used by every canvas/graph that maps Hz to pixels.
@@ -9,7 +9,7 @@
 import Testing
 import Foundation
 import CoreGraphics
-@testable import AuditumEQ
+@testable import SherlockEQ
 
 struct LogFreqAxisTests {
 

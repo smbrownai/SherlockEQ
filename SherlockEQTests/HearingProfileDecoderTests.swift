@@ -1,6 +1,6 @@
 //
 //  HearingProfileDecoderTests.swift
-//  AuditumEQTests
+//  SherlockEQTests
 //
 //  Persistence-migration safety net. HearingProfile's custom Codable
 //  init reads older JSON shapes (single shared `notch`, missing
@@ -12,7 +12,7 @@
 
 import Testing
 import Foundation
-@testable import AuditumEQ
+@testable import SherlockEQ
 
 struct HearingProfileDecoderTests {
 
