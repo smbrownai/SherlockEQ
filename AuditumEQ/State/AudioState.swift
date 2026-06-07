@@ -53,36 +53,30 @@ final class AudioState: ObservableObject {
     /// matches `AuditumEQAudioEngine.calibrationToneDBFS`.
     var calibrationToneLevelDBFS: Float { AuditumEQAudioEngine.calibrationToneDBFS }
 
-    /// Master output gain, post-limiter. Persists across launches via
-    /// UserDefaults; re-applied to the engine on every graph rebuild so a
-    /// teardown/reattach cycle doesn't drop the user's setting.
-    @Published var masterGainDB: Double = AudioState.loadDouble(key: AudioState.masterGainKey, default: 0) {
-        didSet {
-            audio.setMasterGain(dB: masterGainDB)
-            UserDefaults.standard.set(masterGainDB, forKey: Self.masterGainKey)
-        }
-    }
+    /// Master gain + AUPeakLimiter knobs — see `EngineParameters`.
+    /// AudioState sinks each `$value` publisher (in init) and pushes
+    /// the result into the engine, so EngineParameters itself knows
+    /// nothing about the engine.
+    let engineParameters = EngineParameters()
 
-    /// AUPeakLimiter parameters — exposed in Settings so users can shape the
-    /// limiter's character (snappier attack for transient material, longer
-    /// decay for sustained mixes, preGain to push harder into the curve).
-    @Published var limiterAttackMs: Double = AudioState.loadDouble(key: AudioState.limiterAttackKey, default: 12.0) {
-        didSet {
-            audio.setLimiterAttack(seconds: limiterAttackMs / 1000.0)
-            UserDefaults.standard.set(limiterAttackMs, forKey: Self.limiterAttackKey)
-        }
+    /// Proxy bindings — existing call sites that read
+    /// `audioState.masterGainDB` / `audioState.limiterAttackMs` etc.
+    /// keep working. New code should depend on EngineParameters.
+    var masterGainDB: Double {
+        get { engineParameters.masterGainDB }
+        set { engineParameters.masterGainDB = newValue }
     }
-    @Published var limiterDecayMs: Double = AudioState.loadDouble(key: AudioState.limiterDecayKey, default: 24.0) {
-        didSet {
-            audio.setLimiterDecay(seconds: limiterDecayMs / 1000.0)
-            UserDefaults.standard.set(limiterDecayMs, forKey: Self.limiterDecayKey)
-        }
+    var limiterAttackMs: Double {
+        get { engineParameters.limiterAttackMs }
+        set { engineParameters.limiterAttackMs = newValue }
     }
-    @Published var limiterPreGainDB: Double = AudioState.loadDouble(key: AudioState.limiterPreGainKey, default: 0) {
-        didSet {
-            audio.setLimiterPreGain(dB: limiterPreGainDB)
-            UserDefaults.standard.set(limiterPreGainDB, forKey: Self.limiterPreGainKey)
-        }
+    var limiterDecayMs: Double {
+        get { engineParameters.limiterDecayMs }
+        set { engineParameters.limiterDecayMs = newValue }
+    }
+    var limiterPreGainDB: Double {
+        get { engineParameters.limiterPreGainDB }
+        set { engineParameters.limiterPreGainDB = newValue }
     }
 
     /// App-wide UI / shell preferences (per-ear colors, dock,
@@ -203,10 +197,6 @@ final class AudioState: ObservableObject {
         didSet { UserDefaults.standard.set(hasShownNotchOffReminder, forKey: Self.hasShownNotchOffReminderKey) }
     }
 
-    private static let masterGainKey = "auditumeq.masterGainDB"
-    private static let limiterAttackKey = "auditumeq.limiterAttackMs"
-    private static let limiterDecayKey = "auditumeq.limiterDecayMs"
-    private static let limiterPreGainKey = "auditumeq.limiterPreGainDB"
     private static let auditumEQEnabledKey = "auditumeq.auditumEQEnabled"
     private static let autoEQEnabledKey = "auditumeq.autoEQEnabled"
     private static let notchFilterEnabledKey = "auditumeq.notchFilterEnabled"
@@ -221,12 +211,6 @@ final class AudioState: ObservableObject {
     private static func loadBool(key: String, default defaultValue: Bool) -> Bool {
         let raw = UserDefaults.standard.object(forKey: key) as? Bool
         return raw ?? defaultValue
-    }
-
-    private static func loadColor(key: String, default defaultValue: Color) -> Color {
-        guard let hex = UserDefaults.standard.string(forKey: key),
-              let color = Color(hexString: hex) else { return defaultValue }
-        return color
     }
 
     /// ID of the currently-active hearing profile. The profile itself lives in
@@ -424,6 +408,8 @@ final class AudioState: ObservableObject {
     private var noticeObserver: AnyCancellable?
     private var preferencesObserver: AnyCancellable?
     private var autoEQPreferencesObserver: AnyCancellable?
+    private var engineParametersObserver: AnyCancellable?
+    private var engineParameterSubscriptions: Set<AnyCancellable> = []
     private var profileSubscriptions: Set<AnyCancellable> = []
     private weak var connectedStore: ProfileStore?
     private var sleepObserverToken: NSObjectProtocol?
@@ -502,6 +488,33 @@ final class AudioState: ObservableObject {
             self?.objectWillChange.send()
         }
         autoEQPreferencesObserver = autoEQPreferences.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+
+        // EngineParameters lives outside the engine and just publishes
+        // values; AudioState bridges each value back into the engine.
+        // dropFirst() because the initial published value was already
+        // applied by rebuildAudioGraph (or is about to be on first
+        // start); subsequent user-driven changes flow through these.
+        engineParameters.$masterGainDB
+            .dropFirst()
+            .sink { [weak self] db in self?.audio.setMasterGain(dB: db) }
+            .store(in: &engineParameterSubscriptions)
+        engineParameters.$limiterAttackMs
+            .dropFirst()
+            .sink { [weak self] ms in self?.audio.setLimiterAttack(seconds: ms / 1000.0) }
+            .store(in: &engineParameterSubscriptions)
+        engineParameters.$limiterDecayMs
+            .dropFirst()
+            .sink { [weak self] ms in self?.audio.setLimiterDecay(seconds: ms / 1000.0) }
+            .store(in: &engineParameterSubscriptions)
+        engineParameters.$limiterPreGainDB
+            .dropFirst()
+            .sink { [weak self] db in self?.audio.setLimiterPreGain(dB: db) }
+            .store(in: &engineParameterSubscriptions)
+        // Rebroadcast so views observing AudioState refresh on knob
+        // changes (Settings, popover gain row).
+        engineParametersObserver = engineParameters.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
         // Intentionally NOT rebroadcast — the two SpectrumAnalyzers and
