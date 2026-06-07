@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Lightweight, dismissible status banner shown at the top of the main
@@ -38,6 +39,12 @@ struct TransientNotice: Identifiable, Equatable {
 /// Self-contained banner row. Caller positions it (typically at the
 /// top of a window's detail area); component handles its own padding,
 /// background, icon, and dismiss button.
+///
+/// VoiceOver: posts an `announcementRequested` notification on appear
+/// so VO users hear errors / warnings without needing to navigate to
+/// the banner first. Without it the banner is a silent re-render
+/// from VO's perspective; with it the message reads out at the
+/// configured priority (high for errors, default for warnings).
 struct NoticeBannerView: View {
     let notice: TransientNotice
     let onDismiss: () -> Void
@@ -59,6 +66,12 @@ struct NoticeBannerView: View {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
+                    // 28×28 hit area — Apple recommends 44pt minimum
+                    // but a banner-row dismiss control on macOS has
+                    // less room; 28pt is the smallest that still beats
+                    // the 12pt bare-image target previously here.
+                    .frame(minWidth: 28, minHeight: 28)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Dismiss notice")
@@ -75,6 +88,20 @@ struct NoticeBannerView: View {
         )
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isStaticText)
+        .onAppear { announceToVoiceOver() }
+        .onChange(of: notice.id) { _, _ in announceToVoiceOver() }
+    }
+
+    private func announceToVoiceOver() {
+        let priority: NSAccessibilityPriorityLevel = notice.severity == .error ? .high : .medium
+        NSAccessibility.post(
+            element: NSApp.mainWindow as Any,
+            notification: .announcementRequested,
+            userInfo: [
+                .announcement: notice.message,
+                .priority: priority.rawValue,
+            ]
+        )
     }
 
     private var icon: String {

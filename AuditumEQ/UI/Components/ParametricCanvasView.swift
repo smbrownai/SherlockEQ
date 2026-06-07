@@ -161,6 +161,7 @@ struct ParametricCanvasView: View {
     /// `Reduce Transparency` — push gradient / line opacities toward solid
     /// so users with low contrast sensitivity can read the layers cleanly.
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// `Differentiate Without Color` — guarantees pattern (dashed/dotted/
     /// solid) carries the signal in addition to hue. Most layers already do
     /// this; this hook lets us force a fallback where redundancy is weak.
@@ -1363,7 +1364,9 @@ struct ParametricCanvasView: View {
                 x: min(size.width - 70, max(70, point.x + 12)),
                 y: min(size.height - 24, max(24, point.y - 14))
             )
-            .transition(.opacity)
+            // Skip the fade when Reduce Motion is on. Callouts still
+            // appear/disappear instantly; just no opacity animation.
+            .transition(reduceMotion ? .identity : .opacity)
         }
     }
 

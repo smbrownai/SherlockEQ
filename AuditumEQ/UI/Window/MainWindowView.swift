@@ -5,6 +5,7 @@ import SwiftUI
 /// in Session 6; Sessions 7–17 fill them in incrementally.
 struct MainWindowView: View {
     @EnvironmentObject private var audioState: AudioState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selection: SidebarSection? = .profiles
     /// Visibility of the right-hand monitoring sidebar. Persistent across
     /// launches via @AppStorage — users who dismiss it stay dismissed
@@ -43,8 +44,12 @@ struct MainWindowView: View {
                     }
                 }
             }
-            .animation(.easeInOut(duration: 0.22), value: monitorSidebarVisible)
-            .animation(.easeInOut(duration: 0.18), value: audioState.userVisibleNotice)
+            // Skip animations entirely when Reduce Motion is on — the
+            // System Settings toggle exists exactly so users prone to
+            // vestibular triggers can disable transitions like the
+            // sidebar slide and the banner drop-in.
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: monitorSidebarVisible)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: audioState.userVisibleNotice)
             .navigationSplitViewColumnWidth(min: 760, ideal: 820)
         }
         .toolbar {
