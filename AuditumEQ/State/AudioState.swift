@@ -22,30 +22,31 @@ final class AudioState: ObservableObject {
     @Published private(set) var stereoMonitor: StereoMonitor
     @Published private(set) var safeListening: SafeListeningTracker
 
-    @Published var referenceMode: Bool = false {
-        didSet { audio.setReferenceMode(referenceMode) }
-    }
+    /// EQ-chain control surface — see `EQChainState`. AudioState
+    /// sinks each `$value` publisher (in init) and pushes the result
+    /// into the engine. The four per-stage toggles also kick
+    /// applyActiveProfile() on change so the chain rebuilds against
+    /// the new bypass mask.
+    let eqChain = EQChainState()
 
-    @Published var testCurveEnabled: Bool = false {
-        didSet {
-            audio.setTestCurveEnabled(testCurveEnabled)
-            // When the test curve is turned off, restore the active profile so
-            // the chain doesn't sit flattened.
-            if !testCurveEnabled {
-                applyActiveProfile()
-            }
-        }
+    /// Proxy bindings — view code that reads
+    /// `audioState.referenceMode`, `.testCurveEnabled`, etc. keeps
+    /// working. New code should depend on EQChainState directly.
+    var referenceMode: Bool {
+        get { eqChain.referenceMode }
+        set { eqChain.referenceMode = newValue }
     }
-
-    @Published var testToneEnabled: Bool = false {
-        didSet { audio.setTestTone(testToneEnabled) }
+    var testCurveEnabled: Bool {
+        get { eqChain.testCurveEnabled }
+        set { eqChain.testCurveEnabled = newValue }
     }
-
-    /// Plays the 1 kHz / −12 dBFS reference tone used by the SPL-calibration
-    /// workflow in Safe Listening. Routed via mainMixer so the user's EQ
-    /// doesn't colour it.
-    @Published var calibrationToneEnabled: Bool = false {
-        didSet { audio.setCalibrationTone(calibrationToneEnabled) }
+    var testToneEnabled: Bool {
+        get { eqChain.testToneEnabled }
+        set { eqChain.testToneEnabled = newValue }
+    }
+    var calibrationToneEnabled: Bool {
+        get { eqChain.calibrationToneEnabled }
+        set { eqChain.calibrationToneEnabled = newValue }
     }
 
     /// dBFS level of the calibration tone, exposed so the UI can compute
@@ -131,85 +132,32 @@ final class AudioState: ObservableObject {
         set { autoEQPreferences.libraryFolder = newValue }
     }
 
-    /// Master bypass for the whole AuditumEQ chain. Distinct from
-    /// Reference Mode (which is the transient ⌘B A/B toggle) — this
-    /// is the user's durable on/off preference, persisted across
-    /// launches. When off, every stage passes through unmodified and
-    /// the per-stage toggles below are visually disabled (their
-    /// stored values stay intact so flipping back restores the chain).
-    @Published var auditumEQEnabled: Bool = AudioState.loadBool(
-        key: AudioState.auditumEQEnabledKey,
-        default: true
-    ) {
-        didSet {
-            UserDefaults.standard.set(auditumEQEnabled, forKey: Self.auditumEQEnabledKey)
-            applyActiveProfile()
-        }
+    /// Proxy bindings for the per-stage chain toggles. Existing
+    /// surfaces (popover power toggle, Settings chain toggles, the
+    /// notch-off reminder check) keep working.
+    var auditumEQEnabled: Bool {
+        get { eqChain.auditumEQEnabled }
+        set { eqChain.auditumEQEnabled = newValue }
     }
-
-    /// Per-stage toggle for AutoEQ headphone correction. On by
-    /// default — if the user loaded a correction they almost
-    /// certainly want it active.
-    @Published var autoEQEnabled: Bool = AudioState.loadBool(
-        key: AudioState.autoEQEnabledKey,
-        default: true
-    ) {
-        didSet {
-            UserDefaults.standard.set(autoEQEnabled, forKey: Self.autoEQEnabledKey)
-            applyActiveProfile()
-        }
+    var autoEQEnabled: Bool {
+        get { eqChain.autoEQEnabled }
+        set { eqChain.autoEQEnabled = newValue }
     }
-
-    /// Per-stage toggle for the tinnitus notch. Profile-stored notch
-    /// frequency/depth/Q are preserved when this is off, so flipping
-    /// back restores the user's dialed-in settings.
-    @Published var notchFilterEnabled: Bool = AudioState.loadBool(
-        key: AudioState.notchFilterEnabledKey,
-        default: true
-    ) {
-        didSet {
-            UserDefaults.standard.set(notchFilterEnabled, forKey: Self.notchFilterEnabledKey)
-            applyActiveProfile()
-        }
+    var notchFilterEnabled: Bool {
+        get { eqChain.notchFilterEnabled }
+        set { eqChain.notchFilterEnabled = newValue }
     }
-
-    /// Per-stage toggle for the manual parametric EQ (Stage 4 — the
-    /// bands the user dialed in via Simple / Speech / Advanced /
-    /// Expert). When off, the profile's own bands drop out of the
-    /// chain while AutoEQ correction and the notch keep working.
-    @Published var manualEQEnabled: Bool = AudioState.loadBool(
-        key: AudioState.manualEQEnabledKey,
-        default: true
-    ) {
-        didSet {
-            UserDefaults.standard.set(manualEQEnabled, forKey: Self.manualEQEnabledKey)
-            applyActiveProfile()
-        }
+    var manualEQEnabled: Bool {
+        get { eqChain.manualEQEnabled }
+        set { eqChain.manualEQEnabled = newValue }
     }
-
-    /// One-shot reminder banner shown the first time the user
-    /// disables the notch stage. The copy lives in the view layer;
-    /// this flag just guards re-display.
-    @Published var hasShownNotchOffReminder: Bool = AudioState.loadBool(
-        key: AudioState.hasShownNotchOffReminderKey,
-        default: false
-    ) {
-        didSet { UserDefaults.standard.set(hasShownNotchOffReminder, forKey: Self.hasShownNotchOffReminderKey) }
+    var hasShownNotchOffReminder: Bool {
+        get { eqChain.hasShownNotchOffReminder }
+        set { eqChain.hasShownNotchOffReminder = newValue }
     }
-
-    private static let auditumEQEnabledKey = "auditumeq.auditumEQEnabled"
-    private static let autoEQEnabledKey = "auditumeq.autoEQEnabled"
-    private static let notchFilterEnabledKey = "auditumeq.notchFilterEnabled"
-    private static let manualEQEnabledKey = "auditumeq.manualEQEnabled"
-    private static let hasShownNotchOffReminderKey = "auditumeq.hasShownNotchOffReminder"
 
     private static func loadDouble(key: String, default defaultValue: Double) -> Double {
         let raw = UserDefaults.standard.object(forKey: key) as? Double
-        return raw ?? defaultValue
-    }
-
-    private static func loadBool(key: String, default defaultValue: Bool) -> Bool {
-        let raw = UserDefaults.standard.object(forKey: key) as? Bool
         return raw ?? defaultValue
     }
 
@@ -410,6 +358,8 @@ final class AudioState: ObservableObject {
     private var autoEQPreferencesObserver: AnyCancellable?
     private var engineParametersObserver: AnyCancellable?
     private var engineParameterSubscriptions: Set<AnyCancellable> = []
+    private var eqChainObserver: AnyCancellable?
+    private var eqChainSubscriptions: Set<AnyCancellable> = []
     private var profileSubscriptions: Set<AnyCancellable> = []
     private weak var connectedStore: ProfileStore?
     private var sleepObserverToken: NSObjectProtocol?
@@ -515,6 +465,42 @@ final class AudioState: ObservableObject {
         // Rebroadcast so views observing AudioState refresh on knob
         // changes (Settings, popover gain row).
         engineParametersObserver = engineParameters.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+
+        // EQ-chain control surface — same pattern as EngineParameters.
+        // Transient toggles push directly to the engine; the four
+        // per-stage toggles ALSO kick applyActiveProfile() so the
+        // chain rebuilds against the new bypass mask. testCurveEnabled
+        // additionally re-applies the active profile when turned off
+        // so the chain doesn't sit flattened post-test-curve.
+        eqChain.$referenceMode
+            .dropFirst()
+            .sink { [weak self] on in self?.audio.setReferenceMode(on) }
+            .store(in: &eqChainSubscriptions)
+        eqChain.$testCurveEnabled
+            .dropFirst()
+            .sink { [weak self] on in
+                self?.audio.setTestCurveEnabled(on)
+                if !on { self?.applyActiveProfile() }
+            }
+            .store(in: &eqChainSubscriptions)
+        eqChain.$testToneEnabled
+            .dropFirst()
+            .sink { [weak self] on in self?.audio.setTestTone(on) }
+            .store(in: &eqChainSubscriptions)
+        eqChain.$calibrationToneEnabled
+            .dropFirst()
+            .sink { [weak self] on in self?.audio.setCalibrationTone(on) }
+            .store(in: &eqChainSubscriptions)
+        // The four per-stage bypass toggles share one handler — each
+        // flip rebuilds the chain against the new mask.
+        let applyOnFlip: (Bool) -> Void = { [weak self] _ in self?.applyActiveProfile() }
+        eqChain.$auditumEQEnabled.dropFirst().sink(receiveValue: applyOnFlip).store(in: &eqChainSubscriptions)
+        eqChain.$autoEQEnabled.dropFirst().sink(receiveValue: applyOnFlip).store(in: &eqChainSubscriptions)
+        eqChain.$notchFilterEnabled.dropFirst().sink(receiveValue: applyOnFlip).store(in: &eqChainSubscriptions)
+        eqChain.$manualEQEnabled.dropFirst().sink(receiveValue: applyOnFlip).store(in: &eqChainSubscriptions)
+        eqChainObserver = eqChain.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
         // Intentionally NOT rebroadcast — the two SpectrumAnalyzers and
