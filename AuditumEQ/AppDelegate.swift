@@ -84,8 +84,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         profileStore.seedDefaultsIfEmpty()
         audioState.adoptDefaultProfileIfNeeded(from: profileStore)
         audioState.connect(profileStore: profileStore)
-        applyGlobalReferenceShortcut(enabled: audioState.globalReferenceShortcutEnabled)
-        audioState.$globalReferenceShortcutEnabled
+        applyGlobalReferenceShortcut(enabled: audioState.preferences.globalReferenceShortcutEnabled)
+        audioState.preferences.$globalReferenceShortcutEnabled
             .sink { [weak self] enabled in self?.applyGlobalReferenceShortcut(enabled: enabled) }
             .store(in: &cancellables)
         Task {

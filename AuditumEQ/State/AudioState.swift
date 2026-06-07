@@ -85,75 +85,40 @@ final class AudioState: ObservableObject {
         }
     }
 
-    /// Per-ear colors — used everywhere a stereo curve / band / chart is
-    /// drawn so users with colorblindness can dial in a palette they can
-    /// distinguish. Persisted as #RRGGBB hex via UserDefaults.
-    @Published var leftEarColor: Color = AudioState.loadColor(key: AudioState.leftEarColorKey, default: .blue) {
-        didSet { UserDefaults.standard.set(leftEarColor.hexString, forKey: Self.leftEarColorKey) }
+    /// App-wide UI / shell preferences (per-ear colors, dock,
+    /// launch-at-login, global reference shortcut) — see `AppPreferences`.
+    /// Held as a property here so existing call sites keep working via
+    /// the proxy bindings below; new code should depend on
+    /// `AppPreferences` directly.
+    let preferences = AppPreferences()
+
+    /// Proxy bindings so view code that still goes through AudioState
+    /// keeps compiling. SwiftUI views observing AudioState re-evaluate
+    /// when these change because AudioState republishes
+    /// preferences.objectWillChange (wired in init).
+    var leftEarColor: Color {
+        get { preferences.leftEarColor }
+        set { preferences.leftEarColor = newValue }
     }
-    @Published var rightEarColor: Color = AudioState.loadColor(key: AudioState.rightEarColorKey, default: .red) {
-        didSet { UserDefaults.standard.set(rightEarColor.hexString, forKey: Self.rightEarColorKey) }
+    var rightEarColor: Color {
+        get { preferences.rightEarColor }
+        set { preferences.rightEarColor = newValue }
+    }
+    var hideFromDockEnabled: Bool {
+        get { preferences.hideFromDockEnabled }
+        set { preferences.hideFromDockEnabled = newValue }
+    }
+    var launchAtLoginEnabled: Bool {
+        get { preferences.launchAtLoginEnabled }
+        set { preferences.launchAtLoginEnabled = newValue }
+    }
+    var globalReferenceShortcutEnabled: Bool {
+        get { preferences.globalReferenceShortcutEnabled }
+        set { preferences.globalReferenceShortcutEnabled = newValue }
     }
 
-    static let defaultLeftEarColor: Color = .blue
-    static let defaultRightEarColor: Color = .red
-
-    /// Mirrors `SMAppService.mainApp.status == .enabled`. Setting it
-    /// calls `register()` / `unregister()`; if the OS rejects (Login Items
-    /// permission denied or similar) the value reverts and the error is
-    /// logged so the UI stays in sync with reality.
-    /// When true, the app reverts to `.accessory` activation policy on
-    /// window close (menu-bar-only, no Dock icon). When false, the Dock
-    /// icon persists once the main window has been opened. Trade-off:
-    /// `.accessory` keeps the app feeling like a menu-bar utility but
-    /// macOS doesn't always redraw the system menu bar reliably on the
-    /// `.accessory → .regular` swap; `.regular` permanently avoids that
-    /// at the cost of a permanent Dock icon.
-    @Published var hideFromDockEnabled: Bool = AudioState.loadBool(key: AudioState.hideFromDockKey, default: true) {
-        didSet {
-            UserDefaults.standard.set(hideFromDockEnabled, forKey: Self.hideFromDockKey)
-            // Turning the toggle off (show in Dock) takes effect right
-            // away. Turning it on only kicks in on next window close.
-            if !hideFromDockEnabled {
-                NSApp.setActivationPolicy(.regular)
-            }
-        }
-    }
-
-    @Published var launchAtLoginEnabled: Bool = (SMAppService.mainApp.status == .enabled) {
-        didSet {
-            guard launchAtLoginEnabled != oldValue else { return }
-            do {
-                if launchAtLoginEnabled {
-                    try SMAppService.mainApp.register()
-                } else {
-                    try SMAppService.mainApp.unregister()
-                }
-            } catch {
-                log.error("Launch-at-login toggle failed: \(error.localizedDescription, privacy: .public)")
-                // Revert without re-triggering didSet (oldValue is the
-                // pre-toggle truth; assign on next runloop).
-                let revertTo = oldValue
-                DispatchQueue.main.async { [weak self] in
-                    self?.launchAtLoginEnabled = revertTo
-                }
-            }
-        }
-    }
-
-    /// Global ⌘⇧B shortcut to toggle Reference Mode from any app. Off by
-    /// default because system-wide hotkeys can collide with whatever's
-    /// frontmost (Cmd-Shift-B is "Bookmarks bar" in some browsers); users
-    /// who want it opt in from Settings. AppDelegate registers / unregisters
-    /// the actual Carbon hotkey in response to this flag changing.
-    @Published var globalReferenceShortcutEnabled: Bool = AudioState.loadBool(
-        key: AudioState.globalReferenceShortcutKey,
-        default: false
-    ) {
-        didSet {
-            UserDefaults.standard.set(globalReferenceShortcutEnabled, forKey: Self.globalReferenceShortcutKey)
-        }
-    }
+    static let defaultLeftEarColor: Color = AppPreferences.defaultLeftEarColor
+    static let defaultRightEarColor: Color = AppPreferences.defaultRightEarColor
 
     /// User-selected library folder containing AutoEQ correction `.txt`
     /// files. When set, the Headphone-correction picker on Profile Detail
@@ -241,10 +206,6 @@ final class AudioState: ObservableObject {
     private static let limiterAttackKey = "auditumeq.limiterAttackMs"
     private static let limiterDecayKey = "auditumeq.limiterDecayMs"
     private static let limiterPreGainKey = "auditumeq.limiterPreGainDB"
-    private static let leftEarColorKey = "auditumeq.leftEarColorHex"
-    private static let rightEarColorKey = "auditumeq.rightEarColorHex"
-    private static let hideFromDockKey = "auditumeq.hideFromDock"
-    private static let globalReferenceShortcutKey = "auditumeq.globalReferenceShortcut"
     private static let autoEQLibraryKey = "auditumeq.autoEQLibraryFolder"
     private static let auditumEQEnabledKey = "auditumeq.auditumEQEnabled"
     private static let autoEQEnabledKey = "auditumeq.autoEQEnabled"
@@ -466,6 +427,7 @@ final class AudioState: ObservableObject {
     private var audioObserver: AnyCancellable?
     private var trackerObserver: AnyCancellable?
     private var noticeObserver: AnyCancellable?
+    private var preferencesObserver: AnyCancellable?
     private var profileSubscriptions: Set<AnyCancellable> = []
     private weak var connectedStore: ProfileStore?
     private var sleepObserverToken: NSObjectProtocol?
@@ -535,6 +497,12 @@ final class AudioState: ObservableObject {
         // this doesn't suffer the high-rate issue that excludes the
         // analyzers / monitor below.
         noticeObserver = noticeCenter.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+        // Same rebroadcast for prefs — Settings toggles, color picks
+        // etc. should refresh views observing AudioState. These are
+        // user-driven (low rate), so the cost is negligible.
+        preferencesObserver = preferences.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
         // Intentionally NOT rebroadcast — the two SpectrumAnalyzers and
