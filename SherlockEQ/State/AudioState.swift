@@ -576,8 +576,8 @@ final class AudioState: ObservableObject {
             Task { @MainActor [weak self] in self?.handleDidWake() }
         }
 
-        // The user can revoke Screen Recording (or Microphone) in
-        // System Settings while SherlockEQ is running. The IOProc then
+        // The user can revoke Screen Recording in System Settings while
+        // SherlockEQ is running. The IOProc then
         // silently delivers zeros and the rest of our state has no way
         // to know. `didBecomeActiveNotification` fires when the user
         // returns from Settings (the natural moment to re-check), so

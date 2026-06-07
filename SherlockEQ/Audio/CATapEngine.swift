@@ -194,24 +194,18 @@ final class CATapEngine: ObservableObject {
     func requestPermissionAndStart() async {
         state = .awaitingPermission
 
-        // 1. Microphone (covers the audio-input entitlement).
-        let micGranted = await AVCaptureDevice.requestAccess(for: .audio)
-        permissionGranted = micGranted
-        guard micGranted else {
-            state = .permissionDenied
-            log.error("Microphone permission denied")
-            return
-        }
-
-        // 2. Screen & System Audio Recording — required for CATap to deliver
-        //    audio from other processes on macOS 14.4+. The OS silently zeroes
-        //    tap data without it, which is exactly what we just spent hours
-        //    diagnosing. Request triggers the system dialog the first time;
-        //    after that the user must grant in System Settings manually.
+        // Screen & System Audio Recording is the real gating permission for
+        // CATap on macOS 14.4+ — the OS silently zeroes tap data without it.
+        // We deliberately do NOT request microphone TCC: CATap reads other
+        // processes' audio via the CoreAudio process-tap API, not via an
+        // input device, so the mic prompt was misleading ("microphone" when
+        // we never touch the mic). The sandbox audio-input entitlement
+        // covers our right to open the aggregate device.
         if !CGPreflightScreenCaptureAccess() {
             log.info("Screen capture access not granted — requesting...")
             _ = CGRequestScreenCaptureAccess()   // shows dialog OR no-ops if previously denied
             if !CGPreflightScreenCaptureAccess() {
+                permissionGranted = false
                 state = .failed("""
                     Screen & System Audio Recording permission is required. \
                     Open System Settings → Privacy & Security → Screen & System Audio \
@@ -220,6 +214,7 @@ final class CATapEngine: ObservableObject {
                 return
             }
         }
+        permissionGranted = true
 
         await start()
     }
