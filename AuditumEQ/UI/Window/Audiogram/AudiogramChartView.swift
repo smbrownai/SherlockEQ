@@ -65,6 +65,46 @@ struct AudiogramChartView: View {
             }
         }
         .frame(minHeight: 220)
+        // Replace the chart for VoiceOver / keyboard users with one
+        // adjustable Stepper per audiogram frequency. Visual stays as
+        // the chart; accessibility users get a labeled, focusable,
+        // arrow-key-adjustable stack that respects the same 5 dB snap
+        // the drag gesture uses. Without this the chart was entirely
+        // invisible to VO and unusable from the keyboard.
+        .accessibilityRepresentation { accessibleAudiogram }
+    }
+
+    @ViewBuilder private var accessibleAudiogram: some View {
+        VStack(alignment: .leading) {
+            Text("Audiogram thresholds")
+                .font(.headline)
+            ForEach(thresholds.indices, id: \.self) { idx in
+                Stepper(
+                    value: bindingForThreshold(at: idx),
+                    in: yRange,
+                    step: 5
+                ) {
+                    Text("\(formatFrequency(Double(thresholds[idx].frequencyHz))) hertz")
+                }
+                .accessibilityValue("\(Int(thresholds[idx].thresholddBHL)) dB HL")
+            }
+        }
+    }
+
+    /// Binding that survives @Binding<Array> indexing — direct
+    /// `$thresholds[idx].thresholddBHL` would fail because the array
+    /// indices aren't stable identifiers. Wraps the get/set so the
+    /// Stepper can drive a single threshold without confusing Combine.
+    private func bindingForThreshold(at index: Int) -> Binding<Double> {
+        Binding(
+            get: { thresholds[index].thresholddBHL },
+            set: { newValue in
+                let snapped = (max(yRange.lowerBound, min(yRange.upperBound, newValue)) / 5.0).rounded() * 5.0
+                if thresholds[index].thresholddBHL != snapped {
+                    thresholds[index].thresholddBHL = snapped
+                }
+            }
+        )
     }
 
     private func dragGesture(proxy: ChartProxy, geo: GeometryProxy) -> some Gesture {
