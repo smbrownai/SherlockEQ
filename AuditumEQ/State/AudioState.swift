@@ -431,6 +431,14 @@ final class AudioState: ObservableObject {
         noticeObserver = noticeCenter.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
+
+        // Surface tap permission denials / failures + AVAudioEngine
+        // errors in the banner. ProfileStore.lastError flows through
+        // a third bind() at `connect(profileStore:)`. Together these
+        // three sinks cover every persistent error path that
+        // previously only showed up in DebugView.
+        noticeCenter.bindTapState(tap)
+        noticeCenter.bindAudioLastError(audio)
         // Same rebroadcast for prefs — Settings toggles, color picks
         // etc. should refresh views observing AudioState. These are
         // user-driven (low rate), so the cost is negligible.

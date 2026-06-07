@@ -90,6 +90,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
         Task {
             await NotificationManager.shared.requestAuthorization()
+            // If the user denied notifications (either just now on
+            // first launch or in a prior session), surface that as a
+            // one-shot warning. Without it the user has no idea
+            // they've lost the safe-listening alerts until they
+            // happen to dose past amber later.
+            audioState.noticeCenter.warnIfNotificationsDenied(
+                status: NotificationManager.shared.authorizationStatus
+            )
             await audioState.startAll()
         }
     }

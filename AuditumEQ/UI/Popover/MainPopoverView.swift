@@ -12,6 +12,17 @@ struct MainPopoverView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
+            // Surface the same notice the main window's banner would
+            // show. Users who live in the popover (the whole point of
+            // a menu-bar app) need to see save failures, tap-permission
+            // denials, and the safety warnings here too. Both mounts
+            // read from the same `AudioState.noticeCenter`, so dismiss
+            // from either clears both.
+            if let notice = audioState.userVisibleNotice {
+                NoticeBannerView(notice: notice) {
+                    audioState.dismissNotice()
+                }
+            }
             Divider()
             DoseBarView(
                 percent: audioState.sessionDosePercent,
