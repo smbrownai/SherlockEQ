@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SherlockEQ — hearing-correction equalizer for macOS</title>
-  <meta name="description" content="A hearing-correction equalizer for macOS. Locate a tinnitus tone, interpret an audiogram, and shape system audio per ear with precision other apps don't expose." />
+  <title>SherlockEQ — per-ear audio equalizer for macOS</title>
+  <meta name="description" content="A per-ear audio equalizer for macOS. Investigate a tinnitus tone, translate an audiogram into EQ, and shape system audio with precision other apps don't expose." />
 
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
   <link rel="stylesheet" href="colors_and_type.css" />
@@ -291,17 +291,44 @@
       margin-top: 2px;
     }
 
-    /* ---- Notes / inside joke ----------------------------------------- */
+    /* ---- Notes / disclaimer ------------------------------------------ */
+    .notes-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--s-11);
+      align-items: start;
+    }
     .notes {
       font-family: var(--font-mono);
       font-size: var(--fs-13);
       color: var(--fg-3);
       max-width: 60ch;
       line-height: var(--lh-body);
+      margin: 0;
     }
     .notes em {
       font-style: normal;
       color: var(--fg-2);
+    }
+    .disclaimer {
+      border-left: 1px solid var(--warn);
+      padding-left: var(--s-7);
+    }
+    .disclaimer-label {
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      font-weight: var(--w-medium);
+      color: var(--warn);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+      margin-bottom: var(--s-4);
+    }
+    .disclaimer p {
+      font-size: var(--fs-13);
+      color: var(--fg-2);
+      line-height: var(--lh-body);
+      margin: 0;
+      max-width: 56ch;
     }
 
     /* ---- Footer ------------------------------------------------------- */
@@ -332,6 +359,8 @@
       .hero h1 { font-size: var(--fs-36); }
       .pillars { grid-template-columns: 1fr; }
       .install-grid { grid-template-columns: 1fr; }
+      .notes-grid { grid-template-columns: 1fr; gap: var(--s-9); }
+      .disclaimer { border-left: 0; border-top: 1px solid var(--warn); padding-left: 0; padding-top: var(--s-6); }
       .audience li { flex-direction: column; gap: var(--s-3); }
       .audience .who { width: auto; }
       .req-grid { grid-template-columns: 1fr; row-gap: var(--s-3); }
@@ -352,7 +381,7 @@
         <a href="#what">What it does</a>
         <a href="#install">Install</a>
         <a href="#requirements">Requirements</a>
-        <a href="https://github.com/shawnbrown/SherlockEQ">Source <i data-lucide="arrow-up-right" style="width:12px;height:12px"></i></a>
+        <a href="https://github.com/smbrownai/SherlockEQ">Source <i data-lucide="arrow-up-right" style="width:12px;height:12px"></i></a>
       </nav>
     </div>
   </header>
@@ -367,7 +396,7 @@
         <div class="eyebrow" style="margin-bottom: var(--s-6);">MACOS · SYSTEM-AUDIO EQUALIZER</div>
         <h1>Notice what other equalizers don't expose.</h1>
         <p class="lede">
-          SherlockEQ is a hearing-correction equalizer for macOS. It taps system audio, splits the chain per ear, and gives you the controls to locate a tinnitus tone, interpret an audiogram, and refine an EQ to your actual hearing — not the version most apps and streaming services let you reach.
+          SherlockEQ is a per-ear audio equalizer for macOS. It taps system audio, splits the chain by ear, and gives you the controls to investigate a tinnitus tone, plot an audiogram-shaped EQ curve, and refine sound to your listening preferences — with precision most apps and streaming services don't expose.
         </p>
         <div class="cta-row">
           <a class="btn btn-primary" href="#install">
@@ -465,7 +494,7 @@
           <p>Signed and notarized .dmg from GitHub Releases. Drag SherlockEQ into Applications and launch.</p>
           <pre><code>SherlockEQ-1.0.0.dmg
 8.2 MB · sha256 a1b2c3…</code></pre>
-          <a class="btn btn-primary" href="https://github.com/shawnbrown/SherlockEQ/releases/latest">
+          <a class="btn btn-primary" href="https://github.com/smbrownai/SherlockEQ/releases/latest">
             Download .dmg
             <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i>
           </a>
@@ -474,7 +503,7 @@
         <div class="install-card">
           <h3><i data-lucide="terminal" style="width:14px;height:14px;color:var(--fg-2)"></i> Homebrew</h3>
           <p>Installs the same notarized bundle and tracks updates via <code>brew upgrade</code>. The in-app updater stands down when installed this way.</p>
-          <pre><code>brew tap shawnbrown/sherlockeq
+          <pre><code>brew tap smbrownai/sherlockeq
 brew install --cask sherlockeq</code></pre>
         </div>
       </div>
@@ -527,9 +556,18 @@ brew install --cask sherlockeq</code></pre>
         <h2>Notes</h2>
       </div>
 
-      <p class="notes">
-        <em>On the name.</em> Sherlocking is what happens when Apple ships a feature that copies an independent app. SherlockEQ is built around exactly the kind of system audio processing macOS does not expose. So: Apple, sherlock this. The author would consider that a win.
-      </p>
+      <div class="notes-grid">
+        <p class="notes">
+          <em>On the name.</em> Sherlocking is what happens when Apple ships a feature that copies an independent app. SherlockEQ is built around exactly the kind of system audio processing macOS does not expose. So: Apple, sherlock this. The author would consider that a win.
+        </p>
+
+        <aside class="disclaimer" role="note">
+          <div class="disclaimer-label">NOT A MEDICAL DEVICE</div>
+          <p>
+            SherlockEQ is not a health or medical application. It does not diagnose, treat, measure, or monitor any hearing condition, tinnitus, or disability. It is an audio equalizer for personal listening preferences. If you have concerns about your hearing, consult a doctor, audiologist, or licensed healthcare professional.
+          </p>
+        </aside>
+      </div>
     </div>
   </section>
 
@@ -538,11 +576,11 @@ brew install --cask sherlockeq</code></pre>
        ================================================================= -->
   <footer class="site-footer">
     <div class="container footer-inner">
-      <span>SherlockEQ · built by <a href="https://shawnnext.ai">shawnnext.ai</a></span>
+      <span>SherlockEQ · snxt.ai</span>
       <div class="footer-spacer"></div>
-      <a href="https://github.com/shawnbrown/SherlockEQ">Source</a>
+      <a href="https://github.com/smbrownai/SherlockEQ">Source</a>
       <span>·</span>
-      <a href="mailto:hi@shawnnext.ai">hi@shawnnext.ai</a>
+      <a href="mailto:dev@snxt.ai">dev@snxt.ai</a>
     </div>
   </footer>
 

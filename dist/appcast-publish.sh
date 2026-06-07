@@ -35,7 +35,7 @@ cd "$REPO_ROOT"
 
 DMG="dist/build/SherlockEQ-$VERSION.dmg"
 APPCAST="dist/appcast.xml"
-DOWNLOAD_URL="https://github.com/shawnbrown/SherlockEQ/releases/download/v$VERSION/SherlockEQ-$VERSION.dmg"
+DOWNLOAD_URL="https://github.com/smbrownai/SherlockEQ/releases/download/v$VERSION/SherlockEQ-$VERSION.dmg"
 MIN_OS="14.6"
 
 [[ -f "$DMG" ]]        || { echo "error: $DMG missing — run dist/release.sh first"; exit 1; }
@@ -118,10 +118,10 @@ cat <<SUMMARY
 
   next:
     1. git add $APPCAST && git commit -m "appcast: $VERSION"
-    2. upload $APPCAST to https://sherlockeq.app/appcast.xml
+    2. upload $APPCAST to https://snxt.ai/appcast.xml
        (or wherever SUFeedURL points)
     3. confirm via:
-         curl -sI https://sherlockeq.app/appcast.xml
-         curl -s  https://sherlockeq.app/appcast.xml | head -40
+         curl -sI https://snxt.ai/appcast.xml
+         curl -s  https://snxt.ai/appcast.xml | head -40
 
 SUMMARY

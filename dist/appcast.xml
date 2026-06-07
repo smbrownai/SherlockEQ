@@ -2,7 +2,7 @@
 <!--
   SherlockEQ Sparkle appcast.
 
-  Hosted at:  https://sherlockeq.app/appcast.xml
+  Hosted at:  https://snxt.ai/appcast.xml
   Updated by: dist/appcast-publish.sh on each release.
 
   Sparkle reads <item> entries newest-first. New releases prepend a fresh
@@ -14,7 +14,7 @@
      version="2.0">
   <channel>
     <title>SherlockEQ</title>
-    <link>https://sherlockeq.app/appcast.xml</link>
+    <link>https://snxt.ai/appcast.xml</link>
     <description>Updates for SherlockEQ.</description>
     <language>en</language>
 

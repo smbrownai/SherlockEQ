@@ -57,7 +57,7 @@ add a custom user-defined build setting:
 
 Also add (one-time per project):
 
-  INFOPLIST_KEY_SUFeedURL = https://sherlockeq.app/appcast.xml
+  INFOPLIST_KEY_SUFeedURL = https://snxt.ai/appcast.xml
 
 Optional (defaults are sensible):
 

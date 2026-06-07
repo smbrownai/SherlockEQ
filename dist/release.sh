@@ -187,7 +187,7 @@ cat <<SUMMARY
     3. upload dmg:                 gh release create v$VERSION "$DMG" \\
                                      --title "SherlockEQ $VERSION" \\
                                      --notes-file dist/release-notes/$VERSION.md
-    4. upload dist/appcast.xml to https://sherlockeq.app/appcast.xml
+    4. upload dist/appcast.xml to https://snxt.ai/appcast.xml
     5. bump version + sha256 in dist/homebrew/sherlockeq.rb and push the tap repo
 
 SUMMARY

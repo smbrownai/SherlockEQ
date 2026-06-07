@@ -1,7 +1,7 @@
 # Homebrew Cask for SherlockEQ.
 #
 # Lives in a personal tap repo at:
-#   github.com/shawnbrown/homebrew-sherlockeq/Casks/sherlockeq.rb
+#   github.com/smbrownai/homebrew-sherlockeq/Casks/sherlockeq.rb
 #
 # Bumping a release:
 #   1. dist/release.sh <version>   produces a signed/notarized/stapled dmg
@@ -19,11 +19,11 @@ cask "sherlockeq" do
   version "1.0.0"
   sha256 "REPLACE_WITH_RELEASE_SHA256"
 
-  url "https://github.com/shawnbrown/SherlockEQ/releases/download/v#{version}/SherlockEQ-#{version}.dmg",
-      verified: "github.com/shawnbrown/SherlockEQ/"
+  url "https://github.com/smbrownai/SherlockEQ/releases/download/v#{version}/SherlockEQ-#{version}.dmg",
+      verified: "github.com/smbrownai/SherlockEQ/"
   name "SherlockEQ"
-  desc "Hearing-correction equalizer for system audio"
-  homepage "https://sherlockeq.app"
+  desc "Audio equalizer for personal listening preferences on macOS"
+  homepage "https://snxt.ai"
 
   livecheck do
     url :url
