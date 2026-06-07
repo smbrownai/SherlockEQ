@@ -164,7 +164,22 @@ final class AudioState: ObservableObject {
     /// ID of the currently-active hearing profile. The profile itself lives in
     /// `ProfileStore`; we hold only the ID so the store remains the source of
     /// truth and edits naturally flow through `ProfileStore.save(_:)`.
-    @Published var activeProfileID: UUID?
+    /// Persisted to UserDefaults so the user's selection survives across launches.
+    @Published var activeProfileID: UUID? = AudioState.loadActiveProfileID() {
+        didSet {
+            let defaults = UserDefaults.standard
+            if let id = activeProfileID {
+                defaults.set(id.uuidString, forKey: Self.activeProfileIDKey)
+            } else {
+                defaults.removeObject(forKey: Self.activeProfileIDKey)
+            }
+        }
+    }
+    static let activeProfileIDKey = "sherlockeq.activeProfileID"
+    private static func loadActiveProfileID() -> UUID? {
+        guard let raw = UserDefaults.standard.string(forKey: activeProfileIDKey) else { return nil }
+        return UUID(uuidString: raw)
+    }
 
     /// Throttled mirrors of `safeListening.sessionDose` / `.remainingMinutes`
     /// for views that re-render on every `AudioState` tick. Populated at 1 Hz
@@ -222,11 +237,14 @@ final class AudioState: ObservableObject {
     }
 
     /// On first launch, pick the first available profile so the popover and
-    /// the audio engine have something to point at.
+    /// the audio engine have something to point at. If a persisted active
+    /// profile no longer exists (user deleted it in a prior session) fall
+    /// back to the first available profile the same way.
     func adoptDefaultProfileIfNeeded(from store: ProfileStore) {
-        if activeProfileID == nil, let first = store.profiles.first {
-            activeProfileID = first.id
+        if let id = activeProfileID, store.profiles.contains(where: { $0.id == id }) {
+            return
         }
+        activeProfileID = store.profiles.first?.id
     }
 
     /// Bridge profile state into the audio engine. Subscribes to the active
