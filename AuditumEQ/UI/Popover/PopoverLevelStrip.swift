@@ -90,6 +90,14 @@ struct PopoverLevelStrip: View {
     /// up with how a hardware meter's LED ladder reads at a glance.
     @ViewBuilder
     private func bar(label: String, peak: Float) -> some View {
+        let peakDBVal = peakDB(peak)
+        let zone: String = {
+            let yellowBoundary = 70 - calibrationOffsetDBA
+            let redBoundary = 85 - calibrationOffsetDBA
+            if peakDBVal >= redBoundary { return "very loud" }
+            if peakDBVal >= yellowBoundary { return "loud" }
+            return "moderate"
+        }()
         HStack(spacing: 6) {
             Text(label)
                 .font(.caption2.monospaced().weight(.semibold))
@@ -97,7 +105,7 @@ struct PopoverLevelStrip: View {
                 .frame(width: 10, alignment: .leading)
             GeometryReader { geo in
                 let W = geo.size.width
-                let peakX = W * fillFraction(forDB: peakDB(peak))
+                let peakX = W * fillFraction(forDB: peakDBVal)
                 let yellowX = W * fillFraction(forDB: 70 - calibrationOffsetDBA)
                 let redX    = W * fillFraction(forDB: 85 - calibrationOffsetDBA)
 
@@ -125,11 +133,27 @@ struct PopoverLevelStrip: View {
                             .frame(width: peakX - redX)
                             .offset(x: redX)
                     }
+
+                    // Zone-boundary tick marks — non-color encoding
+                    // so colorblind users can locate the moderate /
+                    // loud / very-loud thresholds without relying on
+                    // the green / yellow / red transition.
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.55))
+                        .frame(width: 1)
+                        .offset(x: yellowX)
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.55))
+                        .frame(width: 1)
+                        .offset(x: redX)
                 }
                 .clipShape(Capsule())
             }
             .frame(height: 5)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label) channel peak level")
+        .accessibilityValue(String(format: "%.0f dBFS, %@", peakDBVal, zone))
     }
 
     private func peakDB(_ peak: Float) -> Double {
