@@ -614,6 +614,17 @@ EOF
         --title "SherlockEQ $VERSION — web update" \
         --body "Mirror of \`web/\` from smbrownai/SherlockEQ at v$VERSION. Source: https://github.com/smbrownai/SherlockEQ/blob/v$VERSION/web/index.html")
       echo "    ✓ web PR opened: $PR_URL"
+
+      # Auto-merge: web/ changes for a typical release are just the
+      # two version-bump strings (sed'd in PREP from web/index.html),
+      # which the maintainer already reviewed in the SherlockEQ release
+      # PR. Keeping the PR as a paper trail but landing it immediately
+      # so snxt.ai picks up the new version without a manual step.
+      if gh pr merge "$PR_URL" --squash --delete-branch; then
+        echo "    ✓ web PR merged: $PR_URL"
+      else
+        warn "auto-merge of $PR_URL failed — merge it manually"
+      fi
     )
   else
     warn "SNXT_REPO_PATH ($SNXT_REPO_PATH) is not a git repo — skipping web sync"
@@ -625,6 +636,7 @@ EOF
         git add SherlockEQ && git commit -m "SherlockEQ $VERSION web update"
         git push -u origin sherlockeq/$VERSION
         gh pr create --base main --title "SherlockEQ $VERSION — web update"
+        gh pr merge --squash --delete-branch
 EOF
   fi
 
