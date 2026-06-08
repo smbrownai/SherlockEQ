@@ -16,7 +16,7 @@
 #   - Submit via `brew bump-cask-pr` once eligible.
 
 cask "sherlockeq" do
-  version "1.0.0"
+  version "0.1.0"
   sha256 "REPLACE_WITH_RELEASE_SHA256"
 
   url "https://github.com/smbrownai/SherlockEQ/releases/download/v#{version}/SherlockEQ-#{version}.dmg",
