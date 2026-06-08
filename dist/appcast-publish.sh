@@ -66,7 +66,31 @@ BUILD=$(printf "%d%02d%02d" \
   "$(echo "$VERSION" | cut -d. -f3 | sed 's/[^0-9].*//')")
 
 PUBDATE="$(date -u "+%a, %d %b %Y %H:%M:%S +0000")"
-NOTES_BODY="$(cat "$NOTES_FILE")"
+
+# Strip leading HTML comment blocks from the notes before embedding in
+# the CDATA description. The notes files start with a maintainer-only
+# "<!-- ... -->" header that has no business in the user-facing release
+# notes — Sparkle.framework handled it via WebKit, but third-party
+# Sparkle readers (Latest, MacUpdater) sniff the first non-whitespace
+# char and bail when they see "<!--". Strip all leading comment blocks
+# then collapse the surrounding blank lines.
+NOTES_BODY="$(python3 - "$NOTES_FILE" <<'PY'
+import re, sys
+text = open(sys.argv[1]).read()
+# Repeatedly strip a leading comment + any whitespace that follows.
+while True:
+    stripped = re.sub(r'\A\s*<!--.*?-->\s*', '', text, count=1, flags=re.DOTALL)
+    if stripped == text:
+        break
+    text = stripped
+print(text.rstrip())
+PY
+)"
+
+# GitHub release page hosts the same release notes — emit as
+# sparkle:releaseNotesLink so third-party readers that prefer external
+# notes (Latest, MacUpdater) have a working URL to fall back to.
+RELEASE_NOTES_LINK="https://github.com/smbrownai/SherlockEQ/releases/tag/v$VERSION"
 
 # Write the new item to its own temp file. BSD awk on macOS rejects
 # multi-line strings via -v, so we splice with head/tail instead.
@@ -79,6 +103,7 @@ cat > "$ITEM_FILE" <<XML
       <sparkle:version>$BUILD</sparkle:version>
       <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>$MIN_OS</sparkle:minimumSystemVersion>
+      <sparkle:releaseNotesLink>$RELEASE_NOTES_LINK</sparkle:releaseNotesLink>
       <description><![CDATA[
 $NOTES_BODY
 ]]></description>
