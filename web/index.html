@@ -379,8 +379,8 @@
       <div class="nav-spacer"></div>
       <nav class="nav-links">
         <a href="#what">What it does</a>
+        <a href="#approach">Approach</a>
         <a href="#install">Install</a>
-        <a href="#requirements">Requirements</a>
         <a href="https://github.com/smbrownai/SherlockEQ">Source <i data-lucide="arrow-up-right" style="width:12px;height:12px"></i></a>
       </nav>
     </div>
@@ -474,6 +474,41 @@
           <span class="what">For anyone chasing harshness, muddiness, or fatigue who wants more than a five-band slider. Operates on the system bus, not per-app.</span>
         </li>
       </ul>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       Approach
+       ================================================================= -->
+  <section id="approach">
+    <div class="container">
+      <div class="section-head">
+        <h2>Built on Core Audio</h2>
+      </div>
+
+      <div class="pillars">
+        <div class="pillar">
+          <div class="key">NATIVE TAPS</div>
+          <h3>Apple's API, not a workaround</h3>
+          <p>
+            SherlockEQ uses the Core Audio Tap API Apple shipped in macOS 14.2 to read system audio at the source. No virtual driver, no kernel extension, no audio routing to configure. Permissions are managed by macOS itself.
+          </p>
+        </div>
+        <div class="pillar">
+          <div class="key">GENERAL PURPOSE</div>
+          <h3>An EQ for anyone</h3>
+          <p>
+            The hearing and tinnitus tools are there if you need them, but the EQ underneath is the same one a producer or careful listener would reach for. macOS does not ship a system-wide parametric EQ. This is one.
+          </p>
+        </div>
+        <div class="pillar">
+          <div class="key">MODULAR</div>
+          <h3>As few or as many features as you want</h3>
+          <p>
+            Every feature is per-profile and optional. Run with just a master gain. Or layer in the safety overlay, notch filter, headphone correction, dose tracking — whatever you actually reach for.
+          </p>
+        </div>
+      </div>
     </div>
   </section>
 

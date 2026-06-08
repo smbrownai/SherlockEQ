@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		975CFBD82FD6601100AF53D9 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 975CFBD72FD6601100AF53D9 /* Sparkle */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		977681282FD473BF00F6CE2F /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -46,6 +50,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				975CFBD82FD6601100AF53D9 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -113,6 +118,7 @@
 			);
 			name = SherlockEQ;
 			packageProductDependencies = (
+				975CFBD72FD6601100AF53D9 /* Sparkle */,
 			);
 			productName = SherlockEQ;
 			productReference = 9789EF0F2FCF6BC6008D3A9A /* SherlockEQ.app */;
@@ -146,6 +152,9 @@
 			);
 			mainGroup = 9789EF062FCF6BC6008D3A9A;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				975CFBD62FD6601100AF53D9 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 9789EF102FCF6BC6008D3A9A /* Products */;
 			projectDirPath = "";
@@ -381,6 +390,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "SherlockEQ uses system audio access to apply your hearing profile to all apps on your Mac.";
+				INFOPLIST_KEY_NSScreenCaptureDescription = "SherlockEQ uses this permission to capture system audio. It does not record video or screen contents.";
+				INFOPLIST_KEY_SUFeedURL = "https://snxt.ai/appcast.xml";
+				INFOPLIST_KEY_SUPublicEDKey = "wltqWmlE8DlhQFGVxSRGLO06xjRrYO3jDIu8h3SYx58=";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -395,7 +407,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.6;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.shawnbrown.SherlockEQ;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -439,6 +451,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "SherlockEQ uses system audio access to apply your hearing profile to all apps on your Mac.";
+				INFOPLIST_KEY_NSScreenCaptureDescription = "SherlockEQ uses this permission to capture system audio. It does not record video or screen contents.";
+				INFOPLIST_KEY_SUFeedURL = "https://snxt.ai/appcast.xml";
+				INFOPLIST_KEY_SUPublicEDKey = "wltqWmlE8DlhQFGVxSRGLO06xjRrYO3jDIu8h3SYx58=";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -453,7 +468,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.6;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.shawnbrown.SherlockEQ;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -507,6 +522,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		975CFBD62FD6601100AF53D9 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		975CFBD72FD6601100AF53D9 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 975CFBD62FD6601100AF53D9 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 9789EF072FCF6BC6008D3A9A /* Project object */;
 }

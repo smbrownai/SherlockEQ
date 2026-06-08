@@ -68,7 +68,11 @@ BUILD=$(printf "%d%02d%02d" \
 PUBDATE="$(date -u "+%a, %d %b %Y %H:%M:%S +0000")"
 NOTES_BODY="$(cat "$NOTES_FILE")"
 
-NEW_ITEM=$(cat <<XML
+# Write the new item to its own temp file. BSD awk on macOS rejects
+# multi-line strings via -v, so we splice with head/tail instead.
+ITEM_FILE="$(mktemp)"
+trap 'rm -f "$ITEM_FILE"' EXIT
+cat > "$ITEM_FILE" <<XML
     <item>
       <title>SherlockEQ $VERSION</title>
       <pubDate>$PUBDATE</pubDate>
@@ -83,31 +87,32 @@ $NOTES_BODY
                  $SIG_LINE />
     </item>
 XML
-)
 
 # ---- splice into appcast.xml -------------------------------------------------
 
-# Insert above the marker comment, falling back to inserting just before
+# Insert below the marker comment. Fall back to inserting just before
 # </channel> if the marker has been edited away.
 TMP="$(mktemp)"
 if grep -q "<!-- NEW RELEASES GO BELOW THIS LINE -->" "$APPCAST"; then
-  awk -v ITEM="$NEW_ITEM" '
-    /<!-- NEW RELEASES GO BELOW THIS LINE -->/ {
-      print
-      print ""
-      print ITEM
-      next
-    }
-    { print }
-  ' "$APPCAST" > "$TMP"
+  MARKER_LINE=$(grep -n "<!-- NEW RELEASES GO BELOW THIS LINE -->" "$APPCAST" | head -1 | cut -d: -f1)
+  {
+    head -n "$MARKER_LINE" "$APPCAST"
+    echo ""
+    cat "$ITEM_FILE"
+    tail -n +$((MARKER_LINE + 1)) "$APPCAST"
+  } > "$TMP"
 else
-  awk -v ITEM="$NEW_ITEM" '
-    /<\/channel>/ {
-      print ITEM
-      print ""
-    }
-    { print }
-  ' "$APPCAST" > "$TMP"
+  CHANNEL_LINE=$(grep -n "</channel>" "$APPCAST" | head -1 | cut -d: -f1)
+  if [[ -z "$CHANNEL_LINE" ]]; then
+    echo "error: appcast.xml has neither the insertion marker nor a </channel> tag" >&2
+    rm -f "$TMP"
+    exit 1
+  fi
+  {
+    head -n $((CHANNEL_LINE - 1)) "$APPCAST"
+    cat "$ITEM_FILE"
+    tail -n +"$CHANNEL_LINE" "$APPCAST"
+  } > "$TMP"
 fi
 
 mv "$TMP" "$APPCAST"
