@@ -401,24 +401,24 @@ if [[ "$PHASE" == "publish" ]]; then
   : "${TEAM_ID:?set TEAM_ID for dist/release.sh}"
   : "${NOTARY_PROFILE:?set NOTARY_PROFILE for dist/release.sh}"
 
-  CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-  [[ "$CURRENT_BRANCH" == "main" ]] || die "expected to be on main, on '$CURRENT_BRANCH'"
-
+  # Working tree must be clean before any branch movement.
   [[ -z "$(git status --porcelain)" ]] || die "working tree dirty — clean before publish"
 
-  git fetch --quiet origin main
-  LOCAL=$(git rev-parse main)
-  REMOTE=$(git rev-parse origin/main)
-  if [[ "$LOCAL" != "$REMOTE" ]]; then
-    warn "main is out of sync with origin/main"
-    info "local:  $LOCAL"
-    info "remote: $REMOTE"
-    die "pull first, then re-run"
+  # Auto-switch to main: the PR is already merged (we checked in phase
+  # detection), so the release branch we're sitting on is fully reflected
+  # in origin/main. Switching + fast-forward pull is the safe move.
+  CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+  if [[ "$CURRENT_BRANCH" != "main" ]]; then
+    info "currently on '$CURRENT_BRANCH'; switching to main (PR is merged)"
+    git checkout main
   fi
 
-  [[ -f "$NOTES_FILE" ]] || die "release notes missing: $NOTES_FILE (was the PR merged into main?)"
+  git fetch --quiet origin main
+  git pull --ff-only origin main
+  ok "on main, clean, up to date with origin"
 
-  ok "on main, clean, in sync with origin, notes present"
+  [[ -f "$NOTES_FILE" ]] || die "release notes missing: $NOTES_FILE (was the PR merged into main?)"
+  ok "release notes present"
 
   # ---- step 1: build, notarize, dmg ------------------------------------------
 
