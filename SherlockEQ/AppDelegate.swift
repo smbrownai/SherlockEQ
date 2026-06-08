@@ -167,8 +167,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified
         window.titlebarAppearsTransparent = false
-        window.setContentSize(NSSize(width: 1480, height: 820))
-        window.minSize = NSSize(width: 1400, height: 740)
+        // Min height is set to fit the densest non-scrolling screen — Tinnitus
+        // Notch with its disclaimer fully visible. Below ~860 the disclaimer
+        // wraps off the bottom; Equalizer also crowds its keyboard-shortcuts
+        // panel. Separate-L/R notch mode is still allowed to scroll a touch
+        // at the floor — it's an advanced opt-in and the alternative is
+        // forcing every user onto a tall window. Default height bumped to
+        // match so first launch is comfortable.
+        window.setContentSize(NSSize(width: 1480, height: 880))
+        window.minSize = NSSize(width: 1400, height: 860)
         window.setFrameAutosaveName("SherlockEQ.MainWindow")
         window.isReleasedWhenClosed = false
         window.delegate = self

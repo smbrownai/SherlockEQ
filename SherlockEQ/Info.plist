@@ -43,16 +43,22 @@
 
     <!--
       Privacy descriptions. These strings are shown to the user inside
-      the macOS TCC permission prompts. Both are required:
+      the macOS TCC permission prompts.
         - NSMicrophoneUsageDescription pairs with the
           com.apple.security.device.audio-input entitlement.
-        - NSScreenCaptureUsageDescription is what macOS demands for any
-          cross-process audio capture, including Core Audio Taps.
+        - NSAudioCaptureUsageDescription is the "System Audio Recording"
+          TCC bucket (macOS 15+ user-visible name; the underlying TCC
+          service `kTCCServiceAudioCapture` exists on 14.x too — it's
+          just grouped under Screen Recording in the Settings UI there).
+          We do NOT use NSScreenCaptureUsageDescription / the CGRequest
+          screen-capture APIs because those route the app to the wrong
+          bucket (Screen & System Audio Recording) — CATap belongs in
+          System Audio Recording Only alongside Audio Hijack / ARK.
     -->
     <key>NSMicrophoneUsageDescription</key>
     <string>SherlockEQ uses microphone access for the audio path; it does not record audio.</string>
-    <key>NSScreenCaptureUsageDescription</key>
-    <string>SherlockEQ uses this permission to capture system audio through Apple's Core Audio Tap API. It does not record video or screen contents.</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>SherlockEQ uses this permission to capture system audio through Apple's Core Audio Tap API. It does not record audio to disk.</string>
 
     <!--
       Sparkle. SUFeedURL is the appcast endpoint. SUPublicEDKey MUST

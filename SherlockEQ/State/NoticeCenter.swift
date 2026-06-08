@@ -74,7 +74,7 @@ final class NoticeCenter: ObservableObject {
                     case .permissionDenied:
                         self?.showNotice(TransientNotice(
                             severity: .error,
-                            message: "Audio capture needs Screen & System Audio Recording permission. Open System Settings → Privacy & Security → Screen & System Audio Recording to enable SherlockEQ."
+                            message: "Audio capture needs System Audio Recording permission. Open System Settings → Privacy & Security → System Audio Recording to enable SherlockEQ."
                         ))
                     case .failed(let msg):
                         self?.showNotice(TransientNotice(
