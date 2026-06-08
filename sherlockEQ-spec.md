@@ -1,10 +1,11 @@
 # SherlockEQ — Specification
 **Name:** SherlockEQ
 **Type:** macOS hybrid app — menu bar popover + full main window
-**Target OS:** macOS 14.2 (Sonoma) and later
-**Language:** Swift 5.9+ / SwiftUI
-**Build tool:** Xcode 15+
-**Audio:** Core Audio Taps + AVAudioEngine + AVAudioUnitEQ (AUNBandEQ)
+**Target OS:** macOS 14.6 (Sonoma) and later
+**Language:** Swift 5 / SwiftUI (SwiftUI default actor isolation = MainActor)
+**Build tool:** Xcode 16+
+**Audio:** Core Audio Taps (CATap) + AVAudioEngine + manual biquad cascades (per-ear)
+**Auto-updates:** Sparkle 2.x (EdDSA-signed appcast at `https://snxt.ai/appcast.xml`)
 
 ---
 
@@ -39,12 +40,13 @@ sound the way it used to.
 
 **The Asymmetric Listener**
 One ear significantly different from the other. Stereo imaging sounds off. Panning in
-music feels wrong. Needs independent left/right channel correction.
+music feels wrong. Needs independent left/right channel correction and per-ear notch
+control for asymmetric tinnitus.
 
 **The Podcast Prosumer**
 Hosts or edits a personal or semi-professional podcast. Monitors audio during editing
 and recording. Needs confidence that what they're hearing accurately reflects what
-listeners hear. Uses bypass/reference mode to A/B their mix against their hearing profile.
+listeners hear. Uses Reference Mode to A/B their mix against their hearing profile.
 
 ---
 
@@ -61,55 +63,90 @@ listeners hear. Uses bypass/reference mode to A/B their mix against their hearin
   everything that deserves a chair. Neither tries to do the other's job.
 - **Prosumer ceiling.** Full parametric control is available but not the default. The
   default experience is guided and friendly.
+- **Errors route through `NoticeCenter`.** Every user-facing warning or error surfaces
+  via the central notice banner (visible in both the popover and the main window's
+  detail area), not via ad-hoc alerts or Debug-only state.
 
 ---
 
 ## 4. UI Surface Map
 
-This is the architectural decision that shapes everything else. SherlockEQ has two surfaces
-with a clean division of responsibility.
+SherlockEQ has two primary surfaces — a menu-bar popover for quick operation, and a
+main window for configuration — plus a persistent right-hand monitor sidebar inside the
+main window.
 
-### Menu Bar Popover (~380pt wide)
-The popover is for **operating** SherlockEQ, not configuring it. It is what you interact
-with a dozen times a day without thinking. It dismisses when you click away.
+### Menu Bar Popover (380pt wide)
+The popover is for **operating** SherlockEQ, not configuring it. It dismisses when you
+click away. Implemented as a SwiftUI `MenuBarExtra` with `.menuBarExtraStyle(.window)`.
 
-What belongs here:
-- Active profile name + quick profile switcher
-- Session dose bar and remaining time estimate
-- Compensation strength slider (the one knob that matters most)
-- Tinnitus notch on/off toggle
-- Reference mode button (prominent, hold or click)
-- Output device picker
-- "Open SherlockEQ" button → opens the main window
+What belongs here (top → bottom):
+- Header: app icon + name, read-only current output device label, "Open SherlockEQ"
+  arrow button (opens main window via `AppDelegate.showMainWindow`)
+- Notice banner (shared `NoticeCenter` — also rendered in the main window)
+- Session dose bar (percent + remaining minutes)
+- Stereo level strip (live L/R peak meters, A-weighted dBA via calibration offset)
+- Master gain slider (`-60…+12 dB`) with recenter button
+- Balance slider (`-1…+1`, per active profile) with recenter button
+- Profile picker row
+- Compensation strength slider
+- Tinnitus notch on/off + frequency label
+- Reference Mode button (prominent)
 
-What does NOT belong here:
+What does **not** belong here:
 - Audiogram entry
 - Parametric EQ canvas
 - Spectrum analyzer
-- Tone Finder
 - Profile creation or editing
 - Settings
+- Output device picker (the popover shows the current device as a read-only label;
+  device routing follows the macOS default output. Profile→device auto-switching is
+  configured per profile in Profile Detail.)
 
-### Main Window (~860 × 600pt, resizable)
-The window is for **configuring** SherlockEQ. It is opened deliberately. It appears in the
-Dock and CMD+Tab while open. It has a sidebar-based navigation modeled on System
-Settings — clear sections, no nested sheets required for primary tasks.
+### Main Window (default 1480 × 880pt, minimum 1400 × 740pt)
+Opened deliberately from the popover. Appears in the Dock and CMD+Tab while open.
+Uses `NavigationSplitView` with a left sidebar and a persistent right monitor sidebar
+(220pt) toggleable from the toolbar.
 
 What belongs here:
-- All profile management (create, edit, delete, reorder, import/export)
-- Audiogram entry (interactive chart — needs real estate)
-- Advanced and parametric EQ views with spectrum analyzer
-- Tone Finder (focused task, dedicated view)
+- All profile management (create, duplicate, delete, reorder, import, export)
+- Audiogram entry (interactive chart + numeric fields)
+- Equalizer (Simple / Speech / Advanced / Expert — the active profile commits to one
+  mode; mode picker lives on Profile Detail)
+- Tinnitus Notch (Tone Finder + notch controls, consolidated)
 - Safe Listening detail and history
 - All Settings
-- Onboarding wizard (first launch only)
+- Debug diagnostics
+
+### Right-Hand Monitor Sidebar (220pt, toggleable)
+Persistent across every main-window section so the user keeps level/dose awareness
+while editing EQ, browsing profiles, calibrating, etc. Contents:
+1. Output level VU — vertical L/R peak meter. Triple-tap the header to cycle
+   Digital → Analog VU → Vectorscope → Waveform.
+2. Master gain slider (`-60…+12 dB`).
+3. Balance slider (per active profile, `-1…+1`) with recenter button.
+4. Dose mini-bar — today's NIOSH dose as a thin green/amber/red capsule.
+
+Visibility persisted via `@AppStorage("sherlockeq.monitorSidebarVisible")`. Defaults
+to visible so first-launch users discover it.
 
 ### Activation Policy
-- Window closed → `NSApp.setActivationPolicy(.accessory)` — lives in menu bar only,
-  no Dock icon, not in CMD+Tab
+- Window closed → `NSApp.setActivationPolicy(.accessory)` — menu bar only, no Dock
+  icon, not in CMD+Tab. Controlled by `preferences.hideFromDockEnabled` (default on).
 - Window open → `NSApp.setActivationPolicy(.regular)` — Dock icon appears, CMD+Tab
-  works, feels like a full app
-- This is the same pattern used by Fantastical, 1Password, iStat Menus, and others.
+  works.
+- The flip is sequenced manually in `AppDelegate.showMainWindow`: policy change →
+  short runloop pump (~10ms) → `NSRunningApplication.current.activate(options:
+  .activateAllWindows)` → `makeKeyAndOrderFront`. This works around the
+  `NSApp.activate(ignoringOtherApps:)` deprecation on macOS 14+ where the menu bar
+  silently stays greyed out.
+- `applicationShouldTerminateAfterLastWindowClosed` returns `false` — closing the
+  window doesn't quit.
+
+### Multi-Instance Guard
+`applicationWillFinishLaunching` checks for another running instance by bundle ID;
+if one is found, it activates that instance and calls `NSApp.terminate(nil)`. Two
+SherlockEQ binaries would each install a CATap that captures the other's output and
+loop.
 
 ---
 
@@ -120,77 +157,118 @@ What belongs here:
 A **Hearing Profile** is the central data object. Users can create and name multiple
 profiles — one per output device, per context, or per activity.
 
-Each profile contains:
-- Display name and optional icon (SF Symbol)
-- Left ear EQ curve (up to 16 bands)
-- Right ear EQ curve (up to 16 bands, independent)
-- Tinnitus notch settings (on/off, frequency, depth, Q)
-- Global gain trim (±12 dB, prevents clipping after EQ boosts)
-- Safe listening ceiling (user-set, default 85 dB)
-- Creation date and last modified date
-- Optional: linked output device (auto-activates when device connects)
+Each profile contains (see `HearingProfile.swift`):
+- `id: UUID`, `name: String`, `symbol: String` (SF Symbol)
+- `linkedDeviceUID: String?` — optional auto-switch target
+- `leftEar: EarProfile`, `rightEar: EarProfile` (each carries audiogram thresholds +
+  derived EQ bands)
+- `leftNotch: TinnitusNotch`, `rightNotch: TinnitusNotch` — per-ear notches
+- `separateNotch: Bool` — when false, the notch UI writes both ears in lockstep;
+  when true, the user can dial in different notches per ear
+- `globalTrimDB: Double` — `-12…+12`, guards against post-boost clipping
+- `balance: Double` — `-1` (full L) ... `0` (center) ... `+1` (full R)
+- `autoEQCurveURL: URL?` (legacy decode-only), `autoEQName: String?`,
+  `autoEQBands: [EQBand]?`, `autoEQPreampDB: Double?` — parsed AutoEQ correction
+- `safeListeningCeilingDB: Double` — user-set, default 85.0
+- `compensationFactor: Double` — `0.25…1.0`, audiogram→EQ strength
+- `separateChannels: Bool` — toggles per-ear UI for the Simple/Advanced/Expert EQ
+  surfaces (default false: single-column UI; symmetric-hearing users keep it off)
+- `eqMode: EQMode` — `.simple`, `.speech`, `.advanced`, `.expert`. The four modes
+  are storage views onto the same band array, not stackable layers — the profile
+  commits to one mental model. Switching is non-destructive. New profiles default
+  to `.simple`; legacy decode defaults to `.expert`.
+- `isBuiltIn: Bool` — true for curated presets (Default, Voice Clarity). The UI
+  blocks edits on built-in profiles and offers Duplicate.
+- `createdAt: Date`, `modifiedAt: Date`
 
-Profiles are stored as JSON in `~/Library/Application Support/SherlockEQ/profiles/`.
-Optional iCloud Drive sync via `NSUbiquitousKeyValueStore` (lightweight, for v2).
+Custom `Codable` decoder preserves backwards compatibility: pre-balance, pre-isBuiltIn
+profiles still load, and the legacy single `notch` field mirrors onto both per-ear
+notches.
+
+Profiles are stored as one `<UUID>.json` file each under
+`~/Library/Application Support/SherlockEQ/profiles/` (overridable via
+`UserDefaults["sherlockeq.profilesDirectory"]`; Settings exposes a folder picker).
+JSON is pretty-printed with sorted keys + ISO-8601 dates.
+
+Writes route through `ProfileStore.save(_:)`, which registers undo on the window's
+`UndoManager` and coalesces rapid saves of the same profile within a 500ms window
+into one undo step (so a slider drag reverts as one Cmd-Z).
 
 ---
 
 ### 5.2 Audiogram Import
 
-The most powerful onboarding path. The user enters their audiogram data — the numbers
-from a printed or digital report from their audiologist. Lives in the main window.
+The user enters their audiogram data — the numbers from a printed or digital report
+from their audiologist. Lives in the main window's Audiogram section.
 
 **Standard audiogram frequencies (Hz):**
-`250, 500, 1000, 2000, 3000, 4000, 6000, 8000`
+`250, 500, 1000, 2000, 3000, 4000, 6000, 8000` (`AudiogramPoint.standardFrequencies`)
 
-**Entry method:** An interactive chart with draggable threshold points per ear.
-Alternatively, numeric entry fields for each frequency/ear combination.
-Values entered in **dB HL** (hearing level, as reported on audiograms).
+**Entry method:** interactive chart with draggable threshold points per ear, plus
+numeric fields alongside. Values entered in **dB HL** (hearing level, as reported
+on audiograms). Left/right tab on the same screen.
 
-**Conversion to EQ:**
-- dB HL is the threshold relative to average normal hearing — it directly represents
-  the additional gain needed at each frequency for audibility
-- EQ boost at each frequency = `audiogram_loss_dBHL * compensation_factor`
-- Default `compensation_factor` = 0.5 (partial compensation, conservative)
+**Conversion to EQ** (`AudiogramConversion.bands(for:compensationFactor:)`):
+- `gain_at_freq = threshold_dBHL × compensation_factor`
+- Default `compensationFactor` = 0.5; range `0.25…1.0`
 - Hard ceiling: no single band boosted more than **+20 dB** regardless of loss
-- User adjusts `compensation_factor` (0.25–1.0) via the "Compensation Strength"
-  slider — in both the popover (quick) and the window (in context with the EQ curve)
-- Bands between audiogram frequencies are interpolated using cubic spline
+  (`AudiogramConversion.perBandCeilingDB`)
+- Bands disabled when pre-compensation loss is < 5 dB HL (no audible boost needed)
+- One band emitted per audiogram point (8 bands per ear). Cubic-spline-derived
+  intermediate bands are not implemented — the algorithm signature can absorb that
+  later without API churn.
+- User adjusts `compensationFactor` via the "Compensation Strength" slider in both
+  the popover (quick) and the main window (in context with the EQ curve preview).
 
 **Caveat messaging (non-clinical):**
 > "For losses above 40 dB, an EQ alone may not fully restore clarity — a hearing
 > professional can discuss additional options. SherlockEQ is not a substitute for hearing aids."
 
-**Per-ear independence:**
-Left and right ears are configured separately. Most hearing loss is asymmetric. The
-audio engine splits stereo to two parallel EQ chains (see Section 7).
+**Per-ear independence:** left and right ears are configured separately. The audio
+engine processes L and R as independent mono streams via per-ear `BiquadCascade`
+inside the source-node render block (see §7.1).
 
 ---
 
 ### 5.3 Tinnitus Notch Filter
 
-A narrow frequency cut applied at the user's tinnitus pitch. Research on tailor-made
-notch training (TMNT) shows that sustained reduction of stimulation around the tinnitus
-frequency can reduce perceived loudness over time.
+A narrow frequency cut applied at the user's tinnitus pitch. Per-ear by design — the
+profile carries `leftNotch` and `rightNotch` independently, with a `separateNotch`
+toggle that controls whether the UI exposes two panels or links them.
 
-**SherlockEQ makes no therapeutic claims.** The notch filter is presented simply as a way
-to reduce the presence of frequencies that are already mentally fatiguing to the user.
+SherlockEQ makes no therapeutic claims. The notch is presented as a way to reduce
+the presence of frequencies that are already mentally fatiguing to the user.
 
-**Popover:** On/off toggle + frequency label only.
-**Main window (EQ view):** Full controls — frequency, depth (-3 to -15 dB), width
-(Narrow / Medium / Wide, mapping to Q ~8 / ~4 / ~2). The notch is rendered as a
-visible notch on the EQ curve in the parametric canvas.
+**Popover:** linked notch on/off toggle + frequency label.
+
+**Main window — Tinnitus Notch view:** full controls. Frequency (1000–16000 Hz),
+depth (`-3` to `-15` dB), width (Narrow / Medium / Wide → Q = 8.0 / 4.0 / 2.0,
+see `NotchWidth.qValue`). When `separateNotch` is on, the screen shows two stacked
+notch panels (Left ear, Right ear). The notch is rendered as a labeled notch on the
+Expert EQ curve.
+
+The Tone Finder and notch controls live on the same view (sidebar entry "Tinnitus
+Notch") so the user reads them as one task — identify the pitch, then dial in the
+notch.
 
 ---
 
 ### 5.4 Safe Listening Monitor
 
-SherlockEQ estimates output loudness using FFT analysis on the post-EQ audio stream and
-tracks a session dose based on NIOSH's 3 dB exchange rate standard:
+SherlockEQ estimates output loudness using FFT-derived RMS on the post-EQ audio
+stream (A-weighted per-bin), then converts dBFS to dBA via the user's calibration
+offset (`calibrationOffsetDBA`, default 100, persisted). Dose accumulates against
+NIOSH's equal-energy 3 dB exchange rule.
+
+NIOSH constants (`SafeListeningTracker`):
+- `nioshReferenceLevelDBA = 85`
+- `nioshReferenceDuration = 28800 s` (8 hours)
+- `nioshExchangeRateDB = 3`
+- Permissible duration at any dBA: `28800 / 2^((dBA - 85) / 3)`
 
 | Level (dBA) | Safe Duration |
 |-------------|--------------|
-| ≤ 70        | Unlimited     |
+| ≤ 70        | Effectively unlimited |
 | 80          | ~8 hours      |
 | 85          | ~2.5 hours    |
 | 88          | ~1.25 hours   |
@@ -198,69 +276,104 @@ tracks a session dose based on NIOSH's 3 dB exchange rate standard:
 | 94          | ~18 minutes   |
 | 100         | ~4 minutes    |
 
-**Popover:** Compact dose bar (green → amber → red), remaining time label.
+**Popover:** compact dose bar (green → amber → red), remaining-time label.
 
-**Main window (Safe Listening view):** Full detail — current level estimate, session
-history chart, per-day dose log, ceiling configuration, notification preferences.
+**Main window — Safe Listening view:** full detail — current level estimate, session
+history, ceiling configuration, notification preferences, SPL-calibration workflow.
 
 **Behavior:**
+- Dose accumulates at all levels (NIOSH self-regulates — permissible duration at
+  low dBA is enormous, contribution is near zero). A `quietThresholdDBA` (default
+  50) only gates the "remaining minutes" display and the sustained-quiet reset.
 - At 80% of daily dose: amber indicator in popover + menu bar icon tint, optional
-  system notification
-- At 100%: red indicator, system notification: *"You've reached your safe listening
-  limit for today. Consider taking a break."*
-- Dose resets at midnight or after a configurable quiet period (default 2h silence)
+  system notification (gated by `notificationsEnabled` and the user's macOS
+  notification authorization).
+- At 100%: red indicator, system notification: "You've reached your safe listening
+  limit for today. Consider taking a break."
+- One-shot per-day flags (`didCrossAmberToday`, `didCrossRedToday`) prevent
+  re-firing the same notification.
+- Dose resets at the calendar-day boundary (midnight rollover) or after a sustained
+  quiet period (default 2h, `quietResetDuration`).
+- "Remaining minutes" is computed off a 60s power-domain rolling average and
+  republished at most once per minute so the readout doesn't twitch.
 
-**Important framing:**
-This is an *estimate* based on digital signal level, not a calibrated SPL meter.
-Actual SPL at the ear depends on headphone type, fit, and hardware output level.
-A one-time disclaimer is shown in onboarding and available in the Safe Listening view.
+**Important framing:** this is an *estimate* based on digital signal level converted
+via a user-set calibration offset. Actual SPL at the ear depends on headphone type,
+fit, and hardware output level. The calibration workflow plays a 1 kHz / −12 dBFS
+reference tone so the user can match it to a known SPL with an external meter.
 
 ---
 
 ### 5.5 Reference Mode
 
-A momentary bypass. Hold (or click-to-toggle) to instantly hear unprocessed system
-audio for A/B comparison. Implemented as a single `bypass` flag on all EQ nodes —
-no graph reconfiguration, no audio dropout.
+A momentary bypass for A/B comparison. Implemented as a single `setBypassed(true)`
+call on both per-ear `BiquadCascade` nodes — the entire EQ stack (AutoEQ + profile
+bands + notch + trim) drops out at once. No graph reconfiguration, no audio dropout.
 
-**Popover:** Prominent Reference button, always visible.
-**Main window:** Reference button also present in the EQ view toolbar.
-**Global shortcut:** User-assignable in Settings.
-**Menu bar icon:** Optional state change (e.g., dim or alt icon) while engaged.
+**Popover:** prominent Reference Mode button.
+**Main window:** Reference button also present in the Expert EQ toolbar.
+**Menu bar:** Audio → Toggle Reference Mode (⌘B local).
+**Global shortcut:** ⌘⇧B when `preferences.globalReferenceShortcutEnabled` is on
+(registered via Carbon `RegisterEventHotKey` in `GlobalHotKey`).
+**Distinct from `eqMasterEnabled`:** reference mode is the transient A/B toggle;
+`eqMasterEnabled` is the user's durable on/off (persisted).
 
 ---
 
 ### 5.6 Device Profiles & Auto-Switching
 
-Any profile can be linked to a specific output device by name. When that device becomes
-the default output, its profile activates automatically. "Passthrough" is a valid
-profile (no EQ, monitoring only).
+Any profile can be linked to a specific output device by UID. When that device
+becomes the default output, `AudioState.autoSwitchProfileIfLinked()` activates
+its profile.
 
-**Popover:** Device picker + current profile name show the active state.
-**Main window (Profiles view):** Manage all device links, set priority order for
-conflicts (two profiles linked to same device).
+**Popover:** the header shows the current output device name as a read-only label.
+**Main window — Profile Detail:** picker for the linked device UID.
+**Settings:** device auto-switching is a profile-level concern; there is no separate
+device-map manager.
 
 ---
 
 ### 5.7 AutoEQ Integration
 
-Import headphone correction curves from the AutoEQ project. The correction is applied
-as a separate `AVAudioUnitEQ` node upstream of the hearing profile EQ:
+Import headphone correction curves from the AutoEQ project. The correction is parsed
+into `EQBand` values (`AutoEQParser`) and pushed onto the per-ear `BiquadCascade`
+*upstream* of the profile's own bands, with the AutoEQ preamp folded into the
+cascade's gain. Headphone-correction toggle (`eqChain.autoEQEnabled`) is independent
+of the profile-EQ toggle (`eqChain.manualEQEnabled`).
 
 ```
-System Audio → [AutoEQ Headphone Correction] → [Hearing Profile EQ] → Output
+Per-ear cascade: [AutoEQ correction] → [Profile EQ bands] → [Tinnitus notch] → [Global trim]
 ```
 
-Both nodes can be toggled independently. AutoEQ curves are imported from plain-text
-`.txt` filter files in AutoEQ parametric format.
+The integration has more surface than a single file picker:
+- **`AutoEQParser`** — parses AutoEQ `.txt` parametric files (preamp + per-band
+  freq/gain/Q).
+- **`AutoEQLibrary`** — manages a user-selected library folder of `.txt` files.
+  The Profile-Detail picker offers every `.txt` in this folder.
+- **`AutoEQRemoteService`** — fetches the AutoEQ catalog
+  (`https://raw.githubusercontent.com/jaakkopasanen/AutoEq/master/results/...`).
+  Caches index + profiles under `Application Support/SherlockEQ`. Refreshes the
+  index weekly; backs off 5 minutes after a 403 rate-limit. Errors surface as a
+  typed `AutoEQFetchError`.
+- **`AutoEQRemote`** — Phase-1 fetcher with rate-limit + offline classification.
+- **`AutoEQSavedProfilesStore`** — persistent store of saved AutoEQ corrections the
+  user keeps across profile edits.
+- **`AutoEQConflictDetector`** — warns when a loaded correction conflicts with
+  manually-dialed bands.
+- **`AutoEQSearchView`** — UI surface inside Profiles for searching the remote
+  catalog and importing a correction into the active profile.
 
-**Main window only** — import, manage, and preview AutoEQ curves in the EQ view.
+User-selected library folder is stored in `AutoEQPreferences.libraryFolder`
+(UserDefaults; the app runs without sandbox, so no security-scoped bookmarks
+needed).
 
 ---
 
 ### 5.8 Voice Clarity Preset
 
-A built-in profile preset targeting speech intelligibility for podcast monitoring.
+A built-in profile preset (`HearingProfile.makeVoiceClarityPreset`) targeting speech
+intelligibility for podcast monitoring. Marked `isBuiltIn: true` so the UI blocks
+edits and offers Duplicate.
 
 | Frequency | Gain  | Rationale                              |
 |-----------|-------|----------------------------------------|
@@ -271,51 +384,72 @@ A built-in profile preset targeting speech intelligibility for podcast monitorin
 | 4000 Hz   | +3 dB | Presence and definition                |
 | 6000 Hz   | +1 dB | Air and brightness                     |
 
-Applied on top of or instead of the hearing profile EQ. Available as a named preset
-in the Profiles list, not buried in a menu.
+The preset appears as a named profile in the Profiles list (not buried in a menu)
+and is seeded on first launch alongside a flat "Default" profile.
+
+Separately, the **Speech EQ mode** (`EQMode.speech`) is a 6-band slider surface
+(60 Hz low-shelf, 200 / 800 / 2500 / 6000 Hz parametric, 12 kHz high-shelf) so users
+can dial in a voice-tuned EQ themselves without using the preset.
 
 ---
 
 ### 5.9 Parametric EQ (Expert View)
 
-The full-control surface. Lives in the main window, EQ section, Expert tab.
+The full-control surface. Reached by setting the active profile's `eqMode` to
+`.expert` (mode picker lives on Profile Detail). Rendered by `ExpertEQView` via
+`ParametricCanvasView`.
 
-- Interactive frequency response canvas: log-scaled x-axis (20Hz–20kHz), ±24 dB y-axis
+- Interactive frequency response canvas: log-scaled x-axis (20 Hz – 20 kHz),
+  ±24 dB y-axis
 - Draggable nodes: x = frequency, y = gain
-- Right-click a node → change filter type (parametric, low/high shelf, notch, low/high pass)
-- Q / bandwidth: pinch gesture or modifier-drag
-- Composite EQ curve rendered in real time via SwiftUI `Canvas` and `Path`, computed
-  from biquad coefficients (Audio EQ Cookbook formulas)
-- Spectrum analyzer (80pt tall) drawn beneath the EQ curve using `vDSP` FFT
-- Tinnitus notch rendered as a labeled notch on the curve
-- L and R curves displayed simultaneously in different colors, with a toggle to edit
-  each independently
+- Filter types per band (`EQFilterType`): parametric, lowShelf, highShelf, notch,
+  bandPass, lowPass, highPass
+- Composite biquad curve computed via `BiquadCoefficients` / `BiquadResponse`
+- Spectrum underlay drawn at the bottom 1/3, log-binned from
+  `SpectrumAnalyzer.logSpectrumDB` (vDSP discrete Fourier transform). Pre-EQ
+  spectrum optionally overlaid as a thin cyan outline.
+- Visualisation modes: `.spectrum` (line + peak-hold + pre-EQ outline), `.octaveBars`
+  (31 ISO 1/3-octave bars). `.spectrogram` exists in code but is hidden from the
+  user-visible picker pending a performance/UX revisit.
+- L and R curves displayed simultaneously (different colors via
+  `AppPreferences.leftEarColor` / `.rightEarColor`), with a Link L+R toggle to edit
+  one or both ears
+- Audiogram-derived target bands rendered as a dashed ghost behind the active curve
+  so the user can see how far their manual tuning has drifted
+- Tinnitus notch rendered as a labeled notch on the curve; edits route through
+  `NotchControlView`, not the canvas, so the dedicated freq/depth/width inputs stay
+  authoritative
 
 ---
 
 ### 5.10 Tone Finder
 
-A dedicated view in the main window for identifying tinnitus frequency.
+Lives inside the Tinnitus Notch view in the main window — Tone Finder and notch
+controls share one screen so the user reads identify-then-dial as one task.
 
-- Large frequency display (Hz) + musical note name approximation
-- Sine tone generator at a safe, fixed output level (~60 dB estimated)
-- Large drag/swipe target to sweep frequency (log scale, 1kHz–16kHz)
-- Fine-tune stepper for ±1 Hz precision
-- "Set as Notch Frequency" button — populates the tinnitus notch filter and returns
-  to the EQ view
-- Non-clinical copy throughout: *"Drag to find the pitch closest to your ringing."*
+- Large frequency readout (Hz)
+- Sine-tone generator (`SineToneGenerator`) routed directly into `mainMixerNode`
+  upstream of master gain, bypassing per-ear EQ so the reference pitch isn't
+  coloured by the profile
+- Drag/swipe target to sweep frequency (log scale, **1 kHz – 16 kHz**)
+- Fine-tune stepper (±1 Hz)
+- Volume row
+- "Set as notch frequency" action — writes into the active profile's notch and
+  flips it on. With `separateNotch` on, the user picks Left / Right / Both.
+- Non-clinical copy: "Drag to find the pitch closest to your ringing."
 
 ---
 
 ## 6. What Is Explicitly Out of Scope
 
-- Per-application volume routing (requires a virtual driver)
+- Per-application volume routing (would require a virtual driver)
 - Recording / capture to file
 - Virtual output devices
 - MIDI or hardware control surfaces
-- iOS / iPadOS companion (future, not now)
+- iOS / iPadOS companion
 - Multichannel / surround audio (stereo only)
 - Any clinical diagnostic feature
+- Onboarding wizard (not currently implemented — see §8.4)
 
 ---
 
@@ -324,149 +458,255 @@ A dedicated view in the main window for identifying tinnitus frequency.
 ### 7.1 Audio Signal Path
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        AVAudioEngine                            │
-│                                                                 │
-│  CATap ──► StereoSplitter ──► [Left EQ Chain]  ──► Mixer ──►  │
-│                           └──► [Right EQ Chain] ──►           │
-│                                                                 │
-│  Left EQ Chain:  AutoEQ Node ──► HearingProfile Node ──► Trim │
-│  Right EQ Chain: AutoEQ Node ──► HearingProfile Node ──► Trim │
-│                                                                 │
-│  Mixer ──► SpectrumTap ──► OutputNode                          │
-└─────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│ CATapEngine                                                            │
+│                                                                        │
+│  CATap (default output, all processes)                                 │
+│   │                                                                    │
+│   ├──► leftSourceNode  (mono L; render block runs leftEQCascade)       │
+│   └──► rightSourceNode (mono R; render block runs rightEQCascade)      │
+│                                                                        │
+│  Each cascade carries, in order:                                       │
+│    AutoEQ correction → Profile EQ bands → Tinnitus notch → Trim        │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
+                              │ (stereo with one channel zeroed each)
+┌────────────────────────────────────────────────────────────────────────┐
+│ SherlockEQAudioEngine (AVAudioEngine)                                  │
+│                                                                        │
+│  leftSourceNode  ──► leftBalanceMixer  ─┐                              │
+│                                          ├──► sumMixer ──► AUPeakLimiter
+│  rightSourceNode ──► rightBalanceMixer ─┘                          │   │
+│                                                                    ▼   │
+│                                              masterGainStage (AVAudioUnitEQ
+│                                              with 1 bypassed band, used as
+│                                              a gain-only stage; -60…+12 dB)
+│                                                          │             │
+│                                                          ▼             │
+│                                              mainMixerNode ──► outputNode
+│                                                          │             │
+│                                              SpectrumTap (vDSP FFT)    │
+│                                                          ▼             │
+│                                              SpectrumAnalyzer →        │
+│                                              SafeListeningTracker      │
+│                                                                        │
+│  toneSourceNode (Tone Finder sine) ──► mainMixerNode (bypasses EQ)     │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-**StereoSplitter:** An `AVAudioMixerNode` routing L to the left chain and R to the
-right chain. Each chain processes its channel independently.
+Key implementation notes:
 
-**Tinnitus Notch:** A high-Q band inside the HearingProfile EQ node, not a separate
-node — keeps the graph simple and the notch visible on the EQ curve.
-
-**SpectrumTap:** `engine.mainMixerNode.installTap(onBus:)` captures post-EQ PCM
-buffers. `vDSP_DFT_Execute` (Accelerate) computes the FFT. Results feed both
-`SpectrumView` and `SafeListeningTracker`.
-
-**Reference Mode:** Sets `.bypass = true` on all EQ nodes simultaneously. Glitch-free,
-no graph reconfiguration.
+- **Per-ear EQ runs inside the source-node render block** as a manual
+  `BiquadCascade` per ear, owned by `CATapEngine`. This replaces an earlier
+  AVAudioUnitEQ-per-ear graph layout that introduced cross-channel content
+  (~−50 dB) under mono-on-one-channel input and ~45 dB of leak at extreme balance
+  pans. Running the filter on a single mono Float buffer per render block keeps
+  L and R signal paths physically separate.
+- **Balance** is realized via `AVAudioMixerNode.outputVolume` (linear, from the
+  `AVAudioMixing` protocol) on per-ear balance mixers between the source nodes and
+  the sumMixer — *not* via `AVAudioUnitEQ.globalGain`, which leaked at extreme
+  attenuations.
+- **Master gain** is realized via a 1-band-bypassed `AVAudioUnitEQ`'s `globalGain`
+  (range `-96…+24 dB`, clamped by SherlockEQ to `-60…+12 dB`) because
+  `mainMixerNode.outputVolume` silently no-ops on this graph.
+- **Limiter** is Apple's `AUPeakLimiter` (`kAudioUnitSubType_PeakLimiter`) right
+  before master gain so band sums that overshoot get brick-walled cleanly.
+- **Sample-rate handling:** the source-node format is stamped at the output device's
+  nominal rate (the rate the aggregate's drift-compensated IOProc delivers), so the
+  graph is uniform end-to-end with no SRC node. If the rates ever disagree on
+  rebuild the engine refuses to start and surfaces a typed error rather than
+  silently producing wrong-rate audio.
+- **Tinnitus notch** lives inside each cascade — not as a separate node — so it
+  rides the same bypass and renders as a labeled notch on the Expert curve.
+- **Reference Mode** calls `setBypassed(true)` on both cascades simultaneously.
+  Glitch-free, no graph reconfiguration.
+- **Tone Finder sine** is attached directly to `mainMixerNode`, bypassing the
+  per-ear EQ so the reference pitch isn't coloured.
+- **Spectrum tap** is installed on `mainMixerNode` (not on `masterGainStage`) so
+  the meter reflects what the listener actually hears — `mainMixerNode` scrubs
+  residual cross-channel content that's audible in upstream nodes but inaudible
+  at the speakers.
+- **AVAudioEngine configuration changes** (Bluetooth route swap, sample-rate
+  renegotiation) post `.AVAudioEngineConfigurationChange`; `SherlockEQAudioEngine`
+  hops the callback to `@MainActor` and asks `AudioState` to rebuild the graph
+  so the user doesn't end up in silence after a route change.
 
 ---
 
 ### 7.2 CATapEngine
 
-```swift
-@available(macOS 14.2, *)
-class CATapEngine: ObservableObject {
-    @Published var isRunning: Bool = false
-    @Published var permissionGranted: Bool = false
-    var sourceNode: AVAudioSourceNode?
+`@MainActor final class CATapEngine: ObservableObject` (macOS 14.6+).
 
-    func requestPermissionAndStart() async { ... }
-    func handleOutputDeviceChange(newDeviceID: AudioDeviceID) { ... }
-    func stop() { ... }
+```swift
+enum State: Equatable {
+    case idle
+    case awaitingPermission
+    case permissionDenied
+    case starting
+    case running
+    case failed(String)
 }
+
+@Published private(set) var state: State
+@Published private(set) var permissionGranted: Bool
+@Published private(set) var currentOutputDeviceID: AudioDeviceID
+@Published private(set) var currentOutputDeviceName: String
+
+let leftEQCascade: BiquadCascade
+let rightEQCascade: BiquadCascade
+private(set) var leftSourceNode:  AVAudioSourceNode?
+private(set) var rightSourceNode: AVAudioSourceNode?
+private(set) var sourceFormat: AVAudioFormat?
+private(set) var tapFormat: AVAudioFormat?
+
+var onOutputDeviceChanged: ((AudioDeviceID) -> Void)?
+
+func requestPermissionAndStart() async { ... }
+func stop() { ... }
 ```
 
-- Tap targets all processes on the default output device
-- Device change listener (`kAudioHardwarePropertyDefaultOutputDevice`) tears down
-  and restarts the tap cleanly, then fires the profile auto-switch logic
-- On permission denial: posts a notification that triggers an alert in whichever
-  surface is visible (popover or window) with "Open System Settings" button
+- Tap targets all processes on the default output device. The current process's
+  PID is excluded from the tap so SherlockEQ's own output doesn't feed back into
+  its input.
+- A device-change listener on `kAudioHardwarePropertyDefaultOutputDevice` tears down
+  and restarts the tap cleanly, then fires `onOutputDeviceChanged` which runs the
+  profile auto-switch logic.
+- A pre-EQ spectrum ingest slot (`PreSpectrumIngestSlot`, lock-protected) lets
+  `SpectrumAnalyzer.preSpectrum` see the raw input for the Expert canvas's pre-EQ
+  outline without competing for the cascades' state.
+- Permission: requests via `kTCCServiceAudioCapture` (the "System Audio Recording"
+  TCC bucket on macOS 15+; grouped under Screen Recording in the 14.x UI). On
+  denial, posts a `NoticeCenter` warning with an Open System Settings affordance.
 
 ---
 
 ### 7.3 AudioState (ObservableObject)
 
-Single source of truth, injected at the top of both the popover and window hierarchies
-via `@EnvironmentObject`.
+`@MainActor final class AudioState: ObservableObject`. The single source of truth
+for the audio pipeline; injected at the top of both popover and window hierarchies
+via `@EnvironmentObject`. Composes several focused sub-objects:
 
-```swift
-class AudioState: ObservableObject {
-    // Profiles
-    @Published var profiles: [HearingProfile] = []
-    @Published var activeProfile: HearingProfile?
+| Sub-object | Role |
+|------------|------|
+| `tap: CATapEngine` | CATap + per-ear source nodes + cascades |
+| `audio: SherlockEQAudioEngine` | AVAudioEngine graph, balance, limiter, master gain |
+| `spectrum: SpectrumAnalyzer` | Post-EQ vDSP FFT, A-weighting, dose feed |
+| `preSpectrum: SpectrumAnalyzer` | Pre-EQ FFT for Expert canvas overlay |
+| `stereoMonitor: StereoMonitor` | L/R peak meters for Monitor Sidebar + popover |
+| `safeListening: SafeListeningTracker` | NIOSH dose accumulator |
+| `eqChain: EQChainState` | referenceMode, testCurveEnabled, testToneEnabled, calibrationToneEnabled, eqMasterEnabled, autoEQEnabled, notchFilterEnabled, manualEQEnabled, hasShownNotchOffReminder |
+| `engineParameters: EngineParameters` | masterGainDB, limiter attack/decay/preGain |
+| `preferences: AppPreferences` | leftEarColor, rightEarColor, hideFromDockEnabled, launchAtLoginEnabled, globalReferenceShortcutEnabled |
+| `autoEQPreferences: AutoEQPreferences` | libraryFolder |
+| `noticeCenter: NoticeCenter` | shared user-visible notice banner state |
 
-    // Engine state
-    @Published var tapRunning: Bool = false
-    @Published var referenceMode: Bool = false
-    @Published var outputDevice: AudioDevice?
+AudioState exposes proxy bindings for the most-used sub-object fields
+(`referenceMode`, `masterGainDB`, `eqMasterEnabled`, `leftEarColor`, etc.) so existing
+view code that reads through AudioState keeps working; new code should depend on
+the sub-objects directly.
 
-    // Safe listening
-    @Published var sessionDosePercent: Double = 0
-    @Published var currentLeveldBSPL: Double = 0
-    @Published var remainingMinutes: Double?
-
-    // Spectrum (updated ~30fps from vDSP)
-    @Published var spectrumBins: [Float] = []
-
-    // Persistence
-    func saveProfiles()
-    func loadProfiles()
-}
-```
+Other AudioState surface:
+- `@Published var activeProfileID: UUID?` — persisted to UserDefaults
+  (`sherlockeq.activeProfileID`)
+- `@Published var sessionDosePercent: Double` and `remainingMinutes: Double?` —
+  throttled 1 Hz mirrors of `safeListening` state for views that re-render on every
+  AudioState tick (popover, MonitorSidebar). Faster-updating consumers
+  (SafeListeningView, MenuBarIcon, DebugView) read `safeListening.sessionDose` /
+  `.remainingMinutes` directly.
+- `@Published var calibrationOffsetDBA: Double` — SPL calibration (default 100,
+  persisted as `sherlockeq.calibrationOffsetDBA`). Drives the dBFS→dBA conversion
+  for the dose tracker and the canvas safety-threshold curve.
+- `func activeProfile(in store: ProfileStore) -> HearingProfile?`
+- `func adoptDefaultProfileIfNeeded(from store: ProfileStore)`
+- `func connect(profileStore: ProfileStore)` — subscribes to profile changes and
+  pushes them into the engine
 
 ---
 
 ### 7.4 Data Models
 
 ```swift
-struct HearingProfile: Codable, Identifiable {
+struct HearingProfile: Codable, Identifiable, Hashable {
     var id: UUID
     var name: String
-    var symbol: String                          // SF Symbol name
+    var symbol: String                              // SF Symbol
     var linkedDeviceUID: String?
-
     var leftEar: EarProfile
     var rightEar: EarProfile
-    var notch: TinnitusNotch
-    var globalTrimDB: Double                    // -12 to +12
-    var autoEQCurveURL: URL?
-    var safeListeningCeilingDB: Double          // default 85.0
-    var compensationFactor: Double              // 0.25 to 1.0
+    var leftNotch: TinnitusNotch
+    var rightNotch: TinnitusNotch
+    var separateNotch: Bool
+    var globalTrimDB: Double                        // -12…+12
+    var balance: Double                             // -1…+1
+    var autoEQCurveURL: URL?                        // legacy decode-only
+    var autoEQName: String?
+    var autoEQBands: [EQBand]?
+    var autoEQPreampDB: Double?
+    var safeListeningCeilingDB: Double              // default 85
+    var compensationFactor: Double                  // 0.25…1.0
+    var separateChannels: Bool
+    var eqMode: EQMode                              // .simple / .speech / .advanced / .expert
+    var isBuiltIn: Bool
+    var createdAt: Date
+    var modifiedAt: Date
 }
 
-struct EarProfile: Codable {
-    var thresholds: [AudiogramPoint]            // [(hz: Int, dBHL: Double)]
-    var bands: [EQBand]                         // computed from thresholds
+struct EarProfile: Codable, Hashable {
+    var thresholds: [AudiogramPoint]
+    var bands: [EQBand]
 }
 
-struct AudiogramPoint: Codable {
-    var frequencyHz: Int                        // 250, 500, 1000, 2000, 3000, 4000, 6000, 8000
-    var thresholddBHL: Double                   // 0–110, from audiologist report
+struct AudiogramPoint: Codable, Hashable {
+    var frequencyHz: Int                            // 250, 500, 1000, 2000, 3000, 4000, 6000, 8000
+    var thresholddBHL: Double
 }
 
-struct EQBand: Codable {
+struct EQBand: Codable, Hashable, Identifiable {
+    var id: UUID = UUID()
     var frequencyHz: Double
     var gaindB: Double
-    var bandwidth: Double                       // Q value
-    var filterType: EQFilterType
+    var bandwidth: Double                           // Q for parametric/notch; octaves for shelves
+    var filterType: EQFilterType                    // parametric, lowShelf, highShelf, notch, bandPass, lowPass, highPass
     var enabled: Bool
 }
 
-struct TinnitusNotch: Codable {
+struct TinnitusNotch: Codable, Hashable {
     var enabled: Bool
-    var frequencyHz: Double                     // 1000–16000
-    var depthdB: Double                         // -3 to -15
-    var qWidth: NotchWidth                      // .narrow, .medium, .wide
+    var frequencyHz: Double                         // typically 1000…16000
+    var depthdB: Double                             // negative, typically -3…-15
+    var qWidth: NotchWidth                          // .narrow (Q 8) / .medium (Q 4) / .wide (Q 2)
 }
+
+enum EQMode: String, Codable, CaseIterable { case simple, speech, advanced, expert }
 ```
+
+`HearingProfile` carries a custom `init(from decoder:)` so older JSON (pre-balance,
+pre-isBuiltIn, single shared `notch`) still loads with safe defaults; encoding
+stays synthesized.
 
 ---
 
 ### 7.5 Safe Listening Calculation
 
-NIOSH equal energy (3 dB exchange rate):
+NIOSH equal-energy (3 dB exchange rate). From `SafeListeningTracker`:
 
 ```swift
-func updateDose(currentLeveldBA: Double, elapsedSeconds: Double) {
-    // NIOSH REL: 85 dBA = 8 hours = 28800 seconds
-    let permissibleDuration = 28800.0 / pow(2.0, (currentLeveldBA - 85.0) / 3.0)
-    sessionDose += elapsedSeconds / permissibleDuration  // fraction; 1.0 = 100%
+static func permissibleDuration(at dBA: Double) -> TimeInterval {
+    nioshReferenceDuration / pow(2.0, (dBA - nioshReferenceLevelDBA) / nioshExchangeRateDB)
+}
+
+// Per-sample accumulation (~10 Hz, self-times on wall clock):
+let perm = Self.permissibleDuration(at: clampedDBA)
+if perm.isFinite, perm > 0 {
+    sessionDose = min(1.0, sessionDose + chunk / perm)   // 1.0 = 100% of daily limit
 }
 ```
 
-Level estimate: RMS of post-EQ FFT spectrum, A-weighted per-bin using standard
-A-weighting coefficients. Called at ~1 Hz from the analysis loop.
+Level estimate: RMS of post-EQ FFT spectrum, A-weighted per-bin via standard
+A-weighting coefficients. The dBA the user sees is dBFS + `calibrationOffsetDBA`.
+"Remaining minutes" derives from a 60s power-domain rolling average (NIOSH math is
+logarithmic, so arithmetic averaging of dBA would be wrong by ~3 dB per 6 dB of
+peak-to-mean).
 
 ---
 
@@ -474,136 +714,132 @@ A-weighting coefficients. Called at ~1 Hz from the analysis loop.
 
 ### 8.1 Menu Bar
 
-- Icon: `waveform.and.magnifyingglass` or a custom waveform-with-notch asset
-- Tinted amber or red when dose warning is active
-- Left-click: open/close popover
-- Right-click: quick menu — active profile name, Reference Mode toggle, Open SherlockEQ,
-  Quit
+- Implemented as SwiftUI `MenuBarExtra` with `.menuBarExtraStyle(.window)`.
+- Icon: `MenuBarIcon` (renders `waveform.and.magnifyingglass` and tints amber/red
+  for dose warnings via `safeListening.sessionDose`).
+- Click: opens the popover.
+
+A full AppKit main menu (`NSApp.mainMenu`) is installed by `AppDelegate`:
+- **App menu** — About, Check for Updates… (Sparkle), Hide / Hide Others / Show All,
+  Quit.
+- **File menu** — Close Window (⌘W).
+- **Edit menu** — Undo (⌘Z), Redo (⌘⇧Z), Cut/Copy/Paste/Select All. Dispatch via
+  responder chain to the window's `UndoManager` (returned by
+  `windowWillReturnUndoManager`).
+- **Audio menu** — Toggle Reference Mode (⌘B).
+- **Window menu** — Minimize, Zoom, SherlockEQ (⌘0 to show main window).
+
+The menu is reinstalled on `applicationDidBecomeActive` because SwiftUI overrides
+`NSApp.mainMenu` on scene activation.
 
 ---
 
-### 8.2 Main Popover (~380pt wide)
+### 8.2 Main Popover (380pt wide)
 
-The 5-second surface. Dismisses on click-outside. Never shows charts or canvases.
+The 5-second surface. Dismisses on click-outside. No charts or canvases.
 
 ```
 ┌──────────────────────────────────────────┐
-│  ≋ SherlockEQ        [AirPods Pro ▾]  [↗]  │  ← [↗] opens main window
+│  ≋ SherlockEQ      [device label]   [↗]  │  ← arrow opens main window
 ├──────────────────────────────────────────┤
-│  Session  ████████░░░░  67%  ~1h 20m    │  ← dose bar
+│  [ NoticeBanner (when active) ]          │
 ├──────────────────────────────────────────┤
-│  Profile  [ Afternoon – AirPods    ▾ ]  │
-│                                          │
-│  Compensation   ○————————●————————○     │  ← single slider
-│                 Less              More   │
-│                                          │
-│  Tinnitus Notch  ●—— ON   4,200 Hz      │
-│                                          │
-│  [        🔴 Reference Mode         ]   │  ← prominent, hold or toggle
+│  Session  ████████░░░░  67%  ~1h 20m     │  ← dose bar
+│  Level   L ▓▓▓▓▓░░░░░  R ▓▓▓▓░░░░░       │  ← stereo level strip
+│  Gain    ─────●─────── −2.3 dB    ↺      │  ← master gain
+│  Balance ──────●────── Center     ↺      │  ← balance (active profile)
+├──────────────────────────────────────────┤
+│  Profile  [ Afternoon – AirPods    ▾ ]   │
+│  Compensation  ○────────●────────○       │  ← one slider that matters most
+│  Tinnitus Notch  ●—— ON   4,200 Hz       │
+│  [        🔴 Reference Mode         ]    │  ← prominent
 └──────────────────────────────────────────┘
 ```
 
-The "Open SherlockEQ" button (↗) in the header opens the main window and brings it to
-front. If the window is already open, it focuses it.
+On first appearance the popover calls `audioState.startAll()` so users don't have
+to dig into Debug to bring the tap up.
+
+The arrow button hands off to `AppDelegate.showMainWindow`, which owns the NSWindow
+and sequences the `.accessory → .regular` policy flip + activation deterministically.
 
 ---
 
-### 8.3 Main Window (~860 × 600pt minimum, resizable)
+### 8.3 Main Window (default 1480 × 880pt, minimum 1400 × 740pt, resizable)
 
-Sidebar-based navigation modeled on System Settings. The sidebar is always visible.
-Content area changes based on the selected section.
+`NavigationSplitView` with a left sidebar (min 220 / ideal 240 / max 300pt), detail
+content in the middle (min 760 / ideal 820pt), and a persistent right monitor
+sidebar (220pt) toggleable from the toolbar.
 
-```
-┌─────────────────┬─────────────────────────────────────────────────┐
-│  LIBRARY        │                                                 │
-│  ──────────     │                  [content area]                 │
-│  👤 Profiles    │                                                 │
-│  👂 Audiogram   │                                                 │
-│  🎛  Equalizer  │                                                 │
-│  🔔 Tone Finder │                                                 │
-│  📊 Safe Listen │                                                 │
-│  ⚙️  Settings   │                                                 │
-│                 │                                                 │
-│  [+ New Profile]│                                                 │
-└─────────────────┴─────────────────────────────────────────────────┘
-```
+**Sidebar groups** (`SidebarView`):
 
-**Sidebar sections:**
+- **Audio Processor** — Audiogram, Equalizer, Tinnitus Notch, Safe Listening
+- **App** — Settings, Debug
+- Bottom safe-area inset: active profile name (read-only label) + "Manage
+  Profiles" button (selects the Profiles section). Profiles is reachable via this
+  shortcut, not from the section list, to avoid a duplicated top+bottom entry.
 
-**Profiles**
-List of all profiles. Click to select and make active. Toolbar: add, duplicate,
-delete, import, export. Detail panel (right side of content area) shows profile name,
-device link, icon picker, compensation factor, global trim, and safe listening ceiling.
+**Profiles** — list of profiles with create / duplicate / delete / import / export
+in the toolbar. Detail panel shows name, symbol, linked device UID, EQ mode picker,
+balance, global trim, safe-listening ceiling, AutoEQ correction (file picker plus
+the library-folder menu plus the AutoEQ remote search view). Built-in profiles
+(Default, Voice Clarity) show a banner offering Duplicate; their controls are
+disabled.
 
-**Audiogram**
-Interactive audiogram chart for the active profile. Two panels: Left ear, Right ear
-(tab or side-by-side toggle). Draggable threshold points at standard frequencies.
-Numeric entry fields alongside the chart for exact values. The resulting EQ curve is
-previewed in a smaller read-only curve below the chart.
+**Audiogram** — interactive audiogram chart for the active profile (Left ear / Right
+ear tabs). Draggable threshold points at standard frequencies plus numeric entry
+alongside. EQ preview rendered below.
 
-**Equalizer**
-Three-tab view for the active profile:
+**Equalizer** — shows the single EQ surface that matches the active profile's
+`eqMode`. The four modes:
+- *Simple* — three slots (250 Hz low-shelf, 1 kHz parametric, 5 kHz high-shelf)
+- *Speech* — six slots (60 Hz low-shelf, 200 / 800 / 2500 / 6000 Hz parametric,
+  12 kHz high-shelf) tuned for voice intelligibility
+- *Advanced* — 10-band graphic EQ (31.5, 63, 125, 250, 500, 1k, 2k, 4k, 8k, 16k Hz)
+- *Expert* — full parametric canvas (draggable nodes, biquad curve, spectrum
+  underlay, layer chip strip, AutoEQ + audiogram + safety overlays, L/R link)
 
-- *Simple* — 3-band (Bass / Mids / Treble) derived from the full curve. Friendly
-  starting point for users who don't want to touch individual bands.
-- *Advanced* — 10-band graphic EQ with vertical sliders. Shows L and R as separate
-  columns when ears differ.
-- *Expert* — Full parametric canvas (draggable nodes, biquad curve, spectrum
-  analyzer). AutoEQ import/toggle. Tinnitus notch controls with the notch visible
-  on the curve. L/R color-coded curves overlaid, individually editable.
+Switching modes is non-destructive: bands the other modes wrote stay in storage and
+just hide. A "hidden bands" hint chip surfaces them when relevant.
 
-Reference mode button is present in the Expert view toolbar for A/B comparisons
-during detailed work.
-
-**Tone Finder**
-Full-width view with the large frequency sweep control, a waveform visualization of
-the sine tone, fine-tune stepper, and the "Set as Notch Frequency" button. Includes
-a brief non-clinical explanation of what the feature does and does not do.
+**Tinnitus Notch** — Tone Finder + notch controls on one screen. Frequency sweep
+(1 kHz – 16 kHz), fine-tune stepper, volume row, "Set as notch frequency". Notch
+controls: frequency / depth / width per ear (Linked or Separate, via the
+`separateNotch` toggle).
 
 **Safe Listening**
-- Current level estimate (dBSPL, updated live)
-- Session dose bar (large, detailed)
-- Chart: dose history over the past 7 days
-- Configuration: personal ceiling, warning threshold, notification preferences,
-  dose reset behavior
-- Explanatory section: what the dose estimate is, what it isn't, link to NIOSH REL
+- Current level estimate (dBA)
+- Session dose bar (large, detailed) with green/amber/red severity
+- Configurable personal ceiling, notification preferences, dose reset behavior
+- Calibration workflow (plays a 1 kHz / −12 dBFS tone so the user can match SPL
+  with an external meter and set `calibrationOffsetDBA`)
+- Explanatory section: what the dose estimate is and isn't; link to NIOSH REL
 
-**Settings**
-- Launch at login
-- Global keyboard shortcut for Reference Mode
-- Device auto-switching: on/off, manage linked device→profile pairs, priority order
-- AutoEQ: import new curves, manage library, credit AutoEQ project
-- Profile backup location (Application Support default or custom folder)
-- About + acknowledgments (AutoEQ, NIOSH, open source credits)
-- "Open Accessibility Settings" — links to macOS System Settings > Accessibility
+**Settings** (`SettingsView`)
+- Startup — Launch at login; Hide from Dock when window is closed
+- Output — Master gain
+- Limiter — AUPeakLimiter attack / decay / pre-gain
+- Appearance — Per-ear colors (left / right)
+- Shortcuts — Global Reference Mode shortcut on/off (⌘⇧B when on)
+- AutoEQ library folder — pick a folder of `.txt` corrections; appears in the
+  Profile-Detail headphone picker menu
+- Profile backup location — show / change the on-disk profiles directory (with
+  "Move existing" vs "Switch only" prompt)
+- About — Acknowledgments (AutoEQ, NIOSH, Sparkle, open-source credits)
+
+**Debug** — diagnostics view (tap state, engine state, sample-rate, frame counters,
+permission status, raw FFT bin readout, manual graph rebuild button). Sidebar entry
+intentionally exposed for self-support and bug reports.
 
 ---
 
-### 8.4 Onboarding (First Launch)
+### 8.4 Onboarding
 
-Opens as a separate window (not a sheet over the main window). Covers:
-
-1. **Welcome** — brief positioning statement, two paths:
-   - "I have an audiogram" → wizard
-   - "Set up manually" → opens main window at Profiles section
-
-2. **Permission** — before any audio starts:
-   > "SherlockEQ needs access to system audio to apply your hearing profile."
-   > [Grant Access] → triggers macOS privacy sheet
-
-3. **Wizard — Profile name + device link**
-
-4. **Wizard — Left ear audiogram** (interactive chart)
-
-5. **Wizard — Right ear audiogram** (pre-mirrored from left, user adjusts)
-
-6. **Wizard — Tinnitus?** (Yes → Tone Finder inline; No → skip)
-
-7. **Wizard — Safe listening ceiling** (slider, explanation of the NIOSH standard)
-
-8. **Done** — "Your profile is active. SherlockEQ is running in your menu bar." Closes
-   onboarding window, opens main window briefly to show the finished profile, then
-   the main window can be dismissed.
+Not currently implemented. A first-launch wizard (welcome → permission → profile
+wizard → audiogram entry → tinnitus pitch → safe-listening ceiling) is out of scope
+for the present version. On first launch the app seeds a flat **Default** profile
+plus the **Voice Clarity** preset and asks for system-audio permission inline the
+first time the popover opens. Onboarding-style polish (welcome screen, guided
+audiogram, calibration walkthrough) is future work.
 
 ---
 
@@ -611,160 +847,181 @@ Opens as a separate window (not a sheet over the main window). Covers:
 
 ```
 SherlockEQ/
-├── SherlockEQApp.swift                      ← @main, WindowGroup, activation policy
-├── MenuBarController.swift              ← NSStatusItem, NSPopover, right-click menu
+├── SherlockEQApp.swift                     ← @main, MenuBarExtra scene
+├── AppDelegate.swift                       ← NSWindow ownership, activation policy,
+│                                             AppKit main menu, multi-instance guard,
+│                                             global hotkey, NotificationManager bootstrap
 │
 ├── Audio/
-│   ├── CATapEngine.swift                ← Core Audio Taps, device change handling
-│   ├── SherlockEQAudioEngine.swift          ← AVAudioEngine graph, L/R chains, bypass
-│   ├── SpectrumAnalyzer.swift           ← vDSP FFT, A-weighting
-│   ├── AutoEQParser.swift               ← Parse AutoEQ .txt → [EQBand]
-│   └── ToneGenerator.swift             ← Sine sweep for Tone Finder
+│   ├── CATapEngine.swift                   ← CATap + per-ear source nodes + cascades
+│   ├── SherlockEQAudioEngine.swift         ← AVAudioEngine graph, balance, limiter, gain
+│   ├── BiquadCoefficients.swift            ← Audio EQ Cookbook coefficient math
+│   ├── BiquadCascade.swift                 ← Per-ear render-block cascade
+│   ├── BiquadResponse.swift                ← Magnitude response for curve drawing
+│   ├── SpectrumAnalyzer.swift              ← vDSP DFT, A-weighting, dBA conversion
+│   ├── StereoMonitor.swift                 ← L/R peak metering for the monitor surfaces
+│   ├── VUMeter.swift                       ← Analog VU ballistics
+│   ├── AudiogramConversion.swift           ← dB HL → EQBand
+│   ├── EQBandLookup.swift                  ← Mode → slot mapping for hidden-band hints
+│   ├── SineToneGenerator.swift             ← Tone Finder + diagnostic test tones
+│   ├── AutoEQParser.swift                  ← Parse AutoEQ .txt → preamp + [EQBand]
+│   ├── AutoEQLibrary.swift                 ← Local library folder enumeration
+│   ├── AutoEQRemote.swift                  ← Phase-1 fetcher (online/offline/ratelimit)
+│   ├── AutoEQRemoteService.swift           ← Catalog + profile fetch, cache, errors
+│   ├── AutoEQConflictDetector.swift        ← Warn on AutoEQ-vs-manual conflicts
+│   ├── AudioCapturePermission.swift        ← kTCCServiceAudioCapture wrapping
+│   ├── TapRingBuffer.swift                 ← Lock-free ring between tap IOProc and source
+│   ├── AudioCounter.swift                  ← Lock-protected diagnostic counters
+│   └── GlobalHotKey.swift                  ← Carbon RegisterEventHotKey wrapper (⌘⇧B)
 │
 ├── State/
-│   ├── AudioState.swift                 ← ObservableObject, @Published
-│   └── SafeListeningTracker.swift       ← Dose accumulator, timer, notifications
+│   ├── AudioState.swift                    ← Top-level ObservableObject composing all sub-state
+│   ├── EQChainState.swift                  ← referenceMode + per-stage bypass toggles
+│   ├── EngineParameters.swift              ← masterGain + limiter knobs
+│   ├── AppPreferences.swift                ← Per-ear colors, dock, launch-at-login, hotkey
+│   ├── AutoEQPreferences.swift             ← AutoEQ library folder
+│   ├── NoticeCenter.swift                  ← Shared notice banner state
+│   ├── NotificationManager.swift           ← UNUserNotificationCenter wrapper
+│   └── SafeListeningTracker.swift          ← NIOSH dose accumulator
 │
 ├── Models/
-│   ├── HearingProfile.swift
+│   ├── HearingProfile.swift                ← incl. EQMode enum
 │   ├── EarProfile.swift
 │   ├── AudiogramPoint.swift
-│   ├── EQBand.swift
-│   └── TinnitusNotch.swift
+│   ├── EQBand.swift                        ← incl. EQFilterType enum
+│   └── TinnitusNotch.swift                 ← incl. NotchWidth enum
 │
 ├── Persistence/
-│   ├── ProfileStore.swift               ← JSON save/load, Application Support
-│   └── DevicePreferences.swift          ← Device→profile links
+│   ├── ProfileStore.swift                  ← <UUID>.json files, undo coalescing, relocation
+│   └── AutoEQSavedProfilesStore.swift      ← Persisted AutoEQ corrections
+│
+├── Updates/
+│   └── UpdaterController.swift             ← Sparkle (SUUpdater) wrapper
 │
 ├── UI/
-│   ├── Popover/                         ← Dismissable, 380pt, operations only
+│   ├── Popover/
 │   │   ├── MainPopoverView.swift
+│   │   ├── MenuBarIcon.swift               ← Menu-bar label icon w/ dose tinting
 │   │   ├── DoseBarView.swift
+│   │   ├── PopoverLevelStrip.swift         ← Stereo L/R peak meter strip
 │   │   ├── ProfilePickerRow.swift
 │   │   ├── CompensationSliderView.swift
+│   │   ├── TinnitusNotchRow.swift
 │   │   └── ReferenceButton.swift
 │   │
-│   ├── Window/                          ← Persistent, resizable, configuration
-│   │   ├── MainWindowView.swift         ← NavigationSplitView root
+│   ├── Window/
+│   │   ├── MainWindowView.swift            ← NavigationSplitView + right monitor sidebar
 │   │   ├── Sidebar/
-│   │   │   └── SidebarView.swift
+│   │   │   ├── SidebarView.swift
+│   │   │   └── SidebarSection.swift        ← profiles, audiogram, equalizer, toneFinder, safeListening, settings, debug
 │   │   ├── Profiles/
-│   │   │   ├── ProfilesView.swift       ← List + toolbar
-│   │   │   └── ProfileDetailView.swift  ← Name, device, trim, ceiling
+│   │   │   ├── ProfilesView.swift
+│   │   │   ├── ProfileListItem.swift
+│   │   │   ├── ProfileDetailView.swift
+│   │   │   └── AutoEQSearchView.swift      ← Remote catalog search + import
 │   │   ├── Audiogram/
-│   │   │   ├── AudiogramView.swift      ← L/R tab + chart + numeric fields
-│   │   │   └── AudiogramChartView.swift ← Interactive draggable threshold chart
+│   │   │   ├── AudiogramView.swift
+│   │   │   ├── AudiogramChartView.swift
+│   │   │   ├── ThresholdEditor.swift
+│   │   │   └── EQPreviewView.swift
 │   │   ├── Equalizer/
-│   │   │   ├── EqualizerView.swift      ← Tab container (Simple/Advanced/Expert)
-│   │   │   ├── SimpleEQView.swift       ← 3-band Bass/Mids/Treble
-│   │   │   ├── AdvancedEQView.swift     ← 10-band graphic sliders, L/R columns
-│   │   │   └── ExpertEQView.swift       ← Parametric canvas + spectrum + notch
+│   │   │   ├── EqualizerView.swift         ← Switches on profile.eqMode
+│   │   │   ├── SimpleEQView.swift
+│   │   │   ├── SpeechEQView.swift
+│   │   │   ├── AdvancedEQView.swift
+│   │   │   └── ExpertEQView.swift
 │   │   ├── ToneFinder/
-│   │   │   └── ToneFinderView.swift
+│   │   │   └── ToneFinderView.swift        ← Sidebar title: "Tinnitus Notch"; bundles Tone Finder + notch controls
 │   │   ├── SafeListening/
-│   │   │   └── SafeListeningView.swift  ← Detail, history chart, settings
-│   │   └── Settings/
-│   │       └── SettingsView.swift
+│   │   │   ├── SafeListeningView.swift
+│   │   │   └── LevelMeterView.swift
+│   │   ├── Monitor/
+│   │   │   └── MonitorSidebar.swift        ← Right-hand panel: VU, gain, balance, dose
+│   │   ├── Meters/
+│   │   │   ├── MetersView.swift            ← Display-mode container (digital/analog/vectorscope/waveform)
+│   │   │   ├── AnalogVUMeter.swift
+│   │   │   ├── VectorscopeView.swift
+│   │   │   └── WaveformView.swift
+│   │   ├── Settings/
+│   │   │   ├── SettingsView.swift
+│   │   │   └── AcknowledgmentsView.swift
+│   │   └── Debug/
+│   │       └── DebugView.swift
 │   │
-│   ├── Onboarding/
-│   │   ├── OnboardingWindowView.swift   ← Separate window, wizard steps
-│   │   └── WelcomeView.swift
-│   │
-│   ├── Components/                      ← Shared across popover and window
-│   │   ├── ParametricCanvasView.swift   ← Draggable EQ nodes, biquad curve
-│   │   ├── SpectrumView.swift           ← vDSP FFT canvas
-│   │   ├── BandSliderView.swift
-│   │   ├── NotchControlView.swift
-│   │   └── DevicePickerView.swift
-│   │
-│   └── Theme/
-│       └── SherlockEQTheme.swift            ← Color, font, spacing tokens
+│   └── Components/
+│       ├── ParametricCanvasView.swift      ← Expert canvas (incl. CanvasVizMode enum)
+│       ├── NotchControlView.swift
+│       ├── NoticeBannerView.swift
+│       ├── BuiltInProfileBanner.swift
+│       ├── EQBypassButton.swift
+│       ├── EQGainChip.swift
+│       ├── HiddenBandsHintChip.swift
+│       ├── CanvasLayerChipStrip.swift
+│       ├── SpectrogramLayerChipStrip.swift
+│       ├── LogFreqAxis.swift
+│       ├── PlaceholderView.swift
+│       ├── ColorHex.swift
+│       └── UndoManagerLink.swift           ← Pipes SwiftUI undoManager into ProfileStore
 │
 └── Resources/
-    ├── Assets.xcassets
+    ├── Assets.xcassets                     ← AppIcon, AccentColor
     ├── Info.plist
     └── SherlockEQ.entitlements
 ```
 
+(No `UI/Onboarding/` directory — onboarding is out of scope for the present version.)
+
 ---
 
-## 10. Entitlements
+## 10. Entitlements & Info.plist
 
+`SherlockEQ.entitlements`:
 ```xml
-<!-- SherlockEQ.entitlements -->
 <key>com.apple.security.device.audio-input</key>
 <true/>
 ```
 
-`Info.plist`:
+`Info.plist` (selected keys):
 ```xml
+<key>LSUIElement</key><true/>                              <!-- start as menu-bar agent -->
+<key>LSApplicationCategoryType</key><string>public.app-category.music</string>
+
 <key>NSMicrophoneUsageDescription</key>
-<string>SherlockEQ uses system audio access to apply your hearing profile to all apps on your Mac.</string>
+<string>SherlockEQ uses microphone access for the audio path; it does not record audio.</string>
+<key>NSAudioCaptureUsageDescription</key>
+<string>SherlockEQ uses this permission to capture system audio through Apple's Core Audio Tap API. It does not record audio to disk.</string>
+
+<!-- Sparkle auto-update -->
+<key>SUFeedURL</key>      <string>https://snxt.ai/appcast.xml</string>
+<key>SUEnableAutomaticChecks</key><true/>
+<key>SUPublicEDKey</key>  <string>wltqWmlE8DlhQFGVxSRGLO06xjRrYO3jDIu8h3SYx58=</string>
 ```
 
-No privileged helper. No driver installation. No password prompt.
+The two privacy strings cover both TCC buckets — `NSMicrophoneUsageDescription`
+pairs with the `audio-input` entitlement, and `NSAudioCaptureUsageDescription`
+is the "System Audio Recording" bucket (user-visible name on macOS 15+; on 14.x
+the `kTCCServiceAudioCapture` service is grouped under Screen Recording in the
+Settings UI). The app deliberately does NOT use `NSScreenCaptureUsageDescription`
+or the CGRequest screen-capture APIs — CATap belongs in System Audio Recording
+only.
+
+App is NOT sandboxed (`ENABLE_APP_SANDBOX = NO`); hardened runtime is on
+(`ENABLE_HARDENED_RUNTIME = YES`). No privileged helper, no driver installation,
+no password prompt.
+
+Distribution: notarized DMG with Sparkle-signed appcast (EdDSA). Not App-Store
+distributed (Core Audio Taps requires `audio-input` outside the sandbox).
 
 ---
 
-## 11. Getting Started in Claude Code
-
-```bash
-# In Xcode: File > New > Project > macOS > App
-# Product name: SherlockEQ
-# Interface: SwiftUI
-# Language: Swift
-# Uncheck "Include Tests" for now
-# IMPORTANT: In the target's Info.plist, set
-#   "Application is agent (UIElement)" = YES
-#   This suppresses the default Dock icon at launch;
-#   MenuBarController manages activation policy dynamically.
-
-cd ~/code/SherlockEQ
-git init && git add . && git commit -m "initial xcode project"
-claude
-```
-
-**Suggested build order:**
-
-| Session | Surface   | Goal |
-|---------|-----------|------|
-| 1  | —          | `CATapEngine.swift` — permission, tap lifecycle, device change |
-| 2  | —          | `SherlockEQAudioEngine.swift` — L/R EQ chains, bypass, connect to tap |
-| 3  | —          | `Models/` — Codable structs, `ProfileStore`, JSON round-trip |
-| 4  | Popover    | `MenuBarController` + `MainPopoverView` — popover opens, dose bar placeholder |
-| 5  | Popover    | `CompensationSliderView`, `ReferenceButton`, profile switcher — wired to `AudioState` |
-| 6  | Window     | `MainWindowView` + `SidebarView` — `NavigationSplitView` skeleton, all sections present |
-| 7  | Window     | `ProfilesView` + `ProfileDetailView` — CRUD, JSON persistence |
-| 8  | Window     | `AudiogramChartView` + conversion logic (audiogram → EQ bands) |
-| 9  | Window     | `SimpleEQView` + `AdvancedEQView` — live band updates to engine |
-| 10 | —          | `SpectrumAnalyzer` — vDSP FFT, A-weighting, dose integration |
-| 11 | Popover    | `DoseBarView` wired to `SafeListeningTracker` — live in popover |
-| 12 | Window     | `SafeListeningView` — full detail, history, configuration |
-| 13 | Window     | `ParametricCanvasView` — biquad curve, draggable nodes, spectrum underlay |
-| 14 | Window     | `ExpertEQView` — notch controls, AutoEQ toggle, L/R overlay |
-| 15 | Window     | `ToneFinderView` — sine generator, sweep, "Set as Notch" |
-| 16 | Window     | `OnboardingWindowView` — wizard flow, permission request |
-| 17 | Both       | Device auto-switching, `SettingsView`, activation policy, polish |
-
-**Suggested first Claude Code prompt:**
-> "Create `Audio/CATapEngine.swift` in the SherlockEQ Xcode project. It should request
-> system audio capture permission using `AVCaptureDevice.requestAccess(for: .audio)`,
-> create a `CATapDescription` targeting all processes on the default output device,
-> create a private aggregate device using `AudioHardwareCreateAggregateDevice`, and
-> expose an `AVAudioSourceNode` for use by `AVAudioEngine`. Handle output device
-> changes via a `kAudioHardwarePropertyDefaultOutputDevice` listener. Requires
-> macOS 14.2+. Mark the class `@available(macOS 14.2, *)`."
-
----
-
-## 12. Open Questions
+## 11. Open Questions
 
 | Item | Notes |
 |------|-------|
-| App name | "SherlockEQ" — name is set. Still confirm no App Store trademark conflicts before public release. |
-| App Store distribution | Core Audio Taps requires `com.apple.security.device.audio-input` outside the App Store sandbox. Plan for notarized DMG distribution (same as eqMac). Worth a direct inquiry to Apple DTS about whether an entitlement exception is available. |
-| dBHL → EQ accuracy | The 0.5× compensation factor is a pragmatic heuristic. A more rigorous v2 approach would apply ISO 226 equal-loudness correction to convert dBHL thresholds to dBSPL before deriving EQ gains. |
-| Left/right EQ routing | Stereo split via `AVAudioMixerNode` requires verifying sample-accurate L/R alignment with no drift. Test during Session 2 with a phase-coherent mono test tone and confirm no comb filtering. |
-| Spectrum analyzer accuracy | The dose estimate is only as accurate as the digital signal level. Hardware output gain, headphone impedance, and ear canal fit all affect actual SPL. One-time onboarding disclaimer is sufficient. |
-| AutoEQ license | AutoEQ data is MIT licensed. Credit the project in Settings > About with a link to the repository. |
-| Window sizing | 860 × 600pt is a reasonable minimum. The parametric EQ canvas benefits from wider windows. Consider setting a minimum width of 760pt and letting height be free. |
+| App Store distribution | Core Audio Taps requires `com.apple.security.device.audio-input` outside the App Store sandbox. Current plan: notarized DMG distribution (same model as eqMac). |
+| dBHL → EQ accuracy | The default 0.5× compensation factor is a pragmatic heuristic. A more rigorous approach would apply ISO 226 equal-loudness correction to convert dBHL thresholds to dBSPL before deriving EQ gains; not currently planned. |
+| Cubic-spline interpolation | Spec §5.2 originally called for cubic-spline-derived intermediate bands. Not implemented — `AudiogramConversion.bands(for:compensationFactor:)` emits one band per audiogram point. Adding interpolation later would not change the function signature. |
+| Spectrogram visualisation | `.spectrogram` mode is implemented in `ParametricCanvasView` but hidden from the user-visible picker (`CanvasVizMode.userVisibleCases`) pending a performance pass (~120% CPU during testing) and a UX review. |
+| Onboarding wizard | Not implemented (§8.4). First-launch UX seeds a Default profile + Voice Clarity preset and asks for permission inline; a guided wizard is future work. |
+| AutoEQ license | AutoEQ data is MIT licensed. Credit lives in Settings → About → Acknowledgments with a link to the upstream repo. |
+| Window sizing | Current minimum 1400 × 740pt is set so the Expert layer-chip strip and the dual sidebars fit on one row without compression. Lowering the floor would require collapsing the right monitor sidebar by default. |
