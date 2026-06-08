@@ -564,6 +564,70 @@ EOF
 EOF
   fi
 
+  # ---- step 9: web → smbrownai/next (PR, not direct push) -------------------
+  #
+  # The landing page at snxt.ai/SherlockEQ/ is sourced from this repo's web/
+  # dir. Mirror it into next/SherlockEQ/ on a release branch and open a PR —
+  # not a direct push, because page content (vs. mechanically-regenerated
+  # data like appcast.xml) deserves a review window before going live.
+  #
+  # rsync excludes .DS_Store so macOS Finder noise doesn't slip into commits.
+  # Skips cleanly if there's no diff after the sync — most releases don't
+  # touch web/.
+
+  step "Web → smbrownai/next (PR)"
+  WEB_BRANCH="sherlockeq/$VERSION"
+  if [[ -d "$SNXT_REPO_PATH/.git" ]]; then
+    info "syncing web/ to $SNXT_REPO_PATH/SherlockEQ/"
+    (
+      cd "$SNXT_REPO_PATH"
+      git fetch --quiet origin
+      git checkout main 2>/dev/null || git checkout master
+      git pull --ff-only
+
+      # Make a clean branch from main. If a prior run already created one
+      # for this version, refuse rather than clobber half-finished work.
+      if git ls-remote --heads origin "$WEB_BRANCH" | grep -q .; then
+        echo "    · branch $WEB_BRANCH already exists on origin — skipping (assume PR is open)"
+        EXIT_CODE=0
+        exit 0
+      fi
+      git checkout -b "$WEB_BRANCH"
+
+      mkdir -p SherlockEQ
+      rsync -a --exclude='.DS_Store' "$REPO_ROOT/web/" SherlockEQ/
+
+      if [[ -z "$(git status --porcelain)" ]]; then
+        echo "    · web/ unchanged since last release — no PR needed"
+        git checkout main 2>/dev/null || git checkout master
+        git branch -D "$WEB_BRANCH"
+        exit 0
+      fi
+
+      git add SherlockEQ
+      git commit -m "SherlockEQ $VERSION web update"
+      git push -u origin "$WEB_BRANCH"
+
+      PR_URL=$(gh pr create \
+        --base main \
+        --head "$WEB_BRANCH" \
+        --title "SherlockEQ $VERSION — web update" \
+        --body "Mirror of \`web/\` from smbrownai/SherlockEQ at v$VERSION. Source: https://github.com/smbrownai/SherlockEQ/blob/v$VERSION/web/index.html")
+      echo "    ✓ web PR opened: $PR_URL"
+    )
+  else
+    warn "SNXT_REPO_PATH ($SNXT_REPO_PATH) is not a git repo — skipping web sync"
+    info "manual web sync:"
+    cat <<EOF
+        cd <next-repo>
+        git checkout -b sherlockeq/$VERSION
+        rsync -a --exclude='.DS_Store' $REPO_ROOT/web/ SherlockEQ/
+        git add SherlockEQ && git commit -m "SherlockEQ $VERSION web update"
+        git push -u origin sherlockeq/$VERSION
+        gh pr create --base main --title "SherlockEQ $VERSION — web update"
+EOF
+  fi
+
   # ---- done ------------------------------------------------------------------
 
   cat <<EOF
