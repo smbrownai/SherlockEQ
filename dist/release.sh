@@ -172,7 +172,44 @@ xcrun stapler staple "$DMG"
 echo "==> gatekeeper assessment"
 spctl -a -t open --context context:primary-signature -vv "$DMG"
 
-# ---- 8. checksum + summary ---------------------------------------------------
+# ---- 8. preserve archive + dSYMs for crash symbolication --------------------
+
+# Apple-aggregated crash reports show up in Xcode Organizer → Crashes
+# *only* if Organizer can match a symbolicated archive to the crashing
+# binary. Organizer scans ~/Library/Developer/Xcode/Archives/<date>/,
+# but `xcodebuild archive` writes to the path we passed in $BUILD_DIR
+# — and the next release wipes that. So copy the archive into the
+# Organizer-visible location with a version-tagged name so the various
+# versions you ship don't collide.
+#
+# We also save a standalone dSYMs zip next to the dmg as belt-and-
+# braces — if the Archives folder ever gets cleared (Time Machine
+# restore, fresh machine, manual cleanup), the dSYMs survive in the
+# build artifacts that go alongside the dmg.
+
+ORG_ARCHIVES_DIR="$HOME/Library/Developer/Xcode/Archives/$(date +%Y-%m-%d)"
+ORG_ARCHIVE="$ORG_ARCHIVES_DIR/SherlockEQ-$VERSION.xcarchive"
+
+mkdir -p "$ORG_ARCHIVES_DIR"
+if [[ -e "$ORG_ARCHIVE" ]]; then
+  # Don't silently overwrite — a re-run of the same version probably
+  # means something went wrong; preserve the previous archive.
+  ORG_ARCHIVE="$ORG_ARCHIVES_DIR/SherlockEQ-$VERSION-$(date +%H%M%S).xcarchive"
+fi
+echo "==> copying archive to Organizer-visible location"
+cp -R "$ARCHIVE" "$ORG_ARCHIVE"
+
+DSYM_ZIP="$BUILD_DIR/SherlockEQ-$VERSION-dSYMs.zip"
+echo "==> zipping dSYMs to $DSYM_ZIP"
+(cd "$ARCHIVE/dSYMs" && zip -qr "$DSYM_ZIP" .)
+
+# Print dSYM UUIDs — handy for sanity-checking that a crashed .ips
+# binary matches the symbols you have. Match against
+# `dwarfdump --uuid /path/to/SherlockEQ.app.dSYM` or the UUID line in
+# a `.ips`-style crash report header.
+DSYM_UUIDS=$(dwarfdump --uuid "$ARCHIVE/dSYMs/SherlockEQ.app.dSYM" 2>/dev/null | awk '{print "    " $0}')
+
+# ---- 9. checksum + summary ---------------------------------------------------
 
 SHA=$(shasum -a 256 "$DMG" | awk '{print $1}')
 echo "$SHA  $(basename "$DMG")" > "${DMG}.sha256"
@@ -185,6 +222,12 @@ cat <<SUMMARY
   released:  $(basename "$DMG")
   size:      ${SIZE_MB} MB
   sha256:    $SHA
+
+  archive:   $ORG_ARCHIVE
+             (visible in Xcode → Window → Organizer → Archives)
+
+  dsyms:     $DSYM_ZIP
+$DSYM_UUIDS
 
   cask patch — paste into dist/homebrew/sherlockeq.rb:
 
@@ -199,5 +242,10 @@ cat <<SUMMARY
                                      --notes-file dist/release-notes/$VERSION.md
     4. upload dist/appcast.xml to https://snxt.ai/appcast.xml
     5. bump version + sha256 in dist/homebrew/sherlockeq.rb and push the tap repo
+    6. (one-time, then any time you want to re-check) open Xcode →
+       Window → Organizer → Crashes. Apple-aggregated reports from users
+       who opted into "Share with App Developers" arrive here, typically
+       within 1–3 days of the crash, symbolicated against the dSYMs in
+       the archive above.
 
 SUMMARY

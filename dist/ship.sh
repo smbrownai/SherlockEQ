@@ -1,0 +1,520 @@
+#!/usr/bin/env bash
+# -----------------------------------------------------------------------------
+# SherlockEQ release driver.
+#
+# One-shot release flow with a hand-off in the middle for PR review. State is
+# detected from git, so the same command runs prep before the PR and publish
+# after the merge:
+#
+#   dist/ship.sh <version>                # default editor for release notes
+#   dist/ship.sh <version> --notes <file> # use a prewritten markdown file
+#   dist/ship.sh <version> --notes -      # read from stdin
+#
+# Phases
+#   PREP    (no release/<version> branch on origin)
+#     write notes → bump versions → commit → push branch → open PR → exit.
+#     Re-run after merging the PR.
+#
+#   PUBLISH (release/<version> branch exists on origin, PR is merged)
+#     dist/release.sh → dist/appcast-publish.sh → tag → GitHub release →
+#     push appcast to snxt.ai repo (if configured) → print cask update steps.
+#
+# Required env (inherited by dist/release.sh):
+#   DEVELOPER_ID    Full identity, e.g. "Developer ID Application: Shawn Brown (X)"
+#   TEAM_ID         10-char Apple team id
+#   NOTARY_PROFILE  notarytool keychain profile name
+#
+# Optional env:
+#   SNXT_REPO_PATH  Local checkout of smbrownai/next. Default below.
+#                   Unset → script prints the equivalent commands instead of
+#                   pushing.
+#
+# Safety
+#   set -euo pipefail; every irreversible step asks for confirmation; phase
+#   detection means re-running mid-flow doesn't redo a step that already landed.
+# -----------------------------------------------------------------------------
+set -euo pipefail
+
+# ---- args + env --------------------------------------------------------------
+
+usage() {
+  cat >&2 <<EOF
+usage: $(basename "$0") <version> [--notes <file|-->]
+
+  <version>             semver like 1.0.0 or 1.0.0-beta.1
+  --notes <file>        use prewritten release notes from <file>
+  --notes -             read release notes from stdin
+  (no --notes flag)     open \$EDITOR with a template
+
+env:
+  DEVELOPER_ID, TEAM_ID, NOTARY_PROFILE   passed through to dist/release.sh
+  SNXT_REPO_PATH                          local snxt.ai repo (optional)
+EOF
+  exit 2
+}
+
+VERSION=""
+NOTES_INPUT=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage ;;
+    --notes)
+      [[ $# -ge 2 ]] || { echo "error: --notes needs an argument" >&2; usage; }
+      NOTES_INPUT="$2"; shift 2 ;;
+    -*)
+      echo "error: unknown flag $1" >&2; usage ;;
+    *)
+      if [[ -z "$VERSION" ]]; then VERSION="$1"; shift
+      else echo "error: unexpected arg $1" >&2; usage; fi ;;
+  esac
+done
+
+[[ -n "$VERSION" ]] || usage
+
+if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
+  echo "error: version must look like 1.0.0 or 1.0.0-beta.1, got: $VERSION" >&2
+  exit 2
+fi
+
+: "${SNXT_REPO_PATH:=/Users/smb/code/next}"
+
+# ---- paths -------------------------------------------------------------------
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+
+BRANCH="release/$VERSION"
+TAG="v$VERSION"
+NOTES_FILE="$REPO_ROOT/dist/release-notes/$VERSION.md"
+PBXPROJ="$REPO_ROOT/SherlockEQ.xcodeproj/project.pbxproj"
+WEB_INDEX="$REPO_ROOT/web/index.html"
+DMG="$REPO_ROOT/dist/build/SherlockEQ-$VERSION.dmg"
+APPCAST="$REPO_ROOT/dist/appcast.xml"
+
+# ---- helpers -----------------------------------------------------------------
+
+bold()    { printf "\033[1m%s\033[0m\n" "$*"; }
+ok()      { printf "  \033[32m✓\033[0m %s\n" "$*"; }
+info()    { printf "  \033[36m·\033[0m %s\n" "$*"; }
+warn()    { printf "  \033[33m!\033[0m %s\n" "$*" >&2; }
+die()     { printf "  \033[31m✗\033[0m %s\n" "$*" >&2; exit 1; }
+
+step()    { printf "\n"; bold "==> $*"; }
+
+confirm() {
+  # confirm "prompt" — return 0 on yes, exit on no.
+  local prompt="$1" reply
+  read -r -p "    $prompt [y/N] " reply
+  case "$reply" in
+    y|Y|yes|YES) return 0 ;;
+    *) die "aborted" ;;
+  esac
+}
+
+require_cmd() {
+  command -v "$1" >/dev/null || die "missing required command: $1"
+}
+
+# Look for `prev_version <new_version>` in a tracked file. Returns 0 if the
+# new version is present (already bumped), 1 if it is not.
+file_has_version() {
+  local file="$1" version="$2"
+  grep -qF "$version" "$file"
+}
+
+# ---- preflight ---------------------------------------------------------------
+
+step "Preflight"
+
+require_cmd git
+require_cmd gh
+require_cmd xcodebuild
+require_cmd shasum
+
+git rev-parse --is-inside-work-tree >/dev/null || die "not a git repo"
+git fetch --quiet --tags origin
+
+# Reject re-shipping a tagged version. The script flow is one-version-per-run.
+if git rev-parse "$TAG" >/dev/null 2>&1; then
+  die "tag $TAG already exists locally — version was already shipped"
+fi
+if git ls-remote --tags origin "$TAG" | grep -q .; then
+  die "tag $TAG already exists on origin — version was already shipped"
+fi
+
+ok "git, gh, xcodebuild present"
+ok "tag $TAG not yet shipped"
+
+# ---- phase detection ---------------------------------------------------------
+#
+# Decide whether to run PREP or PUBLISH based on what's on origin:
+#   no release branch on origin            → PREP
+#   release branch on origin, PR open      → exit, tell user to merge
+#   release branch on origin, PR merged    → PUBLISH
+#   release branch on origin, PR closed    → exit, tell user to investigate
+
+step "Detecting phase"
+
+REMOTE_BRANCH_EXISTS=0
+if git ls-remote --heads origin "$BRANCH" | grep -q .; then
+  REMOTE_BRANCH_EXISTS=1
+fi
+
+PHASE=""
+PR_NUMBER=""
+PR_STATE=""
+
+if (( REMOTE_BRANCH_EXISTS == 0 )); then
+  PHASE="prep"
+  info "no $BRANCH on origin — running PREP"
+else
+  # Check PR state. `gh pr view <branch>` works for whatever PR is tied to
+  # this head ref; --json gives us a clean state read without screen scraping.
+  if PR_JSON=$(gh pr view "$BRANCH" --json number,state,mergedAt,url 2>/dev/null); then
+    PR_NUMBER=$(echo "$PR_JSON" | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d["number"])')
+    PR_STATE=$(echo "$PR_JSON" | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d["state"])')
+    PR_URL=$(echo "$PR_JSON" | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d["url"])')
+    case "$PR_STATE" in
+      MERGED)
+        PHASE="publish"
+        info "PR #$PR_NUMBER is merged — running PUBLISH"
+        ;;
+      OPEN)
+        warn "PR #$PR_NUMBER is OPEN. Merge it first, then re-run this script."
+        echo "      $PR_URL" >&2
+        exit 0
+        ;;
+      CLOSED)
+        die "PR #$PR_NUMBER is CLOSED without merge ($PR_URL). Reopen + merge, or delete branch."
+        ;;
+    esac
+  else
+    die "branch $BRANCH exists on origin but no PR is open for it. Investigate manually."
+  fi
+fi
+
+# =============================================================================
+# PREP PHASE
+# =============================================================================
+
+if [[ "$PHASE" == "prep" ]]; then
+
+  step "Prep sanity"
+  CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+  if [[ "$CURRENT_BRANCH" != "main" ]]; then
+    warn "currently on '$CURRENT_BRANCH', expected 'main'"
+    confirm "continue anyway?"
+  fi
+
+  PREV_VERSION=$(git tag --list 'v*' --sort=-v:refname | head -n1 | sed 's/^v//')
+  [[ -n "$PREV_VERSION" ]] || PREV_VERSION="(none)"
+  info "previous shipped version: $PREV_VERSION"
+  info "shipping:                 $VERSION"
+
+  # ---- step 1: release notes ------------------------------------------------
+  #
+  # Notes first per "highest-friction artifact deserves first attention".
+  # Three input modes; all converge to NOTES_FILE on disk before we touch
+  # anything else.
+
+  step "Release notes"
+
+  if [[ -f "$NOTES_FILE" ]]; then
+    info "$NOTES_FILE already exists"
+    confirm "use existing file (no = abort and edit by hand)?"
+  else
+    case "$NOTES_INPUT" in
+      "")
+        # No --notes flag → open editor with template.
+        TEMPLATE=$(mktemp -t sherlockeq-notes.XXXXXX.md)
+        {
+          cat <<EOF
+<!--
+  Release notes for SherlockEQ $VERSION.
+  Lines starting with "<!--" are stripped before commit.
+  Markdown is fine; first paragraph becomes the git commit body.
+-->
+
+<h2>SherlockEQ $VERSION</h2>
+
+<!-- WRITE THE USER-FACING SUMMARY HERE. 1–3 sentences. -->
+
+<h3>Changes</h3>
+
+<ul>
+  <li><!-- one bullet per user-visible change --></li>
+</ul>
+EOF
+          if [[ "$PREV_VERSION" != "(none)" ]] \
+             && [[ -f "$REPO_ROOT/dist/release-notes/$PREV_VERSION.md" ]]; then
+            echo
+            echo "<!-- ===== Previous version ($PREV_VERSION) for reference (will be stripped) ====="
+            cat "$REPO_ROOT/dist/release-notes/$PREV_VERSION.md"
+            echo "===== end previous version ===== -->"
+          fi
+        } > "$TEMPLATE"
+
+        EDITOR_CMD="${EDITOR:-vi}"
+        info "opening \$EDITOR ($EDITOR_CMD)..."
+        "$EDITOR_CMD" "$TEMPLATE"
+
+        # Strip HTML comments before saving — the only HTML comments in the
+        # template are the instructional ones; legitimate content uses Sparkle
+        # release-note tags like <h2>, not comments.
+        python3 - "$TEMPLATE" "$NOTES_FILE" <<'PY'
+import re, sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src).read()
+text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
+text = re.sub(r'\n{3,}', '\n\n', text).strip() + '\n'
+open(dst, 'w').write(text)
+PY
+        rm -f "$TEMPLATE"
+        ;;
+      "-")
+        info "reading notes from stdin (Ctrl-D to end)"
+        mkdir -p "$(dirname "$NOTES_FILE")"
+        cat > "$NOTES_FILE"
+        ;;
+      *)
+        [[ -f "$NOTES_INPUT" ]] || die "--notes file not found: $NOTES_INPUT"
+        mkdir -p "$(dirname "$NOTES_FILE")"
+        cp "$NOTES_INPUT" "$NOTES_FILE"
+        ;;
+    esac
+  fi
+
+  # Reject empty / template-only notes — a forgotten edit shouldn't produce
+  # an empty release announcement.
+  if ! grep -qE '\S' "$NOTES_FILE"; then
+    die "release notes are empty: $NOTES_FILE"
+  fi
+  WORD_COUNT=$(wc -w < "$NOTES_FILE")
+  if (( WORD_COUNT < 10 )); then
+    warn "release notes are very short ($WORD_COUNT words)"
+    confirm "ship with this?"
+  fi
+  ok "release notes saved to $NOTES_FILE"
+
+  # ---- step 2: version bumps (idempotent) -----------------------------------
+
+  step "Version bumps"
+
+  if grep -qE "MARKETING_VERSION = $VERSION;" "$PBXPROJ"; then
+    info "pbxproj already at $VERSION"
+  else
+    # Two MARKETING_VERSION lines (Debug + Release configs); both bumped.
+    /usr/bin/sed -i '' -E "s/MARKETING_VERSION = [^;]+;/MARKETING_VERSION = $VERSION;/g" "$PBXPROJ"
+    ok "pbxproj bumped to $VERSION"
+  fi
+
+  # web/index.html: two known references — meta-row badge "v<X>" and install
+  # card filename "SherlockEQ-<X>.dmg". The PREV_VERSION sniff makes this
+  # idempotent (re-running won't re-replace).
+  if file_has_version "$WEB_INDEX" "v$VERSION " \
+     && file_has_version "$WEB_INDEX" "SherlockEQ-$VERSION.dmg"; then
+    info "web/index.html already at $VERSION"
+  elif [[ "$PREV_VERSION" != "(none)" ]]; then
+    /usr/bin/sed -i '' \
+      -e "s/v$PREV_VERSION /v$VERSION /g" \
+      -e "s/SherlockEQ-$PREV_VERSION\.dmg/SherlockEQ-$VERSION.dmg/g" \
+      "$WEB_INDEX"
+    ok "web/index.html bumped from $PREV_VERSION to $VERSION"
+  else
+    warn "no previous version to derive substitution from; web/index.html left alone"
+    info "edit web/index.html by hand if it has stale version strings"
+  fi
+
+  # ---- step 3: confirm working tree -----------------------------------------
+
+  step "Working tree to be committed"
+
+  git status --short
+  echo
+  if [[ -z "$(git status --porcelain)" ]]; then
+    die "no changes to commit — nothing to release"
+  fi
+
+  warn "the above files will all go into the '$VERSION' commit"
+  confirm "include them?"
+
+  # ---- step 4: branch + commit + push + PR ----------------------------------
+
+  step "Branch, commit, push, PR"
+
+  if git rev-parse --verify "$BRANCH" >/dev/null 2>&1; then
+    info "local branch $BRANCH already exists — switching to it"
+    git switch "$BRANCH"
+  else
+    git switch -c "$BRANCH"
+    ok "created $BRANCH"
+  fi
+
+  # Commit subject = "Release <version>". Body = first paragraph of notes.
+  COMMIT_BODY=$(python3 - "$NOTES_FILE" <<'PY'
+import re, sys
+text = open(sys.argv[1]).read()
+# Strip HTML tags for the commit body; the markdown / Sparkle markup is for the
+# release note and PR description, not the git log.
+text = re.sub(r'<[^>]+>', '', text)
+paras = [p.strip() for p in re.split(r'\n\s*\n', text) if p.strip()]
+print(paras[0] if paras else '')
+PY
+)
+
+  git add -A
+  git commit -m "Release $VERSION" -m "$COMMIT_BODY"
+  ok "committed Release $VERSION"
+
+  git push -u origin "$BRANCH"
+  ok "pushed $BRANCH"
+
+  PR_URL=$(gh pr create \
+    --base main \
+    --head "$BRANCH" \
+    --title "Release $VERSION" \
+    --body-file "$NOTES_FILE")
+  ok "PR opened: $PR_URL"
+
+  cat <<EOF
+
+  Next:
+    1. Review the PR and merge it.
+    2. Re-run: dist/ship.sh $VERSION
+       (no flags needed — same command picks up the publish phase
+        once it sees the PR is merged.)
+
+EOF
+  exit 0
+fi
+
+# =============================================================================
+# PUBLISH PHASE
+# =============================================================================
+
+if [[ "$PHASE" == "publish" ]]; then
+
+  step "Publish sanity"
+
+  : "${DEVELOPER_ID:?set DEVELOPER_ID for dist/release.sh}"
+  : "${TEAM_ID:?set TEAM_ID for dist/release.sh}"
+  : "${NOTARY_PROFILE:?set NOTARY_PROFILE for dist/release.sh}"
+
+  CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+  [[ "$CURRENT_BRANCH" == "main" ]] || die "expected to be on main, on '$CURRENT_BRANCH'"
+
+  [[ -z "$(git status --porcelain)" ]] || die "working tree dirty — clean before publish"
+
+  git fetch --quiet origin main
+  LOCAL=$(git rev-parse main)
+  REMOTE=$(git rev-parse origin/main)
+  if [[ "$LOCAL" != "$REMOTE" ]]; then
+    warn "main is out of sync with origin/main"
+    info "local:  $LOCAL"
+    info "remote: $REMOTE"
+    die "pull first, then re-run"
+  fi
+
+  [[ -f "$NOTES_FILE" ]] || die "release notes missing: $NOTES_FILE (was the PR merged into main?)"
+
+  ok "on main, clean, in sync with origin, notes present"
+
+  # ---- step 1: build, notarize, dmg ------------------------------------------
+
+  step "Build + notarize (dist/release.sh)"
+  info "this can take several minutes (notary wait)"
+  bash "$REPO_ROOT/dist/release.sh" "$VERSION"
+  [[ -f "$DMG" ]] || die "release.sh did not produce $DMG"
+  DMG_SHA=$(awk '{print $1}' "${DMG}.sha256")
+
+  # ---- step 2: appcast -------------------------------------------------------
+
+  step "Appcast (dist/appcast-publish.sh)"
+  if [[ -x "$REPO_ROOT/dist/appcast-publish.sh" ]]; then
+    bash "$REPO_ROOT/dist/appcast-publish.sh" "$VERSION" "$NOTES_FILE"
+    ok "appcast.xml updated"
+  else
+    warn "dist/appcast-publish.sh not found or not executable — skipping appcast regen"
+  fi
+
+  # ---- step 3: tag + push ---------------------------------------------------
+
+  step "Tag + push"
+  git tag -a "$TAG" -m "Release $VERSION"
+  git push origin "$TAG"
+  ok "tag $TAG pushed"
+
+  # ---- step 4: GitHub release ------------------------------------------------
+
+  step "GitHub release"
+  gh release create "$TAG" "$DMG" \
+    --title "SherlockEQ $VERSION" \
+    --notes-file "$NOTES_FILE"
+  ok "GitHub release created"
+
+  # ---- step 5: appcast to snxt.ai repo --------------------------------------
+
+  step "Appcast → snxt.ai"
+  if [[ -d "$SNXT_REPO_PATH/.git" ]]; then
+    info "pushing appcast.xml to $SNXT_REPO_PATH"
+    (
+      cd "$SNXT_REPO_PATH"
+      git fetch --quiet origin
+      git checkout main 2>/dev/null || git checkout master
+      git pull --ff-only
+      cp "$APPCAST" appcast.xml
+      git add appcast.xml
+      if [[ -n "$(git status --porcelain)" ]]; then
+        git commit -m "SherlockEQ $VERSION appcast"
+        git push
+        echo "    ✓ appcast pushed to smbrownai/next"
+      else
+        echo "    · appcast unchanged — nothing to push"
+      fi
+    )
+  else
+    warn "SNXT_REPO_PATH ($SNXT_REPO_PATH) is not a git repo — skipping auto-push"
+    info "manual commands:"
+    cat <<EOF
+        cp $APPCAST <snxt-next-repo>/appcast.xml
+        cd <snxt-next-repo>
+        git add appcast.xml
+        git commit -m "SherlockEQ $VERSION appcast"
+        git push
+EOF
+  fi
+
+  # ---- step 6: cask repo instructions (always manual) -----------------------
+
+  step "Homebrew cask"
+  CASK_FILE="$REPO_ROOT/dist/homebrew/sherlockeq.rb"
+  cat <<EOF
+    Update smbrownai/homebrew-sherlockeq:
+
+      version "$VERSION"
+      sha256 "$DMG_SHA"
+
+    Reference: $CASK_FILE (already updated in this repo to match).
+    Push to the tap repo so 'brew upgrade' picks it up.
+
+EOF
+
+  # ---- done ------------------------------------------------------------------
+
+  cat <<EOF
+
+  $(bold "released: SherlockEQ $VERSION")
+    dmg:     $DMG
+    sha256:  $DMG_SHA
+    notes:   $NOTES_FILE
+    tag:     $TAG
+    release: https://github.com/smbrownai/SherlockEQ/releases/tag/$TAG
+
+  Verify Sparkle pickup: open SherlockEQ → check for updates.
+
+EOF
+  exit 0
+fi
+
+die "unreachable: phase=$PHASE"

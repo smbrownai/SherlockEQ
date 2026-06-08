@@ -493,7 +493,7 @@
           </a>
         </div>
         <div class="meta-row">
-          v0.1.1 <span class="dot"></span> Apple Silicon and Intel <span class="dot"></span> 5.7 MB <span class="dot"></span> <a href="LICENSE" style="color:inherit;text-decoration:none;">MIT licensed</a>
+          v0.1.2 <span class="dot"></span> Apple Silicon and Intel <span class="dot"></span> 5.7 MB <span class="dot"></span> <a href="LICENSE" style="color:inherit;text-decoration:none;">MIT licensed</a>
         </div>
       </div>
     </div>
@@ -697,7 +697,7 @@
         <div class="install-card">
           <h3><i data-lucide="arrow-down-to-line" style="width:14px;height:14px;color:var(--fg-2)"></i> Direct download</h3>
           <p>Signed and notarized .dmg from GitHub Releases. Drag SherlockEQ into Applications and launch.</p>
-          <pre><code>SherlockEQ-0.1.1.dmg
+          <pre><code>SherlockEQ-0.1.2.dmg
 5.7 MB</code></pre>
           <a class="btn btn-primary" href="https://github.com/smbrownai/SherlockEQ/releases/latest">
             Download .dmg
@@ -739,8 +739,14 @@ brew install --cask sherlockeq</code></pre>
 
         <dt>PERMISSIONS</dt>
         <dd>
-          Microphone · Screen &amp; System Audio Recording
-          <span class="note">Screen Recording is what macOS requires to capture audio from other processes. SherlockEQ does not record video or screen contents.</span>
+          System Audio Recording
+          <span class="note">Required for Core Audio process taps. On macOS 14 this is grouped under Screen Recording in System Settings; on macOS 15 and later it appears as its own "System Audio Recording" entry. SherlockEQ does not record audio to disk, nor capture video or screen contents.</span>
+        </dd>
+
+        <dt></dt>
+        <dd>
+          Notifications
+          <span class="note">Used to deliver safe-listening alerts when your accumulated daily dose approaches the warning threshold. Optional — deny and the rest of the app still works; you just won't be alerted.</span>
         </dd>
 
         <dt>PRIVACY</dt>

@@ -2,7 +2,6 @@ import Foundation
 import AVFoundation
 import Combine
 import CoreAudio
-import CoreGraphics
 import OSLog
 
 @MainActor
@@ -168,24 +167,24 @@ final class CATapEngine: ObservableObject {
 
     // MARK: - Public lifecycle
 
-    /// Re-check Screen Recording permission. macOS lets the user revoke
-    /// it in System Settings mid-session; when that happens the IOProc
-    /// silently delivers zeros and nothing in our state changes. Call
-    /// this when the app becomes active (the natural moment the user
-    /// has returned from toggling something in Settings) — if the
+    /// Re-check System Audio Recording permission. macOS lets the user
+    /// revoke it in System Settings mid-session; when that happens the
+    /// IOProc silently delivers zeros and nothing in our state changes.
+    /// Call this when the app becomes active (the natural moment the
+    /// user has returned from toggling something in Settings) — if the
     /// permission has dropped while we thought we were running, flip
     /// to `.failed` and tear down so the user sees the same actionable
     /// error message as the first-time-denied path.
-    func recheckScreenCapturePermission() {
+    func recheckAudioCapturePermission() {
         // Only meaningful while we believed we were tapping. In other
         // states this is either irrelevant (.idle, .awaitingPermission,
         // .permissionDenied) or already handled (.failed, .starting).
         guard case .running = state else { return }
-        guard !CGPreflightScreenCaptureAccess() else { return }
-        log.error("Screen Recording permission revoked mid-session — tearing tap down")
+        guard AudioCapturePermission.preflight() != .authorized else { return }
+        log.error("System Audio Recording permission revoked mid-session — tearing tap down")
         state = .failed("""
-            Screen & System Audio Recording permission was revoked. \
-            Open System Settings → Privacy & Security → Screen & System Audio \
+            System Audio Recording permission was revoked. \
+            Open System Settings → Privacy & Security → System Audio \
             Recording, re-enable SherlockEQ, then quit and relaunch the app.
             """)
         tearDownTapAndAggregate()
@@ -194,21 +193,33 @@ final class CATapEngine: ObservableObject {
     func requestPermissionAndStart() async {
         state = .awaitingPermission
 
-        // Screen & System Audio Recording is the real gating permission for
-        // CATap on macOS 14.4+ — the OS silently zeroes tap data without it.
+        // System Audio Recording (TCC service `kTCCServiceAudioCapture`) is
+        // the real gating permission for CATap. The bucket name in System
+        // Settings differs by OS — on macOS 15+ it appears as the standalone
+        // "System Audio Recording" entry alongside Audio Hijack / ARK; on
+        // 14.x it's grouped under Screen Recording in the UI, but the same
+        // TCC service is checked. Without it the IOProc silently delivers
+        // zeros — see memory `catap-screen-recording-permission`.
+        //
+        // We use Apple's private TCC SPI (modeled on insidegui/AudioCap)
+        // because there is no public preflight/request API for the audio-
+        // capture bucket. The previous `CGRequestScreenCaptureAccess`
+        // approach worked, but routed the app into the broader
+        // "Screen & System Audio Recording" bucket — wrong place for an
+        // audio-only tool.
+        //
         // We deliberately do NOT request microphone TCC: CATap reads other
         // processes' audio via the CoreAudio process-tap API, not via an
         // input device, so the mic prompt was misleading ("microphone" when
-        // we never touch the mic). The sandbox audio-input entitlement
-        // covers our right to open the aggregate device.
-        if !CGPreflightScreenCaptureAccess() {
-            log.info("Screen capture access not granted — requesting...")
-            _ = CGRequestScreenCaptureAccess()   // shows dialog OR no-ops if previously denied
-            if !CGPreflightScreenCaptureAccess() {
+        // we never touch the mic).
+        if AudioCapturePermission.preflight() != .authorized {
+            log.info("System audio capture access not granted — requesting...")
+            let granted = await AudioCapturePermission.request()
+            if !granted {
                 permissionGranted = false
                 state = .failed("""
-                    Screen & System Audio Recording permission is required. \
-                    Open System Settings → Privacy & Security → Screen & System Audio \
+                    System Audio Recording permission is required. \
+                    Open System Settings → Privacy & Security → System Audio \
                     Recording, enable SherlockEQ, then quit and relaunch the app.
                     """)
                 return

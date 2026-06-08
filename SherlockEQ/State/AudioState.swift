@@ -608,7 +608,7 @@ final class AudioState: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.tap.recheckScreenCapturePermission()
+                self.tap.recheckAudioCapturePermission()
                 self.recoverIfAudioFailed()
                 await NotificationManager.shared.refreshAuthorizationStatus()
             }
@@ -736,13 +736,18 @@ final class AudioState: ObservableObject {
             log.error("Tap source nodes unavailable — cannot build graph")
             return
         }
-        audio.attach(
+        // Engine surfaces the specific reason via `lastError` on failure
+        // (format build / SR mismatch). Starting anyway would mask it.
+        guard audio.attach(
             leftSource: leftSource,
             rightSource: rightSource,
             leftEQCascade: tap.leftEQCascade,
             rightEQCascade: tap.rightEQCascade,
             sampleRate: format.sampleRate
-        )
+        ) else {
+            log.error("audio.attach failed — skipping start; lastError preserved")
+            return
+        }
         audio.start()
         audio.setMasterGain(dB: masterGainDB)
         audio.setLimiterAttack(seconds: limiterAttackMs / 1000.0)

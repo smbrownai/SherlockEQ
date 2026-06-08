@@ -99,18 +99,23 @@ final class SherlockEQAudioEngine: ObservableObject {
     /// Wires up the graph with the L/R source nodes from the tap.
     /// Tears down any prior graph first; safe to call on device change.
     ///
+    /// Returns `true` on success. On failure `lastError` is set with the
+    /// specific reason and the caller MUST NOT call `start()` — doing so
+    /// would mask the real error with a generic "no sources" message.
+    ///
     /// Sample-rate handling: the `sampleRate` passed in is the output
     /// device's nominal rate (which is also the rate the aggregate's
     /// drift-compensated IOProc delivers). The engine's outputNode rate
     /// matches, so the graph is uniform end-to-end and no bridge / SRC
     /// node is required. See memory `audio-engine-sr-mismatch`.
+    @discardableResult
     func attach(
         leftSource: AVAudioSourceNode,
         rightSource: AVAudioSourceNode,
         leftEQCascade: BiquadCascade,
         rightEQCascade: BiquadCascade,
         sampleRate: Double
-    ) {
+    ) -> Bool {
         teardownGraph()
 
         guard let tapFormat = AVAudioFormat(
@@ -118,7 +123,7 @@ final class SherlockEQAudioEngine: ObservableObject {
             channels: 2
         ) else {
             lastError = "Could not build stereo format @ \(sampleRate) Hz"
-            return
+            return false
         }
         self.tapSampleRate = sampleRate
         self.leftEQCascade = leftEQCascade
@@ -168,7 +173,7 @@ final class SherlockEQAudioEngine: ObservableObject {
             // of silently producing wrong-rate audio.
             lastError = "Unexpected SR mismatch: source \(Int(sampleRate)) Hz vs output \(Int(outRate)) Hz"
             log.error("Unexpected SR mismatch: source \(Int(sampleRate)) Hz vs output \(Int(outRate)) Hz — graph rebuild needed")
-            return
+            return false
         }
 
         // AUPeakLimiter has a single input bus, so we
@@ -212,14 +217,11 @@ final class SherlockEQAudioEngine: ObservableObject {
         // EQ cascades bypass when the user wants to hear raw signal.
         leftEQCascade.setBypassed(referenceMode)
         rightEQCascade.setBypassed(referenceMode)
+        return true
     }
 
     func start() {
         guard !isRunning else { return }
-        guard leftSource != nil, rightSource != nil else {
-            lastError = "Graph not attached"
-            return
-        }
         do {
             engine.prepare()
             try engine.start()
