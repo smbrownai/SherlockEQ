@@ -25,9 +25,12 @@
 #   NOTARY_PROFILE  notarytool keychain profile name
 #
 # Optional env:
-#   SNXT_REPO_PATH  Local checkout of smbrownai/next. Default below.
-#                   Unset → script prints the equivalent commands instead of
-#                   pushing.
+#   SNXT_REPO_PATH         Local checkout of smbrownai/next (appcast host).
+#                          Default below. Unset → script prints the commands.
+#   SHERLOCKEQ_CASK_PATH   Local checkout of smbrownai/homebrew-sherlockeq.
+#                          Default below. Unset or path missing → script
+#                          prints the manual update commands instead of
+#                          pushing.
 #
 # Safety
 #   set -euo pipefail; every irreversible step asks for confirmation; phase
@@ -48,7 +51,8 @@ usage: $(basename "$0") <version> [--notes <file|-->]
 
 env:
   DEVELOPER_ID, TEAM_ID, NOTARY_PROFILE   passed through to dist/release.sh
-  SNXT_REPO_PATH                          local snxt.ai repo (optional)
+  SNXT_REPO_PATH                          local smbrownai/next checkout
+  SHERLOCKEQ_CASK_PATH                    local smbrownai/homebrew-sherlockeq
 EOF
   exit 2
 }
@@ -78,6 +82,7 @@ if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
 fi
 
 : "${SNXT_REPO_PATH:=/Users/smb/code/next}"
+: "${SHERLOCKEQ_CASK_PATH:=/Users/smb/code/homebrew-sherlockeq}"
 
 # ---- paths -------------------------------------------------------------------
 
@@ -91,6 +96,7 @@ PBXPROJ="$REPO_ROOT/SherlockEQ.xcodeproj/project.pbxproj"
 WEB_INDEX="$REPO_ROOT/web/index.html"
 DMG="$REPO_ROOT/dist/build/SherlockEQ-$VERSION.dmg"
 APPCAST="$REPO_ROOT/dist/appcast.xml"
+CASK_FILE="$REPO_ROOT/dist/homebrew/sherlockeq.rb"
 
 # ---- helpers -----------------------------------------------------------------
 
@@ -438,14 +444,50 @@ if [[ "$PHASE" == "publish" ]]; then
     warn "dist/appcast-publish.sh not found or not executable — skipping appcast regen"
   fi
 
-  # ---- step 3: tag + push ---------------------------------------------------
+  # ---- step 3: bump local cask ----------------------------------------------
+  #
+  # The cask `version` + `sha256` are the only two values that change per
+  # release. Bumping the in-repo reference here so it never drifts from the
+  # tap (a prior release shipped only after we noticed the local file was
+  # stale). Idempotent: a re-run sees the new values already in place.
+
+  step "Bump local cask"
+  if grep -qE "^  version \"$VERSION\"\$" "$CASK_FILE" \
+     && grep -qE "^  sha256 \"$DMG_SHA\"\$" "$CASK_FILE"; then
+    info "cask already at $VERSION / matching sha256"
+  else
+    /usr/bin/sed -i '' -E \
+      -e "s/^  version \"[^\"]+\"/  version \"$VERSION\"/" \
+      -e "s/^  sha256 \"[^\"]+\"/  sha256 \"$DMG_SHA\"/" \
+      "$CASK_FILE"
+    ok "cask bumped to $VERSION / $DMG_SHA"
+  fi
+
+  # ---- step 4: commit bookkeeping to main -----------------------------------
+  #
+  # Single combined commit for the two release-bookkeeping artifacts: appcast
+  # (changelog entry) and cask (version + sha256). Tagging happens AFTER this
+  # so the tag points at a tree that includes both — keeping `git checkout
+  # v$VERSION` self-consistent with what users actually got.
+
+  step "Commit bookkeeping → main"
+  git add "$APPCAST" "$CASK_FILE"
+  if [[ -n "$(git diff --cached --name-only)" ]]; then
+    git commit -m "Release $VERSION bookkeeping: appcast + cask"
+    git push origin main
+    ok "bookkeeping commit pushed to main"
+  else
+    info "appcast + cask unchanged — nothing to commit"
+  fi
+
+  # ---- step 5: tag + push ---------------------------------------------------
 
   step "Tag + push"
   git tag -a "$TAG" -m "Release $VERSION"
   git push origin "$TAG"
   ok "tag $TAG pushed"
 
-  # ---- step 4: GitHub release ------------------------------------------------
+  # ---- step 6: GitHub release ------------------------------------------------
 
   step "GitHub release"
   gh release create "$TAG" "$DMG" \
@@ -453,9 +495,9 @@ if [[ "$PHASE" == "publish" ]]; then
     --notes-file "$NOTES_FILE"
   ok "GitHub release created"
 
-  # ---- step 5: appcast to snxt.ai repo --------------------------------------
+  # ---- step 7: appcast to snxt.ai repo --------------------------------------
 
-  step "Appcast → snxt.ai"
+  step "Appcast → smbrownai/next"
   if [[ -d "$SNXT_REPO_PATH/.git" ]]; then
     info "pushing appcast.xml to $SNXT_REPO_PATH"
     (
@@ -485,20 +527,42 @@ if [[ "$PHASE" == "publish" ]]; then
 EOF
   fi
 
-  # ---- step 6: cask repo instructions (always manual) -----------------------
+  # ---- step 8: cask to tap repo ---------------------------------------------
+  #
+  # Mirrors the snxt.ai push pattern. The tap repo's Casks/sherlockeq.rb is
+  # what `brew upgrade` actually consults — pushing here is what makes the
+  # release visible to Homebrew users.
 
-  step "Homebrew cask"
-  CASK_FILE="$REPO_ROOT/dist/homebrew/sherlockeq.rb"
-  cat <<EOF
-    Update smbrownai/homebrew-sherlockeq:
-
-      version "$VERSION"
-      sha256 "$DMG_SHA"
-
-    Reference: $CASK_FILE (already updated in this repo to match).
-    Push to the tap repo so 'brew upgrade' picks it up.
-
+  step "Cask → smbrownai/homebrew-sherlockeq"
+  if [[ -d "$SHERLOCKEQ_CASK_PATH/.git" ]]; then
+    info "pushing Casks/sherlockeq.rb to $SHERLOCKEQ_CASK_PATH"
+    (
+      cd "$SHERLOCKEQ_CASK_PATH"
+      git fetch --quiet origin
+      git checkout main 2>/dev/null || git checkout master
+      git pull --ff-only
+      mkdir -p Casks
+      cp "$CASK_FILE" Casks/sherlockeq.rb
+      git add Casks/sherlockeq.rb
+      if [[ -n "$(git status --porcelain)" ]]; then
+        git commit -m "sherlockeq $VERSION"
+        git push
+        echo "    ✓ cask pushed to smbrownai/homebrew-sherlockeq"
+      else
+        echo "    · cask unchanged — nothing to push"
+      fi
+    )
+  else
+    warn "SHERLOCKEQ_CASK_PATH ($SHERLOCKEQ_CASK_PATH) is not a git repo — skipping auto-push"
+    info "manual update:"
+    cat <<EOF
+        cp $CASK_FILE <tap-repo>/Casks/sherlockeq.rb
+        cd <tap-repo>
+        git add Casks/sherlockeq.rb
+        git commit -m "sherlockeq $VERSION"
+        git push
 EOF
+  fi
 
   # ---- done ------------------------------------------------------------------
 
