@@ -81,8 +81,8 @@ if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
   exit 2
 fi
 
-: "${SNXT_REPO_PATH:=/Users/smb/code/next}"
-: "${SHERLOCKEQ_CASK_PATH:=/Users/smb/code/homebrew-sherlockeq}"
+: "${SNXT_REPO_PATH:=$HOME/code/next}"
+: "${SHERLOCKEQ_CASK_PATH:=$HOME/code/homebrew-sherlockeq}"
 
 # ---- paths -------------------------------------------------------------------
 
