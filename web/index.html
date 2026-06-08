@@ -148,6 +148,46 @@
       margin: 0 8px;
     }
 
+    /* ---- Specs strip -------------------------------------------------- */
+    section.specs {
+      padding-top: var(--s-9);
+      padding-bottom: var(--s-9);
+      border-top: 1px solid var(--line-soft);
+      border-bottom: 1px solid var(--line-soft);
+    }
+    .specs-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--s-9) var(--s-11);
+    }
+    .spec {
+      flex: 1 1 220px;
+    }
+    .spec .spec-key {
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+      margin-bottom: var(--s-3);
+    }
+    .spec .spec-num {
+      font-family: var(--font-sans);
+      font-size: var(--fs-22);
+      font-weight: var(--w-semibold);
+      color: var(--fg-1);
+      letter-spacing: var(--ls-tight);
+      line-height: var(--lh-tight);
+      margin-bottom: var(--s-3);
+    }
+    .spec p {
+      font-size: var(--fs-13);
+      color: var(--fg-2);
+      line-height: var(--lh-body);
+      margin: 0;
+      max-width: 32ch;
+    }
+
     /* ---- Section header ---------------------------------------------- */
     section { padding-top: var(--s-11); padding-bottom: var(--s-11); }
     .section-head {
@@ -199,6 +239,47 @@
       color: var(--fg-2);
       line-height: var(--lh-body);
       margin: 0;
+    }
+
+    /* ---- Screenshots -------------------------------------------------- */
+    .shots {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--s-9);
+      align-items: start;
+    }
+    .shot {
+      display: flex;
+      flex-direction: column;
+      gap: var(--s-4);
+      margin: 0;
+    }
+    .shot img {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: var(--r-md);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow-1);
+      background: var(--bg-2);
+    }
+    .shot .cap {
+      display: flex;
+      align-items: baseline;
+      gap: var(--s-4);
+    }
+    .shot .cap .key {
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+      flex-shrink: 0;
+    }
+    .shot .cap .label {
+      font-size: var(--fs-14);
+      color: var(--fg-2);
+      line-height: var(--lh-ui);
     }
 
     /* ---- Audience list ------------------------------------------------ */
@@ -358,6 +439,9 @@
       .hero-icon { width: 128px; height: 128px; border-radius: 24px; }
       .hero h1 { font-size: var(--fs-36); }
       .pillars { grid-template-columns: 1fr; }
+      .shots { grid-template-columns: 1fr; }
+      .specs-grid { gap: var(--s-7); }
+      .spec { flex: 1 1 100%; }
       .install-grid { grid-template-columns: 1fr; }
       .notes-grid { grid-template-columns: 1fr; gap: var(--s-9); }
       .disclaimer { border-left: 0; border-top: 1px solid var(--warn); padding-left: 0; padding-top: var(--s-6); }
@@ -373,12 +457,13 @@
   <header class="nav">
     <div class="container nav-inner">
       <a class="nav-mark" href="#">
-        <img src="assets/sherlockeq.png" alt="" onerror="this.style.background='#161B2E'; this.src='assets/favicon.svg';" />
+        <img src="assets/sherlockeq-mark.png" alt="" />
         <span class="name">SherlockEQ</span>
       </a>
       <div class="nav-spacer"></div>
       <nav class="nav-links">
         <a href="#what">What it does</a>
+        <a href="#screenshots">See it</a>
         <a href="#approach">Approach</a>
         <a href="#install">Install</a>
         <a href="https://github.com/smbrownai/SherlockEQ">Source <i data-lucide="arrow-up-right" style="width:12px;height:12px"></i></a>
@@ -393,10 +478,10 @@
     <div class="container hero-grid">
       <img class="hero-icon" src="assets/sherlockeq.png" alt="SherlockEQ app icon — a gold magnifying glass over an audio waveform on a navy field." />
       <div>
-        <div class="eyebrow" style="margin-bottom: var(--s-6);">MACOS · SYSTEM-AUDIO EQUALIZER</div>
+        <div class="eyebrow" style="margin-bottom: var(--s-6);">FREE · OPEN SOURCE · MACOS 14.6+</div>
         <h1>Notice what other equalizers don't expose.</h1>
         <p class="lede">
-          SherlockEQ is a per-ear audio equalizer for macOS. It taps system audio, splits the chain by ear, and gives you the controls to investigate a tinnitus tone, plot an audiogram-shaped EQ curve, and refine sound to your listening preferences — with precision most apps and streaming services don't expose.
+          macOS doesn't ship a per-ear parametric EQ. SherlockEQ is one. It taps system audio, splits the chain by ear, and gives you the controls to investigate a tinnitus tone, shape an audiogram into compensation, and refine sound to taste. <strong>No virtual driver. No kernel extension. No paywall.</strong>
         </p>
         <div class="cta-row">
           <a class="btn btn-primary" href="#install">
@@ -408,8 +493,46 @@
           </a>
         </div>
         <div class="meta-row">
-          v0.1.1 <span class="dot"></span> macOS 14.6+ <span class="dot"></span> Apple Silicon and Intel <span class="dot"></span> 5.7 MB
+          v0.1.1 <span class="dot"></span> Apple Silicon and Intel <span class="dot"></span> 5.7 MB <span class="dot"></span> <a href="LICENSE" style="color:inherit;text-decoration:none;">MIT licensed</a>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       Specs strip
+       ================================================================= -->
+  <section class="specs" aria-label="Engineering specs">
+    <div class="container specs-grid">
+      <div class="spec">
+        <div class="spec-key">EQ</div>
+        <div class="spec-num">Up to 16 bands per ear</div>
+        <p>Independent L/R biquad chains via the Audio EQ Cookbook formulas. Seven filter types: parametric, shelf, notch, band/low/high pass.</p>
+      </div>
+      <div class="spec">
+        <div class="spec-key">PITCH</div>
+        <div class="spec-num">1 Hz resolution</div>
+        <p>Continuous-phase sine sweep across the audible band, fine-tunable down to a single hertz.</p>
+      </div>
+      <div class="spec">
+        <div class="spec-key">DSP</div>
+        <div class="spec-num">Hann-windowed FFT</div>
+        <p>The render thread memcpys into a ring buffer; the 2048-point FFT runs off the audio thread on vDSP / Accelerate.</p>
+      </div>
+      <div class="spec">
+        <div class="spec-key">CHANNELS</div>
+        <div class="spec-num">True per-ear isolation</div>
+        <p>Hand-rolled biquad cascade in the source-node render block. Bypasses <code>AVAudioUnitEQ</code>'s stereo coupling, so a left-ear notch leaves the right channel untouched.</p>
+      </div>
+      <div class="spec">
+        <div class="spec-key">PRESETS</div>
+        <div class="spec-num">AutoEQ-compatible</div>
+        <p>Pulls headphone correction targets on demand from the AutoEQ project — thousands of measured profiles, no bundle to update.</p>
+      </div>
+      <div class="spec">
+        <div class="spec-key">SIZE</div>
+        <div class="spec-num">~6 MB</div>
+        <p>Native Swift, no Electron. Direct download, not Mac App Store — the App Store sandbox prohibits the cross-process audio read that the Tap API needs. The DMG is Apple-signed and notarized.</p>
       </div>
     </div>
   </section>
@@ -444,9 +567,56 @@
           <div class="key">03 · REFINE</div>
           <h3>Shape any frequency, per ear</h3>
           <p>
-            Four EQ modes from one-knob shelves to a fully parametric canvas. Independent left and right chains. Headphone correction via AutoEQ profiles. A live spectrum with safety overlays and dose tracking on top.
+            Four EQ modes from one-knob shelves to a fully parametric canvas. Independent left and right chains. Headphone correction via AutoEQ profiles. A live spectrum with safety overlays and a NIOSH equal-energy dose tracker on top.
           </p>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       Screenshots
+       ================================================================= -->
+  <section id="screenshots">
+    <div class="container">
+      <div class="section-head">
+        <h2>See it</h2>
+        <div class="nav-spacer"></div>
+        <span class="index">SCREENSHOTS</span>
+      </div>
+
+      <div class="shots">
+        <figure class="shot">
+          <img src="assets/shot-notch.png" alt="Tinnitus Notch view — a frequency sweep at 4,000 Hz with ±1/10/100 Hz fine-tune controls and a per-ear notch filter below." loading="lazy" />
+          <figcaption class="cap">
+            <span class="key">01 · LOCATE</span>
+            <span class="label">Sweep the sine, set the notch — per ear or linked.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="shot">
+          <img src="assets/shot-audiogram.png" alt="Audiogram editor — left-ear threshold chart with draggable points and a numeric entry table by frequency." loading="lazy" />
+          <figcaption class="cap">
+            <span class="key">02 · INTERPRET</span>
+            <span class="label">Enter audiogram thresholds; SherlockEQ shapes the curve.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="shot">
+          <img src="assets/shot-eq.png" alt="Equalizer view — a parametric EQ curve overlaid on a live spectrum with selectable Output, Input, EQ, and Audiogram lenses, plus an output-level meter sidebar." loading="lazy" />
+          <figcaption class="cap">
+            <span class="key">03 · REFINE</span>
+            <span class="label">Parametric bands over a live spectrum. Four lenses, one chain.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="shot">
+          <img src="assets/shot-popover.png" alt="Menu-bar popover — today's dose, left/right level meters, master gain and balance sliders, profile picker, compensation slider, tinnitus notch toggle, and a reference-mode bypass." loading="lazy" />
+          <figcaption class="cap">
+            <span class="key">04 · MENU BAR</span>
+            <span class="label">Live levels, dose, gain, balance, and the notch toggle — without opening the app.</span>
+          </figcaption>
+        </figure>
       </div>
     </div>
   </section>
@@ -503,9 +673,9 @@
         </div>
         <div class="pillar">
           <div class="key">MODULAR</div>
-          <h3>As few or as many features as you want</h3>
+          <h3>Use what you want</h3>
           <p>
-            Every feature is per-profile and optional. Run with just a master gain. Or layer in the safety overlay, notch filter, headphone correction, dose tracking — whatever you actually reach for.
+            Every feature is per-profile and optional. Run with just a master gain. Or layer in the safety overlay, notch filter, headphone correction, dose tracking — whatever you want.
           </p>
         </div>
       </div>
@@ -520,7 +690,7 @@
       <div class="section-head">
         <h2>Install</h2>
         <div class="nav-spacer"></div>
-        <span class="index">SIGNED · NOTARIZED</span>
+        <span class="index">FREE · SIGNED · NOTARIZED</span>
       </div>
 
       <div class="install-grid">
