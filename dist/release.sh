@@ -90,7 +90,16 @@ PLIST
 
 # ---- 1. archive --------------------------------------------------------------
 
-echo "==> archiving Release configuration"
+# Compute a monotonically increasing CFBundleVersion from the marketing
+# version, using the same formula as dist/appcast-publish.sh so the
+# installed app's build number matches what the appcast advertises.
+# 0.1.0 -> 100, 0.1.1 -> 101, 1.0.0 -> 10000.
+BUILD_NUMBER=$(printf "%d%02d%02d" \
+  "$(echo "$VERSION" | cut -d. -f1)" \
+  "$(echo "$VERSION" | cut -d. -f2 | sed 's/[^0-9].*//')" \
+  "$(echo "$VERSION" | cut -d. -f3 | sed 's/[^0-9].*//')")
+
+echo "==> archiving Release configuration (build $BUILD_NUMBER)"
 xcodebuild archive \
   -project "$PROJECT" \
   -scheme "$SCHEME" \
@@ -101,6 +110,7 @@ xcodebuild archive \
   "CODE_SIGN_IDENTITY=$DEVELOPER_ID" \
   "DEVELOPMENT_TEAM=$TEAM_ID" \
   MARKETING_VERSION="$VERSION" \
+  CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
   | xcpretty --no-color 2>/dev/null || true
 
 if [[ ! -d "$ARCHIVE" ]]; then

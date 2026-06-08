@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      Bundle identity. All $(...) tokens are expanded by Xcode from build
+      settings at compile time; do not hard-code the values.
+    -->
+    <key>CFBundleDevelopmentRegion</key>
+    <string>$(DEVELOPMENT_LANGUAGE)</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$(MARKETING_VERSION)</string>
+    <key>CFBundleVersion</key>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
+
+    <!-- App behavior -->
+    <key>LSMinimumSystemVersion</key>
+    <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.music</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>NSAccentColorName</key>
+    <string>AccentColor</string>
+
+    <!--
+      Privacy descriptions. These strings are shown to the user inside
+      the macOS TCC permission prompts. Both are required:
+        - NSMicrophoneUsageDescription pairs with the
+          com.apple.security.device.audio-input entitlement.
+        - NSScreenCaptureUsageDescription is what macOS demands for any
+          cross-process audio capture, including Core Audio Taps.
+    -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>SherlockEQ uses microphone access for the audio path; it does not record audio.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>SherlockEQ uses this permission to capture system audio through Apple's Core Audio Tap API. It does not record video or screen contents.</string>
+
+    <!--
+      Sparkle. SUFeedURL is the appcast endpoint. SUPublicEDKey MUST
+      contain the base64 EdDSA public key generated once by
+      dist/sparkle-keygen.sh; Sparkle refuses any update payload whose
+      signature does not verify against this key, so leaving the
+      placeholder in place will make Check for Updates fail.
+    -->
+    <key>SUFeedURL</key>
+    <string>https://snxt.ai/appcast.xml</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUPublicEDKey</key>
+    <string>wltqWmlE8DlhQFGVxSRGLO06xjRrYO3jDIu8h3SYx58=</string>
+</dict>
+</plist>
