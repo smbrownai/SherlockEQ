@@ -29,7 +29,7 @@ struct ExpertEQView: View {
     // layout the user picked last session is what they see next launch.
     // Each chip in the layer strip mutates one of these.
     @AppStorage("sherlockeq.layer.output")    private var showOutputLayer    = true
-    @AppStorage("sherlockeq.layer.input")     private var showInputLayer     = false
+    @AppStorage("sherlockeq.layer.input")     private var showInputLayer     = true
     @AppStorage("sherlockeq.layer.eq")        private var showEQLayer        = true
     @AppStorage("sherlockeq.layer.audiogram") private var showAudiogramLayer = true
     @AppStorage("sherlockeq.layer.safety")    private var showSafetyLayer    = false

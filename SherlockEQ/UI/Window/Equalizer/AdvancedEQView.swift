@@ -18,6 +18,15 @@ struct AdvancedEQView: View {
         !(audioState.activeProfile(in: profileStore)?.separateChannels ?? false)
     }
 
+    // Spectrum-overlay layer visibility — shares Expert's @AppStorage keys
+    // so the user's chip preference is consistent across modes.
+    @AppStorage("sherlockeq.layer.output")    private var showOutputLayer    = true
+    @AppStorage("sherlockeq.layer.input")     private var showInputLayer     = true
+    @AppStorage("sherlockeq.layer.eq")        private var showEQLayer        = true
+    @AppStorage("sherlockeq.layer.audiogram") private var showAudiogramLayer = true
+    @AppStorage("sherlockeq.layer.safety")    private var showSafetyLayer    = false
+    @AppStorage("sherlockeq.layer.peaks")     private var showPeaksLayer     = false
+
     var body: some View {
         if let profile = audioState.activeProfile(in: profileStore) {
             content(profile)
@@ -31,17 +40,35 @@ struct AdvancedEQView: View {
     }
 
     @ViewBuilder private func content(_ profile: HearingProfile) -> some View {
+        let target = targetBands(for: profile)
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 topBar
                 HiddenBandsHintChip()
-                previewCanvas(profile)
+                CanvasLayerChipStrip(
+                    showInputSpectrum: $showInputLayer,
+                    showOutputSpectrum: $showOutputLayer,
+                    showEQCurve: $showEQLayer,
+                    showAudiogramTarget: $showAudiogramLayer,
+                    showSafetyOverlay: $showSafetyLayer,
+                    showPeakCallouts: $showPeaksLayer,
+                    hasAudiogram: !target.isEmpty,
+                    earColor: audioState.leftEarColor
+                )
+                previewCanvas(profile, target: target)
                 slidersRow(profile)
                 resetButton(profile)
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private func targetBands(for profile: HearingProfile) -> [EQBand] {
+        AudiogramConversion.bands(
+            for: profile.leftEar.thresholds,
+            compensationFactor: profile.compensationFactor
+        )
     }
 
     private var topBar: some View {
@@ -116,18 +143,27 @@ struct AdvancedEQView: View {
     @State private var dummySelection: UUID? = nil
 
     @ViewBuilder
-    private func previewCanvas(_ profile: HearingProfile) -> some View {
+    private func previewCanvas(_ profile: HearingProfile, target: [EQBand]) -> some View {
         LiveParametricCanvas(
             spectrum: audioState.spectrum,
-            preSpectrum: nil,
+            preSpectrum: audioState.preSpectrum,
             bands: .constant(profile.leftEar.bands),
             shadowBands: profile.rightEar.bands,
+            targetBands: target,
             notch: profile.leftNotch,
             spectrumSampleRate: audioState.audio.outputSampleRate ?? 48_000,
             earColor: audioState.leftEarColor,
             shadowColor: audioState.rightEarColor,
             readOnly: true,
-            selectedBandID: $dummySelection
+            selectedBandID: $dummySelection,
+            showInputSpectrum: showInputLayer,
+            showOutputSpectrum: showOutputLayer,
+            showEQCurve: showEQLayer,
+            showAudiogramTarget: showAudiogramLayer,
+            showSafetyOverlay: showSafetyLayer,
+            showPeakCallouts: showPeaksLayer,
+            safetyCeilingDBA: profile.safeListeningCeilingDB,
+            calibrationOffsetDBA: audioState.calibrationOffsetDBA
         )
         .frame(height: 180)
     }
@@ -153,10 +189,8 @@ struct AdvancedEQView: View {
 
     @ViewBuilder
     private func bandColumn(profile: HearingProfile, frequency: Double) -> some View {
-        VStack(spacing: 8) {
-            Text(formatFreq(frequency))
-                .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
+        VStack(spacing: 6) {
+            chipRow(profile: profile, frequency: frequency)
 
             HStack(spacing: 4) {
                 if linkChannels {
@@ -186,12 +220,43 @@ struct AdvancedEQView: View {
             }
             .frame(width: Self.columnWidth, height: 220)
 
-            Text(formatGain(displayedGain(profile: profile, frequency: frequency)))
-                .font(.caption.monospaced().weight(.medium))
-                .foregroundStyle(.primary)
+            Text(formatFreq(frequency))
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private func chipRow(profile: HearingProfile, frequency: Double) -> some View {
+        HStack(spacing: 4) {
+            if linkChannels {
+                EQGainChip(
+                    value: gainBinding(profile: profile, frequency: frequency, ear: .left),
+                    range: -12...12,
+                    tint: audioState.leftEarColor,
+                    accessibilityLabel: "\(formatFreq(frequency)) hertz, both ears, gain"
+                )
+                .frame(width: 40)
+            } else {
+                EQGainChip(
+                    value: gainBinding(profile: profile, frequency: frequency, ear: .left),
+                    range: -12...12,
+                    tint: audioState.leftEarColor,
+                    accessibilityLabel: "\(formatFreq(frequency)) hertz, left ear, gain"
+                )
+                .frame(width: 26)
+                EQGainChip(
+                    value: gainBinding(profile: profile, frequency: frequency, ear: .right),
+                    range: -12...12,
+                    tint: audioState.rightEarColor,
+                    accessibilityLabel: "\(formatFreq(frequency)) hertz, right ear, gain"
+                )
+                .frame(width: 26)
+            }
+        }
+        .frame(width: Self.columnWidth)
     }
 
     private typealias Ear = EQBandLookup.Ear
@@ -208,13 +273,6 @@ struct AdvancedEQView: View {
     }
 
     // MARK: - Binding helpers
-
-    private func displayedGain(profile: HearingProfile, frequency: Double) -> Double {
-        let left = EQBandLookup.gain(at: frequency, filterType: .parametric, in: profile.leftEar.bands)
-        if linkChannels { return left }
-        let right = EQBandLookup.gain(at: frequency, filterType: .parametric, in: profile.rightEar.bands)
-        return (left + right) / 2
-    }
 
     private func gainBinding(profile: HearingProfile, frequency: Double, ear: Ear) -> Binding<Double> {
         Binding(
@@ -254,11 +312,6 @@ struct AdvancedEQView: View {
             return k == k.rounded() ? "\(Int(k))k" : String(format: "%.1fk", k)
         }
         return "\(Int(hz))"
-    }
-
-    private func formatGain(_ db: Double) -> String {
-        if abs(db) < 0.05 { return "0" }
-        return String(format: "%+.1f", db)
     }
 }
 

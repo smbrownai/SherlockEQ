@@ -141,14 +141,15 @@ struct ParametricCanvasView: View {
     private let spectrumMaxDB: Double = -6
     /// Mode-aware: the heatmap needs much more vertical room than a thin
     /// silhouette overlay, so Spectrogram mode gets 65% of the canvas
-    /// versus Spectrum / Bars at 50%. (Was 40 % before; bumped to 50 %
-    /// when the Expert canvas grew to 450pt, since the spectrum's
-    /// 84 dB range was visibly cramped in the smaller fraction.)
+    /// versus Spectrum / Bars at 70%. (40 → 50 in commit 10445ea when the
+    /// Expert canvas grew to 450pt; 50 → 70 for 0.1.3 to give the
+    /// iQualize-style live overlay enough vertical room to read as a
+    /// proper background fill rather than a ribbon at the bottom.)
     /// The EQ curve, grid, and labels continue to draw across the
     /// full canvas — they just sit in a smaller proportion of it
     /// when the spectrogram is large.
     private var spectrumHeightFraction: CGFloat {
-        vizMode == .spectrogram ? 0.65 : 0.5
+        vizMode == .spectrogram ? 0.65 : 0.7
     }
 
     @State private var dragState: DragState?
