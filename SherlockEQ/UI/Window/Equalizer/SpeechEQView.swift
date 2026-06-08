@@ -199,7 +199,7 @@ struct SpeechEQView: View {
     private func previewCanvas(_ profile: HearingProfile) -> some View {
         LiveParametricCanvas(
             spectrum: audioState.spectrum,
-            preSpectrum: nil,
+            preSpectrum: audioState.preSpectrum,
             bands: .constant(profile.leftEar.bands),
             shadowBands: profile.rightEar.bands,
             notch: profile.leftNotch,
