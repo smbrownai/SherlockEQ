@@ -17,7 +17,7 @@
 
 cask "sherlockeq" do
   version "0.1.0"
-  sha256 "REPLACE_WITH_RELEASE_SHA256"
+  sha256 "4b9da16decb8057b3f20950c980e629b0556e802cbdda4a7146501b8585bf82d"
 
   url "https://github.com/smbrownai/SherlockEQ/releases/download/v#{version}/SherlockEQ-#{version}.dmg",
       verified: "github.com/smbrownai/SherlockEQ/"
