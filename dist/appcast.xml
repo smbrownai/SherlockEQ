@@ -21,6 +21,93 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 0.1.3</title>
+      <pubDate>Mon, 08 Jun 2026 20:48:48 +0000</pubDate>
+      <sparkle:version>00103</sparkle:version>
+      <sparkle:shortVersionString>0.1.3</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<!--
+  Release notes for SherlockEQ 0.1.3.
+
+  Authored as HTML so Sparkle's update dialog renders the formatting;
+  GitHub renders inline HTML in release notes the same way.
+-->
+
+<h2>SherlockEQ 0.1.3</h2>
+
+<p>
+  A pass over every Equalizer tab — the input (pre-EQ) and post-EQ
+  spectra now ride together behind the curve so you can see what
+  your correction is actually doing to your music in real time.
+  Advanced gets the layer chip strip and tap-to-type gain chips
+  that used to be Expert-only, and a dedicated Bypass button
+  finally lives on the Equalizer surface itself.
+</p>
+
+<h3>Added</h3>
+
+<ul>
+  <li>
+    <strong>Live input + post-EQ spectrum overlay.</strong>
+    The dry input and the post-EQ output spectra are now both
+    rendered behind the EQ curve on every Equalizer tab — Simple,
+    Speech, Advanced, and Expert. The input layer used to be
+    Expert-only (and off by default); it's now on by default
+    everywhere. The overlay also takes up more of the canvas
+    (50&nbsp;%&nbsp;→&nbsp;70&nbsp;% vertical) so it reads as a real
+    background fill rather than a thin ribbon at the bottom.
+  </li>
+  <li>
+    <strong>Bypass button on the Equalizer.</strong>
+    A pill toggle now sits at the top of every Equalizer tab — flip
+    it to A/B between your tuning and the raw source without leaving
+    the screen. Goes red + "Bypassed" when active so you can't lose
+    track of which state you're in. Drives the same Reference Mode
+    that ⌘B and the popover already used; nothing new to learn.
+  </li>
+  <li>
+    <strong>Layer chip strip on Advanced.</strong>
+    Advanced now exposes the same Input&nbsp;/&nbsp;Output&nbsp;/&nbsp;EQ
+    curve&nbsp;/&nbsp;Audiogram target&nbsp;/&nbsp;Safety overlay&nbsp;/&nbsp;Peak
+    callouts chips that Expert has had. Your chip preferences are
+    shared across the two modes — what you toggle in one shows up
+    the same way in the other.
+  </li>
+  <li>
+    <strong>Tap-to-type gain chips on Advanced.</strong>
+    Each of Advanced's ten octave bands now shows its current gain
+    in a small editable chip above the slider. Tap it, type a
+    value ("+2.5", "−3", "0", a trailing "dB" is fine), press
+    Return — or just click anywhere outside the chip and it
+    commits. Esc cancels. Keyboard nudges (±0.5&nbsp;dB) work for
+    VoiceOver users too.
+  </li>
+</ul>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not
+  diagnose, treat, measure, or monitor any hearing condition, tinnitus,
+  or disability. For concerns about your hearing, consult a doctor,
+  audiologist, or licensed healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.1.2">0.1.2 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v0.1.3/SherlockEQ-0.1.3.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="VytaPlHEXMFpvvqB5B60/OX6PNP8NpGQCndQgLbWdCZ7XVoLuSed32MuI+Hn4X4jxuuAg4baucyTF4Dwo3VFAA==" length="6010384" />
+    </item>
+
+    <item>
       <title>SherlockEQ 0.1.2</title>
       <pubDate>Mon, 08 Jun 2026 17:17:16 +0000</pubDate>
       <sparkle:version>00102</sparkle:version>
