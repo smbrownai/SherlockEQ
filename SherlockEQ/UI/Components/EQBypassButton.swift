@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// Pill toggle for the EQ surface — flips `audioState.referenceMode`
-/// (the same state Cmd+B and the popover Reference Button drive).
-/// Goes red + "Bypassed" when on so the user can't miss that they're
+/// Compact toolbar toggle for the EQ surface — flips
+/// `audioState.referenceMode` (the same state Cmd+B and the popover
+/// Reference Button drive). Wording matches the popover ("Reference
+/// Mode" / "Reference Mode — ON") so the two surfaces feel like one
+/// control. Goes red when on so the user can't miss that they're
 /// listening to unprocessed audio.
 struct EQBypassButton: View {
     @EnvironmentObject private var audioState: AudioState
@@ -13,31 +15,22 @@ struct EQBypassButton: View {
                 Image(systemName: audioState.referenceMode ? "circle.fill" : "circle")
                     .font(.system(size: 9))
                     .foregroundStyle(audioState.referenceMode ? .red : .secondary)
-                Text(audioState.referenceMode ? "Bypassed" : "Bypass")
+                Text(audioState.referenceMode ? "Reference Mode — ON" : "Reference Mode")
                     .font(.callout.weight(.medium))
                     .foregroundStyle(audioState.referenceMode ? .red : .primary)
             }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(audioState.referenceMode
-                          ? Color.red.opacity(0.14)
-                          : Color.secondary.opacity(0.08))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 7)
-                    .stroke(audioState.referenceMode
-                            ? Color.red.opacity(0.55)
-                            : Color.secondary.opacity(0.28), lineWidth: 1)
-            )
+            // Inner-content padding inflates the toolbar pill's outer
+            // shape so the dot + label don't sit flush against the
+            // chrome's rounded edges. Pure visual breathing room — the
+            // toolbar draws the capsule around whatever we measure here.
+            .padding(.horizontal, 8)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(audioState.referenceMode
               ? "Re-enable EQ processing (⌘B)"
               : "Bypass all EQ stages to hear the source unprocessed (⌘B)")
-        .accessibilityLabel("Bypass EQ")
+        .accessibilityLabel("Reference Mode")
         .accessibilityValue(audioState.referenceMode ? "On" : "Off")
         .accessibilityAddTraits(.isButton)
     }

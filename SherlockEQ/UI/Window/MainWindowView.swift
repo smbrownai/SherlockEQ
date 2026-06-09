@@ -15,9 +15,21 @@ struct MainWindowView: View {
     @AppStorage("sherlockeq.monitorSidebarVisible") private var monitorSidebarVisible: Bool = true
 
     var body: some View {
-        NavigationSplitView {
+        // Lock the sidebar visible: the seven sections + active-profile
+        // chip + Manage Profiles button are the app's primary navigation
+        // and there's no surface where hiding them helps. `.constant(.all)`
+        // pins the column open against keyboard shortcuts / system gestures
+        // that would otherwise collapse it; `.toolbar(removing: .sidebarToggle)`
+        // on the sidebar view stops AppKit from synthesizing a toggle
+        // button anywhere in the title bar.
+        NavigationSplitView(columnVisibility: .constant(.all)) {
             SidebarView(selection: $selection)
-                .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 300)
+                // Preferred 240 pt. SwiftUI treats this as advisory on
+                // macOS — the user can still drag the underlying
+                // NSSplitView's divider — but it sets the natural
+                // first-launch width and the auto-layout target.
+                .navigationSplitViewColumnWidth(min: 240, ideal: 240, max: 240)
+                .toolbar(removing: .sidebarToggle)
         } detail: {
             VStack(spacing: 0) {
                 if let notice = audioState.userVisibleNotice {
@@ -35,7 +47,10 @@ struct MainWindowView: View {
                     if monitorSidebarVisible {
                         Divider()
                         MonitorSidebar()
-                            .frame(width: 220)
+                            // Match the left sidebar's fixed 240 pt so
+                            // both gutters read as the same shape and
+                            // there's no width drift between launches.
+                            .frame(width: 240)
                             // Slide in / out smoothly when the toolbar toggle
                             // flips. The transition is purely visual; the
                             // underlying StereoMonitor subscription is keyed
@@ -53,6 +68,18 @@ struct MainWindowView: View {
             .navigationSplitViewColumnWidth(min: 760, ideal: 820)
         }
         .toolbar {
+            // Reference Mode lives globally in the title bar so the user
+            // can A/B against the source signal from any screen, not just
+            // the Equalizer view. Declared before the monitor toggle so
+            // it sits to its left on macOS (primaryAction items render in
+            // declaration order, left → right). The `.spacer` between
+            // them visually separates the two unrelated controls.
+            ToolbarItem(placement: .primaryAction) {
+                EQBypassButton()
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Spacer()
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     monitorSidebarVisible.toggle()

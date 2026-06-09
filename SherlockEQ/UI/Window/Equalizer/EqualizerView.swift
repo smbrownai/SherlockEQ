@@ -23,15 +23,6 @@ struct EqualizerView: View {
                 .padding(.top, 12)
             }
 
-            if activeProfile != nil {
-                HStack {
-                    Spacer()
-                    EQBypassButton()
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-            }
-
             Group {
                 switch mode {
                 case .simple:   SimpleEQView()
