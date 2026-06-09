@@ -227,15 +227,52 @@ final class SherlockEQAudioEngine: ObservableObject {
             try engine.start()
             isRunning = true
             lastError = nil
+            startRetryScheduled = false
             let f = engine.outputNode.inputFormat(forBus: 0)
             outputFormatDescription = "\(Int(f.sampleRate)) Hz · \(f.channelCount) ch · \(Self.formatLabel(f.commonFormat))"
             log.info("AVAudioEngine started — output expects \(self.outputFormatDescription)")
         } catch {
             isRunning = false
+            let ns = error as NSError
+            log.error(
+                "AVAudioEngine.start failed: domain=\(ns.domain, privacy: .public) code=\(ns.code) userInfo=\(ns.userInfo, privacy: .public) — \(error.localizedDescription, privacy: .public)"
+            )
+            if Self.isTransientHALFailure(ns), !startRetryScheduled {
+                // The HAL just told us EAGAIN — output device hasn't
+                // settled (route change, SR renegotiation, post-sleep
+                // wake). A 200 ms delay reliably clears it. Hold the
+                // banner so the user only sees an error if recovery
+                // also fails.
+                startRetryScheduled = true
+                log.info("Transient HAL failure (code 35) — scheduling one-shot start() retry in 200 ms")
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: 200_000_000)
+                    guard let self else { return }
+                    self.startRetryScheduled = false
+                    guard !self.isRunning else { return }
+                    self.start()
+                }
+                return
+            }
             lastError = "AVAudioEngine.start: \(error.localizedDescription)"
-            log.error("AVAudioEngine.start failed: \(error.localizedDescription)")
         }
     }
+
+    /// True if `error` is a HAL-layer transient failure — the output
+    /// device refused to open right now but should accept a fresh
+    /// `start()` shortly. Empirically these surface as `EAGAIN` (35)
+    /// in either the avfaudio domain or POSIX, most often when a
+    /// route / sample-rate / wake-from-sleep transition is still
+    /// settling underneath us. Caller does a single 200 ms retry.
+    private static func isTransientHALFailure(_ error: NSError) -> Bool {
+        guard error.code == 35 else { return false }
+        return error.domain == "com.apple.coreaudio.avfaudio"
+            || error.domain == NSPOSIXErrorDomain
+    }
+
+    /// One-shot guard so the retry chain can't recurse — a second
+    /// transient failure surfaces the banner instead of looping.
+    private var startRetryScheduled = false
 
     private static func formatLabel(_ f: AVAudioCommonFormat) -> String {
         switch f {

@@ -7,7 +7,7 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: $selection) {
-            Section("Audio Processor") {
+            Section("Audio Processing") {
                 ForEach(SidebarSection.audioProcessorSections) { section in
                     Label(section.title, systemImage: section.symbol)
                         .tag(section)
