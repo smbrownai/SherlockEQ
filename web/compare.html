@@ -1,0 +1,793 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SherlockEQ — how it compares to other Mac EQ apps</title>
+  <meta name="description" content="Honest, side-by-side notes on SherlockEQ vs SoundSource, eqMac, Sound Control, Boom 3D, SoundID Reference, and pro EQ plugins. Where SherlockEQ fits, and where another tool is a better answer." />
+
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+
+  <style>
+    :root {
+      --container: 1040px;
+      --gutter: 32px;
+    }
+
+    body { margin: 0; }
+
+    .container {
+      max-width: var(--container);
+      margin: 0 auto;
+      padding-left: var(--gutter);
+      padding-right: var(--gutter);
+    }
+
+    /* ---- Nav ---------------------------------------------------------- */
+    header.nav { padding-top: var(--s-9); }
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      gap: var(--s-7);
+    }
+    .nav-mark {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--s-4);
+      text-decoration: none;
+      color: var(--fg-1);
+    }
+    .nav-mark img { width: 22px; height: 22px; border-radius: var(--r-sm); }
+    .nav-mark .name {
+      font-family: var(--font-mono);
+      font-size: var(--fs-14);
+      font-weight: var(--w-medium);
+      letter-spacing: -0.01em;
+    }
+    .nav-spacer { flex: 1; }
+    .nav-links {
+      display: flex;
+      gap: var(--s-7);
+      font-size: var(--fs-14);
+    }
+    .nav-links a {
+      color: var(--fg-2);
+      text-decoration: none;
+    }
+    .nav-links a[aria-current="page"] { color: var(--fg-1); }
+    .nav-links a:hover { color: var(--fg-1); text-decoration: underline; text-underline-offset: 3px; }
+
+    /* ---- Hero --------------------------------------------------------- */
+    section.hero {
+      padding-top: var(--s-12);
+      padding-bottom: var(--s-11);
+    }
+    .hero h1 {
+      font-size: var(--fs-48);
+      font-weight: var(--w-semibold);
+      line-height: 1.1;
+      letter-spacing: -0.015em;
+      margin: var(--s-6) 0 var(--s-7);
+      text-wrap: balance;
+      max-width: 20ch;
+    }
+    .hero p.lede {
+      font-size: var(--fs-18);
+      color: var(--fg-2);
+      line-height: var(--lh-body);
+      max-width: 64ch;
+      margin: 0;
+    }
+
+    /* ---- Section header ---------------------------------------------- */
+    section { padding-top: var(--s-11); padding-bottom: var(--s-11); }
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      gap: var(--s-7);
+      border-bottom: 1px solid var(--line);
+      padding-bottom: var(--s-5);
+      margin-bottom: var(--s-9);
+    }
+    .section-head h2 {
+      font-size: var(--fs-22);
+      font-weight: var(--w-semibold);
+      margin: 0;
+      letter-spacing: var(--ls-normal);
+    }
+    .section-head .index {
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+    }
+
+    /* ---- Pick-this-if cards ------------------------------------------ */
+    .picks {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--s-7);
+    }
+    .pick {
+      background: var(--bg-1);
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      padding: var(--s-8);
+      display: flex;
+      flex-direction: column;
+      gap: var(--s-5);
+    }
+    .pick.is-self {
+      border-color: var(--signal-line);
+      background: var(--signal-soft);
+    }
+    .pick .key {
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+    }
+    .pick.is-self .key { color: var(--signal-ink); }
+    .pick h3 {
+      font-size: var(--fs-18);
+      font-weight: var(--w-semibold);
+      letter-spacing: var(--ls-normal);
+      margin: 0;
+      line-height: var(--lh-snug);
+    }
+    .pick p {
+      font-size: var(--fs-14);
+      color: var(--fg-2);
+      line-height: var(--lh-body);
+      margin: 0;
+    }
+    .pick.is-self p { color: var(--fg-1); }
+
+    /* ---- Matrix table ------------------------------------------------- */
+    .matrix-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      background: var(--bg-1);
+    }
+    table.matrix {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--fs-13);
+      min-width: 760px;
+    }
+    table.matrix th,
+    table.matrix td {
+      padding: var(--s-5) var(--s-6);
+      text-align: left;
+      vertical-align: middle;
+      border-bottom: 1px solid var(--line-soft);
+    }
+    table.matrix thead th {
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      font-weight: var(--w-medium);
+      color: var(--fg-3);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+      text-align: center;
+      border-bottom: 1px solid var(--line);
+      background: var(--bg-2);
+      position: sticky;
+      top: 0;
+    }
+    table.matrix thead th.row-head {
+      text-align: left;
+      width: 32%;
+    }
+    table.matrix thead th.is-self {
+      color: var(--signal-ink);
+      background: var(--signal-soft);
+    }
+    table.matrix tbody td {
+      text-align: center;
+      color: var(--fg-2);
+    }
+    table.matrix tbody td.row-head {
+      text-align: left;
+      color: var(--fg-1);
+      font-weight: var(--w-medium);
+    }
+    table.matrix tbody td.row-head .sub {
+      display: block;
+      font-family: var(--font-sans);
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+      font-weight: var(--w-regular);
+      margin-top: 2px;
+    }
+    table.matrix tbody td.is-self {
+      background: var(--signal-soft);
+      color: var(--signal-ink);
+    }
+    table.matrix tbody tr:last-child td { border-bottom: 0; }
+
+    .mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px; height: 22px;
+      border-radius: 999px;
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      line-height: 1;
+    }
+    .mark.yes  { background: var(--ok-soft);   color: var(--ok); }
+    .mark.no   { background: transparent;       color: var(--fg-4); }
+    .mark.part { background: var(--warn-soft); color: var(--warn); }
+    .mark svg { width: 12px; height: 12px; }
+
+    .matrix-note {
+      display: block;
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+      margin-top: 4px;
+      line-height: var(--lh-ui);
+    }
+
+    /* ---- Side-by-side product notes ----------------------------------- */
+    .product {
+      padding: var(--s-8) 0;
+      border-bottom: 1px solid var(--line-soft);
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: var(--s-9);
+      align-items: start;
+    }
+    .product:last-child { border-bottom: 0; }
+    .product .meta {
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+      line-height: var(--lh-ui);
+    }
+    .product .meta .name {
+      display: block;
+      font-family: var(--font-sans);
+      font-size: var(--fs-18);
+      color: var(--fg-1);
+      text-transform: none;
+      letter-spacing: var(--ls-normal);
+      font-weight: var(--w-semibold);
+      margin-bottom: var(--s-2);
+      line-height: var(--lh-tight);
+    }
+    .product .meta .vendor {
+      display: block;
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+      margin-bottom: var(--s-4);
+    }
+    .product .meta .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--r-pill);
+      color: var(--fg-2);
+      font-size: var(--fs-12);
+    }
+    .product .body p {
+      font-size: var(--fs-14);
+      color: var(--fg-2);
+      line-height: var(--lh-body);
+      margin: 0 0 var(--s-5);
+      max-width: 66ch;
+    }
+    .product .body p:last-child { margin-bottom: 0; }
+    .product .body p strong { color: var(--fg-1); font-weight: var(--w-semibold); }
+    .product .overlap {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: var(--s-5) var(--s-6);
+      font-size: var(--fs-13);
+      line-height: var(--lh-body);
+      margin-top: var(--s-6);
+      padding-top: var(--s-6);
+      border-top: 1px dashed var(--line);
+    }
+    .product .overlap dt {
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+    }
+    .product .overlap dd { margin: 0; color: var(--fg-1); }
+
+    /* ---- Honest "use something else" --------------------------------- */
+    .else {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--s-7);
+    }
+    .else-card {
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      padding: var(--s-7);
+    }
+    .else-card .key {
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+      margin-bottom: var(--s-3);
+    }
+    .else-card h3 {
+      font-size: var(--fs-16);
+      font-weight: var(--w-medium);
+      margin: 0 0 var(--s-3);
+      letter-spacing: var(--ls-normal);
+    }
+    .else-card p {
+      font-size: var(--fs-14);
+      color: var(--fg-2);
+      margin: 0;
+      line-height: var(--lh-body);
+    }
+    .else-card .pick-link {
+      display: inline-block;
+      margin-top: var(--s-5);
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      color: var(--signal);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+    }
+
+    /* ---- Closing CTA -------------------------------------------------- */
+    .closing {
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      padding: var(--s-9);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: var(--s-9);
+      align-items: center;
+    }
+    .closing h3 {
+      font-size: var(--fs-22);
+      font-weight: var(--w-semibold);
+      letter-spacing: var(--ls-tight);
+      margin: 0 0 var(--s-3);
+    }
+    .closing p {
+      font-size: var(--fs-14);
+      color: var(--fg-2);
+      max-width: 60ch;
+      margin: 0;
+      line-height: var(--lh-body);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--s-3);
+      font-family: var(--font-sans);
+      font-size: var(--fs-14);
+      font-weight: var(--w-medium);
+      padding: 10px 16px;
+      border-radius: var(--r-md);
+      text-decoration: none;
+      border: 1px solid transparent;
+      transition: background-color var(--dur-std) var(--ease-standard);
+    }
+    .btn-primary {
+      background: var(--ink);
+      color: var(--paper);
+      border-color: var(--ink);
+    }
+    .btn-primary:hover { background: var(--gray-800); text-decoration: none; }
+
+    /* ---- Footer ------------------------------------------------------- */
+    footer.site-footer {
+      border-top: 1px solid var(--line);
+      margin-top: var(--s-12);
+      padding: var(--s-8) 0;
+    }
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      gap: var(--s-7);
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+    }
+    .footer-inner a { color: var(--fg-3); text-decoration: none; }
+    .footer-inner a:hover { color: var(--fg-1); text-decoration: underline; text-underline-offset: 3px; }
+    .footer-spacer { flex: 1; }
+
+    /* ---- Responsive --------------------------------------------------- */
+    @media (max-width: 880px) {
+      .picks { grid-template-columns: 1fr; }
+      .else { grid-template-columns: 1fr; }
+      .product { grid-template-columns: 1fr; gap: var(--s-5); }
+      .closing { grid-template-columns: 1fr; }
+      .product .overlap { grid-template-columns: 1fr; gap: var(--s-2) 0; }
+      .product .overlap dt { margin-top: var(--s-3); }
+    }
+    @media (max-width: 720px) {
+      .hero h1 { font-size: var(--fs-36); }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="nav-mark" href="index.html">
+        <img src="assets/sherlockeq-mark.png" alt="" />
+        <span class="name">SherlockEQ</span>
+      </a>
+      <div class="nav-spacer"></div>
+      <nav class="nav-links">
+        <a href="index.html#what">What it does</a>
+        <a href="index.html#screenshots">See it</a>
+        <a href="compare.html" aria-current="page">Compare</a>
+        <a href="index.html#install">Install</a>
+        <a href="https://github.com/smbrownai/SherlockEQ">Source <i data-lucide="arrow-up-right" style="width:12px;height:12px"></i></a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- =================================================================
+       Hero
+       ================================================================= -->
+  <section class="hero">
+    <div class="container">
+      <div class="eyebrow">COMPARISON · MAC AUDIO EQ APPS</div>
+      <h1>How SherlockEQ compares.</h1>
+      <p class="lede">
+        Mac audio is a crowded category. Most apps are either system audio control layers that happen to include an EQ, or pro EQ plugins meant for a DAW. SherlockEQ is neither. It is a <strong>personalized, prosumer, system-level equalizer</strong> built around per-ear correction, audiogram-driven curves, a tinnitus tone finder, and a NIOSH dose tracker — features that don't have an obvious home in any of the existing apps. Here is an honest read of where it fits, and where another tool is a better answer.
+      </p>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       Quick orientation — pick this if
+       ================================================================= -->
+  <section id="orient">
+    <div class="container">
+      <div class="section-head">
+        <h2>The 30-second answer</h2>
+        <div class="nav-spacer"></div>
+        <span class="index">PICK ONE</span>
+      </div>
+
+      <div class="picks">
+        <div class="pick is-self">
+          <div class="key">PICK SHERLOCKEQ IF</div>
+          <h3>Your ears are the variable.</h3>
+          <p>Hearing is asymmetric. A tinnitus tone is hiding in the upper mids. Your audiogram says +18 dB at 4 kHz on the left and nothing on the right. You want the same correction applied to Spotify, Zoom, Safari, and Logic — without per-app setup — and you want a safety net so you don't compensate yourself into damage.</p>
+        </div>
+        <div class="pick">
+          <div class="key">PICK SOUNDSOURCE IF</div>
+          <h3>Apps are the variable.</h3>
+          <p>You want different volume, EQ, or routing for Zoom vs Spotify vs the browser. You also want to host real Audio Unit plugins inside a system audio shell. SoundSource is the strongest Mac-native audio control layer; pair it with a plugin EQ if you need surgical bands.</p>
+        </div>
+        <div class="pick">
+          <div class="key">PICK A PRO PLUGIN IF</div>
+          <h3>Mixing is the job.</h3>
+          <p>You are producing, mixing, or mastering. You need linear-phase, dynamic, spectral EQ, EQ-match, and look-ahead. Reach for FabFilter Pro-Q 4 or ToneBoosters Equalizer Pro inside a host. SherlockEQ is a listener's tool, not a producer's.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       Feature matrix
+       ================================================================= -->
+  <section id="matrix">
+    <div class="container">
+      <div class="section-head">
+        <h2>Feature matrix</h2>
+        <div class="nav-spacer"></div>
+        <span class="index">SYSTEM-WIDE MAC EQ APPS</span>
+      </div>
+
+      <div class="matrix-wrap">
+        <table class="matrix" aria-label="Comparison of system-wide Mac equalizer apps">
+          <thead>
+            <tr>
+              <th class="row-head" scope="col">Capability</th>
+              <th class="is-self" scope="col">SherlockEQ</th>
+              <th scope="col">SoundSource</th>
+              <th scope="col">eqMac</th>
+              <th scope="col">Sound Control</th>
+              <th scope="col">Boom 3D</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="row-head">System-wide EQ
+                <span class="sub">Applies to all Mac audio</span>
+              </td>
+              <td class="is-self"><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark yes"><i data-lucide="check"></i></span></td>
+            </tr>
+            <tr>
+              <td class="row-head">Per-app EQ / routing
+                <span class="sub">Different processing per running app</span>
+              </td>
+              <td class="is-self"><span class="mark no"><i data-lucide="minus"></i></span></td>
+              <td><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark part" title="App-volume mixing in Pro tier">◐</span></td>
+              <td><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+            </tr>
+            <tr>
+              <td class="row-head">Independent left/right EQ
+                <span class="sub">Per-ear correction, not just balance</span>
+              </td>
+              <td class="is-self"><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+              <td><span class="mark part" title="Available in Pro tier">◐</span></td>
+              <td><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+            </tr>
+            <tr>
+              <td class="row-head">Audiogram-driven curve
+                <span class="sub">Enter your dB HL thresholds, get an EQ</span>
+              </td>
+              <td class="is-self"><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+            </tr>
+            <tr>
+              <td class="row-head">Tinnitus tone finder + notch
+                <span class="sub">Sweep a sine, set a per-ear notch</span>
+              </td>
+              <td class="is-self"><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+            </tr>
+            <tr>
+              <td class="row-head">Safe-listening dose tracker
+                <span class="sub">NIOSH equal-energy with notifications</span>
+              </td>
+              <td class="is-self"><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+            </tr>
+            <tr>
+              <td class="row-head">Parametric EQ canvas
+                <span class="sub">Draggable bands, multiple filter types</span>
+              </td>
+              <td class="is-self"><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark part" title="10-band built-in; parametric via AU plugin">◐</span></td>
+              <td><span class="mark part" title="Available in Pro tier">◐</span></td>
+              <td><span class="mark part" title="NBandEQ + graphic">◐</span></td>
+              <td><span class="mark no" title="31-band graphic only">—</span></td>
+            </tr>
+            <tr>
+              <td class="row-head">AutoEQ headphone presets
+                <span class="sub">Thousands of measured corrections</span>
+              </td>
+              <td class="is-self"><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+              <td><span class="mark part" title="Headphone presets, scope varies">◐</span></td>
+              <td><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark part" title="Headphone EQ presets">◐</span></td>
+            </tr>
+            <tr>
+              <td class="row-head">Per-output-device presets
+                <span class="sub">Profile switches with the device</span>
+              </td>
+              <td class="is-self"><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+            </tr>
+            <tr>
+              <td class="row-head">Audio Unit plugin host
+                <span class="sub">Run third-party AU effects inline</span>
+              </td>
+              <td class="is-self"><span class="mark no"><i data-lucide="minus"></i></span></td>
+              <td><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+              <td><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+            </tr>
+            <tr>
+              <td class="row-head">Native Core Audio Taps
+                <span class="sub">No virtual driver, no kernel extension</span>
+              </td>
+              <td class="is-self"><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark no" title="Uses a virtual driver">—</span></td>
+              <td><span class="mark no" title="Uses a virtual driver">—</span></td>
+              <td><span class="mark no" title="Uses a virtual driver">—</span></td>
+            </tr>
+            <tr>
+              <td class="row-head">Price
+                <span class="sub">As of publication; verify with vendor</span>
+              </td>
+              <td class="is-self">Free</td>
+              <td>Paid</td>
+              <td>Free + Pro</td>
+              <td>Paid</td>
+              <td>Paid</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="matrix-note" style="margin-top: var(--s-6); max-width: 78ch;">
+        <span class="mark yes" style="vertical-align: middle;"><i data-lucide="check"></i></span> full support &nbsp;·&nbsp;
+        <span class="mark part" style="vertical-align: middle;">◐</span> partial or tier-gated &nbsp;·&nbsp;
+        <span class="mark no" style="vertical-align: middle;"><i data-lucide="minus"></i></span> not offered.
+        Capabilities reflect each vendor's documentation at time of writing. Plugins like FabFilter Pro-Q 4, ToneBoosters Equalizer Pro, and SoundID Reference solve different problems and are discussed below.
+      </p>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       Per-product notes
+       ================================================================= -->
+  <section id="products">
+    <div class="container">
+      <div class="section-head">
+        <h2>Side-by-side notes</h2>
+        <div class="nav-spacer"></div>
+        <span class="index">WHAT EACH IS GOOD AT</span>
+      </div>
+
+      <article class="product">
+        <div class="meta">
+          <span class="name">SoundSource</span>
+          <span class="vendor">Rogue Amoeba</span>
+          <span class="tag">Audio control layer</span>
+        </div>
+        <div class="body">
+          <p><strong>What it nails.</strong> SoundSource is the most complete Mac audio control utility. Per-app volume, per-app EQ, per-output-device control, and a real AU plugin host in one polished package. If your problem is "Zoom is too loud, Spotify is too quiet, and YouTube needs a bass cut," this is the right answer.</p>
+          <p><strong>Where SherlockEQ differs.</strong> SherlockEQ doesn't do per-app routing and doesn't host plugins. It assumes your ears are the variable, not the source. The four EQ modes (Simple / Speech / Advanced / Expert) drive one chain that applies to all system audio, with per-ear curves derived from your audiogram and a tinnitus notch that travels with each profile.</p>
+          <dl class="overlap">
+            <dt>Overlap</dt><dd>Both apply EQ system-wide, both ship per-device profiles, both run native (no virtual driver).</dd>
+            <dt>SherlockEQ adds</dt><dd>Audiogram-driven curve, per-ear parametric (not just balance), tinnitus tone finder + notch, NIOSH dose tracker.</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="product">
+        <div class="meta">
+          <span class="name">eqMac</span>
+          <span class="vendor">Bitgapp</span>
+          <span class="tag">EQ-first app</span>
+        </div>
+        <div class="body">
+          <p><strong>What it nails.</strong> eqMac is the most direct "I want a Mac EQ" answer. Free 10-band, paid Pro with unlimited bands, parametric control, Q/bandwidth, spectrum analyzer, separate left/right EQ, app-volume mixing, headphone presets, and device-based preset switching. The asymmetric-EQ feature in Pro overlaps directly with what SherlockEQ does by default.</p>
+          <p><strong>Where SherlockEQ differs.</strong> SherlockEQ leads with the hearing context — you don't start at a 10-band slider, you start at an audiogram or a tinnitus sweep. It is free with no Pro tier, and uses the native Core Audio Tap API instead of a virtual driver, which means no extra device install. eqMac's Pro tier matches several SherlockEQ features behind a subscription.</p>
+          <dl class="overlap">
+            <dt>Overlap</dt><dd>System-wide EQ, parametric / per-ear capability (Pro), device presets, spectrum analyzer.</dd>
+            <dt>SherlockEQ adds</dt><dd>Audiogram-driven curve, tinnitus tone finder + notch, NIOSH dose tracker, native CATap (no driver), free.</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="product">
+        <div class="meta">
+          <span class="name">Sound Control</span>
+          <span class="vendor">Static Z Software</span>
+          <span class="tag">Per-app + headphone</span>
+        </div>
+        <div class="body">
+          <p><strong>What it nails.</strong> Sound Control is one of the more practical under-discussed picks for hearing- and headphone-focused users. Per-app volume and routing, independent balance, mono / downmix, AU plugin support, and thousands of searchable AutoEQ headphone calibrations. The combination of AutoEQ and per-ear balance makes it a real candidate for asymmetric hearing.</p>
+          <p><strong>Where SherlockEQ differs.</strong> SherlockEQ goes further on the hearing side specifically — audiogram entry, per-ear parametric (not just balance), a tinnitus workflow, and a dose tracker — but doesn't do per-app routing. If per-app is the deciding factor for you, Sound Control wins; if your audiogram is, SherlockEQ does.</p>
+          <dl class="overlap">
+            <dt>Overlap</dt><dd>AutoEQ headphone presets, per-device profiles, system-wide processing.</dd>
+            <dt>SherlockEQ adds</dt><dd>Audiogram→EQ conversion, tinnitus tone finder, dose monitor, native CATap (no driver).</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="product">
+        <div class="meta">
+          <span class="name">Boom 3D</span>
+          <span class="vendor">Global Delight</span>
+          <span class="tag">Consumer enhancement</span>
+        </div>
+        <div class="body">
+          <p><strong>What it nails.</strong> Boom 3D is the friendliest consumer pick. Volume boost, 3D surround simulation, a 31-band graphic EQ, presets, headphone EQ. It is designed to make things sound bigger and more exciting out of the box. For casual movie nights and games, that's a fair pitch.</p>
+          <p><strong>Where SherlockEQ differs.</strong> SherlockEQ is the opposite tool. It is corrective, not enhancing — every boost has a +20 dB ceiling, every profile carries a per-day NIOSH dose limit, and the goal is the sound the source intended, not a louder or more exciting version of it. If the framing "I want bigger sound" matches you, Boom is the right shape. If "I want accurate sound my ears can hear" matches you, SherlockEQ is.</p>
+          <dl class="overlap">
+            <dt>Overlap</dt><dd>System-wide EQ, multi-band control.</dd>
+            <dt>SherlockEQ adds</dt><dd>Hearing-aware framing, per-ear correction, audiogram, tinnitus notch, dose limits.</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="product">
+        <div class="meta">
+          <span class="name">FabFilter Pro-Q 4 · ToneBoosters Equalizer Pro</span>
+          <span class="vendor">FabFilter · ToneBoosters</span>
+          <span class="tag">Pro EQ plugins</span>
+        </div>
+        <div class="body">
+          <p><strong>What they nail.</strong> Industry-benchmark EQ plugins. Dynamic EQ, spectral processing, linear-phase modes, analog modeling, EQ match, surgical precision, immersive-audio support. These are the right tools when you are producing, mixing, or mastering — anywhere a DAW is in the picture.</p>
+          <p><strong>Where SherlockEQ differs.</strong> SherlockEQ is not a plugin and not a producer's tool. It is the system audio path between every Mac app and your headphones. Pro-Q 4 inside SoundSource can absolutely sit downstream of SherlockEQ; the two solve different layers of the same stack. Use SherlockEQ for hearing correction that follows you through every app, use the plugin for surgical work inside a session.</p>
+          <dl class="overlap">
+            <dt>Overlap</dt><dd>Parametric EQ surface, multiple filter types, real-time response curve.</dd>
+            <dt>SherlockEQ adds</dt><dd>Lives on the system bus, no host required, hearing-context features.</dd>
+          </dl>
+        </div>
+      </article>
+
+      <article class="product">
+        <div class="meta">
+          <span class="name">SoundID Reference</span>
+          <span class="vendor">Sonarworks</span>
+          <span class="tag">Speaker / headphone calibration</span>
+        </div>
+        <div class="body">
+          <p><strong>What it nails.</strong> SoundID Reference solves a different problem: making your speakers and headphones tell the truth. Measure (or load) a transducer profile and apply the inverse curve, so what you hear matches the studio reference. It is the standard answer for "my monitors are lying to me" and works in standalone or plugin form.</p>
+          <p><strong>Where SherlockEQ differs.</strong> SoundID corrects the transducer. SherlockEQ corrects the listener. Both can run at the same time — SoundID flattens your headphones, then SherlockEQ applies your hearing-aware curve on top. If the question is "make my headphones neutral," reach for SoundID. If the question is "make playback work for my ears," reach for SherlockEQ.</p>
+          <dl class="overlap">
+            <dt>Overlap</dt><dd>System-wide audio correction, AutoEQ-style headphone targets.</dd>
+            <dt>SherlockEQ adds</dt><dd>Personalization for the listener (audiogram, asymmetry, tinnitus, safe levels) rather than the transducer.</dd>
+          </dl>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       Closing CTA
+       ================================================================= -->
+  <section id="close">
+    <div class="container">
+      <div class="closing">
+        <div>
+          <h3>The product gap SherlockEQ fills.</h3>
+          <p>A Mac-native EQ that combines per-ear correction, audiogram-driven setup, a tinnitus tone finder, AutoEQ headphone targets, and a NIOSH dose tracker — system-wide, free, and built on the native Core Audio Tap API. If that sounds like the thing you've been waiting for, the download is on the home page.</p>
+        </div>
+        <a class="btn btn-primary" href="index.html#install">
+          <i data-lucide="arrow-down-to-line" style="width:16px;height:16px"></i>
+          Download SherlockEQ
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       Footer
+       ================================================================= -->
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <span>SherlockEQ · snxt.ai</span>
+      <div class="footer-spacer"></div>
+      <a href="index.html">Home</a>
+      <span>·</span>
+      <a href="https://github.com/smbrownai/SherlockEQ">Source</a>
+      <span>·</span>
+      <a href="mailto:dev@snxt.ai">dev@snxt.ai</a>
+    </div>
+  </footer>
+
+  <script>
+    if (window.lucide) window.lucide.createIcons();
+    else window.addEventListener('load', () => window.lucide && window.lucide.createIcons());
+  </script>
+</body>
+</html>
