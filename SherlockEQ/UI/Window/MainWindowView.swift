@@ -24,10 +24,17 @@ struct MainWindowView: View {
         // button anywhere in the title bar.
         NavigationSplitView(columnVisibility: .constant(.all)) {
             SidebarView(selection: $selection)
-                // Preferred 240 pt. SwiftUI treats this as advisory on
-                // macOS — the user can still drag the underlying
-                // NSSplitView's divider — but it sets the natural
-                // first-launch width and the auto-layout target.
+                // Force the sidebar's intrinsic content width to 240
+                // pt. `.navigationSplitViewColumnWidth` is advisory on
+                // macOS — SwiftUI ignores even the min/ideal/max
+                // triple, picking a narrower default and letting the
+                // user drag freely. A hard `.frame(width:)` on the
+                // *content* gives it an intrinsic size the enclosing
+                // column has to honor (shrinking past it would clip
+                // the content). The navigation-split modifier stays
+                // as a hint to the layout system in case a future
+                // SwiftUI release starts honoring it.
+                .frame(width: 240)
                 .navigationSplitViewColumnWidth(min: 240, ideal: 240, max: 240)
                 .toolbar(removing: .sidebarToggle)
         } detail: {
