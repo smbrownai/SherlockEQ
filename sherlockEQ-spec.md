@@ -841,6 +841,18 @@ plus the **Voice Clarity** preset and asks for system-audio permission inline th
 first time the popover opens. Onboarding-style polish (welcome screen, guided
 audiogram, calibration walkthrough) is future work.
 
+When the wizard is built, it must include a brief upstream-EQ note: equalizers
+inside other apps (e.g. Music's EQ, Sound Check) are applied within those apps
+before SherlockEQ's tap captures the mix, so they stack underneath the hearing
+correction and cannot be detected or compensated from the tap side. Recommend
+setting other apps' equalizers flat. (A matching footnote already ships on the
+Equalizer screen.) Optional enhancement: Music's EQ state is queryable via
+Apple Events (`EQ enabled` / `current EQ preset` in Music's scripting
+dictionary) — requires an `NSAppleEventsUsageDescription` string, a TCC
+Automation prompt, and a running-Music guard (querying a non-running app
+launches it); covers Music only, so it supplements the note rather than
+replacing it.
+
 ---
 
 ## 9. Project File Structure

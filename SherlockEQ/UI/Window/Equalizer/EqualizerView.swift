@@ -32,6 +32,23 @@ struct EqualizerView: View {
                 }
             }
             .disabled(locked)
+
+            // Upstream-EQ footnote. Other apps' equalizers (Music's EQ,
+            // Sound Check, etc.) run inside those apps before the tap
+            // captures the mix, so they stack underneath this curve and
+            // are indistinguishable from the content itself — we can't
+            // detect or compensate from the tap side, only educate.
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Image(systemName: "info.circle")
+                    .foregroundStyle(.secondary)
+                Text("Equalizers inside other apps — like Music's EQ — shape the audio before it reaches SherlockEQ and stack with this curve. For predictable correction, keep other apps' equalizers flat.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 10)
         }
         .navigationTitle("Equalizer")
     }
