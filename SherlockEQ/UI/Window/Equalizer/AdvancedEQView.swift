@@ -52,7 +52,11 @@ struct AdvancedEQView: View {
                     showAudiogramTarget: $showAudiogramLayer,
                     showSafetyOverlay: $showSafetyLayer,
                     showPeakCallouts: $showPeaksLayer,
+                    // Dynamic-feature overlay is an Expert-canvas affordance
+                    // (live node semantics); the graphic-EQ canvas hides it.
+                    showDynamics: .constant(false),
                     hasAudiogram: !target.isEmpty,
+                    hasDynamics: false,
                     earColor: audioState.leftEarColor
                 )
                 previewCanvas(profile, target: target)

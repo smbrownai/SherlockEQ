@@ -8,6 +8,9 @@ import AppKit
 struct MainPopoverView: View {
     @EnvironmentObject private var audioState: AudioState
     @EnvironmentObject private var profileStore: ProfileStore
+    /// Closes the `.window`-style `MenuBarExtra` popover. Used when handing
+    /// off to the main window so the popover doesn't linger behind it.
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -180,6 +183,10 @@ struct MainPopoverView: View {
     /// owns the NSWindow and sequences the `.accessory → .regular` policy
     /// flip + activation deterministically — see `AppDelegate.showMainWindow`.
     private func openMainWindow() {
+        // Close the popover first — opening/activating the main window
+        // doesn't dismiss the `.window`-style MenuBarExtra on its own, so
+        // without this it lingers in front of (or beside) the window.
+        dismiss()
         // SwiftUI's `@NSApplicationDelegateAdaptor` proxies `NSApp.delegate`,
         // so casting it back to `AppDelegate` returns nil. Reach the real
         // instance via the singleton handle.

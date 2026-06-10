@@ -22,6 +22,12 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     /// (Left / Right / Both). When false, one panel writes both
     /// ears in lockstep.
     var separateNotch: Bool
+    /// Level-dependent dynamic processors (Speech Presence / Harshness
+    /// Control / Sibilance Tamer). Follows the tinnitus-notch pattern:
+    /// dedicated fields folded into the audio path at `applyProfile`
+    /// time, deliberately NOT stored as `EarProfile.bands`. Defaults to
+    /// all-disabled; decoded with `decodeIfPresent` for backward compat.
+    var dynamics: DynamicProcessingSettings
     var globalTrimDB: Double                    // -12 to +12 — guards against post-boost clipping
     var balance: Double                         // -1 (full L) … 0 (centered) … +1 (full R)
     var autoEQCurveURL: URL?                    // legacy — kept for decoder compat, no longer read
@@ -82,6 +88,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
             self.rightNotch = shared
         }
         self.separateNotch          = try c.decodeIfPresent(Bool.self, forKey: .separateNotch) ?? false
+        self.dynamics               = try c.decodeIfPresent(DynamicProcessingSettings.self, forKey: .dynamics) ?? .init()
         self.globalTrimDB           = try c.decode(Double.self, forKey: .globalTrimDB)
         self.balance                = try c.decodeIfPresent(Double.self, forKey: .balance) ?? 0
         self.autoEQCurveURL         = try c.decodeIfPresent(URL.self, forKey: .autoEQCurveURL)
@@ -105,6 +112,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         id: UUID, name: String, symbol: String, linkedDeviceUID: String?,
         leftEar: EarProfile, rightEar: EarProfile,
         leftNotch: TinnitusNotch, rightNotch: TinnitusNotch, separateNotch: Bool = false,
+        dynamics: DynamicProcessingSettings = .init(),
         globalTrimDB: Double, balance: Double = 0, autoEQCurveURL: URL?,
         autoEQName: String? = nil, autoEQBands: [EQBand]? = nil, autoEQPreampDB: Double? = nil,
         safeListeningCeilingDB: Double, compensationFactor: Double,
@@ -118,6 +126,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.leftEar = leftEar; self.rightEar = rightEar
         self.leftNotch = leftNotch; self.rightNotch = rightNotch
         self.separateNotch = separateNotch
+        self.dynamics = dynamics
         self.globalTrimDB = globalTrimDB; self.balance = balance
         self.autoEQCurveURL = autoEQCurveURL
         self.autoEQName = autoEQName

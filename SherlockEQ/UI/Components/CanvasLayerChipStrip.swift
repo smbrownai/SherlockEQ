@@ -23,8 +23,13 @@ struct CanvasLayerChipStrip: View {
     @Binding var showAudiogramTarget: Bool
     @Binding var showSafetyOverlay: Bool
     @Binding var showPeakCallouts: Bool
+    /// Live dynamic-feature bells overlay (Clarity features). A manually
+    /// toggled chip — not part of any lens preset (v1).
+    @Binding var showDynamics: Bool
     /// When false the Audiogram chip is hidden (no thresholds entered yet).
     let hasAudiogram: Bool
+    /// When false the Dynamics chip is hidden (no enabled dynamic features).
+    let hasDynamics: Bool
     /// Used as the swatch hue for the EQ / Audiogram chips.
     let earColor: Color
 
@@ -101,6 +106,15 @@ struct CanvasLayerChipStrip: View {
                     isOn: $showPeakCallouts,
                     hint: "Labels the loudest live frequencies on the spectrum with chips showing the frequency."
                 )
+                if hasDynamics {
+                    chip(
+                        "Dynamics",
+                        swatch: earColor,
+                        pattern: .dashed,
+                        isOn: $showDynamics,
+                        hint: "Live trace of the Clarity features — shows each dynamic bell moving as it engages."
+                    )
+                }
                 Spacer()
             }
     }
@@ -197,6 +211,14 @@ struct CanvasLayerChipStrip: View {
                 swatch: Self.peaksColor,
                 isOn: $showPeakCallouts
             )
+            if hasDynamics {
+                popoverRow(
+                    "Dynamics",
+                    swatch: earColor,
+                    pattern: .dashed,
+                    isOn: $showDynamics
+                )
+            }
         }
     }
 

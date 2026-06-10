@@ -13,7 +13,7 @@
   <style>
     :root {
       --container: 880px;
-      --gutter: 32px;
+      --gutter: var(--s-9);
     }
 
     body { margin: 0; }
@@ -80,7 +80,7 @@
       height: 192px;
       border-radius: 36px;
       box-shadow: var(--shadow-2);
-      background: #161B2E;
+      background: var(--ink);
       display: block;
       object-fit: cover;
     }
@@ -306,7 +306,7 @@
       flex-shrink: 0;
     }
     .audience .what {
-      font-size: var(--fs-15, 15px);
+      font-size: var(--fs-16);
       color: var(--fg-1);
       line-height: var(--lh-body);
       max-width: 60ch;
@@ -481,7 +481,7 @@
         <div class="eyebrow" style="margin-bottom: var(--s-6);">FREE · OPEN SOURCE · MACOS 14.6+</div>
         <h1>Notice what other equalizers don't expose.</h1>
         <p class="lede">
-          macOS doesn't ship a per-ear parametric EQ. SherlockEQ is one. It taps system audio, splits the chain by ear, and gives you the controls to investigate a tinnitus tone, shape an audiogram into compensation, and refine sound to taste. <strong>No virtual driver. No kernel extension. No paywall.</strong>
+          macOS doesn't ship a per-ear parametric EQ. SherlockEQ is one. It taps system audio, splits the chain by ear, and gives you the controls to investigate a tinnitus tone, shape an audiogram into compensation, refine sound to taste, and soften harshness or lift voices only when they need it. <strong>No virtual driver. No kernel extension. No paywall.</strong>
         </p>
         <div class="cta-row">
           <a class="btn btn-primary" href="#install">
@@ -523,6 +523,11 @@
         <div class="spec-key">CHANNELS</div>
         <div class="spec-num">True per-ear isolation</div>
         <p>Hand-rolled biquad cascade in the source-node render block. Bypasses <code>AVAudioUnitEQ</code>'s stereo coupling, so a left-ear notch leaves the right channel untouched.</p>
+      </div>
+      <div class="spec">
+        <div class="spec-key">DYNAMICS</div>
+        <div class="spec-num">Level-dependent comfort</div>
+        <p>Three feed-forward processors — de-ess, harshness, presence — that cut or lift only while the triggering sound is present, then relax. Zero added latency; the limiter stays the ceiling.</p>
       </div>
       <div class="spec">
         <div class="spec-key">PRESETS</div>
@@ -567,7 +572,7 @@
           <div class="key">03 · REFINE</div>
           <h3>Shape any frequency, per ear</h3>
           <p>
-            Four EQ modes from one-knob shelves to a fully parametric canvas. Independent left and right chains. Headphone correction via AutoEQ profiles. A live spectrum with safety overlays and a NIOSH equal-energy dose tracker on top.
+            Four EQ modes from one-knob shelves to a fully parametric canvas. Independent left and right chains. Headphone correction via AutoEQ profiles. Listening Comfort tools soften harshness or sibilance and lift voices dynamically — only when they need it. A live spectrum with safety overlays and a NIOSH equal-energy dose tracker on top.
           </p>
         </div>
       </div>
@@ -641,7 +646,7 @@
         </li>
         <li>
           <span class="who">CRITICAL LISTENERS</span>
-          <span class="what">For anyone chasing harshness, muddiness, or fatigue who wants more than a five-band slider. Operates on the system bus, not per-app.</span>
+          <span class="what">For anyone chasing harshness, muddiness, or fatigue who wants more than a five-band slider. Dynamic comfort processors tame sibilance and harshness only while they spike, not permanently. Operates on the system bus, not per-app.</span>
         </li>
         <li>
           <span class="who">WEIGHING OPTIONS</span>

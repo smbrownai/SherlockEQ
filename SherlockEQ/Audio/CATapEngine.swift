@@ -52,6 +52,15 @@ final class CATapEngine: ObservableObject {
     let leftEQCascade = BiquadCascade()
     let rightEQCascade = BiquadCascade()
 
+    /// Per-ear level-dependent ("dynamic") EQ stage, sitting in the
+    /// render block immediately after the static cascade and before the
+    /// peak counters / pre-spectrum side-channel. Owned here for the same
+    /// reason as the cascades — the source-node render block captures them
+    /// strongly without an isolation hop. SherlockEQAudioEngine pushes the
+    /// per-feature config via `configure(...)` on every profile change.
+    let leftDynamics = DynamicBandProcessor()
+    let rightDynamics = DynamicBandProcessor()
+
     /// Format both source nodes emit (stereo, tap sample rate).
     private(set) var sourceFormat: AVAudioFormat?
     /// Tap stream descriptor — sample rate, channel count of the raw tap.
@@ -454,6 +463,15 @@ final class CATapEngine: ObservableObject {
         let lEQ = leftEQCascade
         let rEQ = rightEQCascade
 
+        // Dynamic stage runs right after the static cascade, on the same
+        // captured-strongly basis. Stamp it at the delivered (output) rate
+        // — the same rate context the cascades get via setBands — so its
+        // detector + bell coefficients use the correct Nyquist.
+        let lDyn = leftDynamics
+        let rDyn = rightDynamics
+        lDyn.setSampleRate(sourceSR)
+        rDyn.setSampleRate(sourceSR)
+
         leftSourceNode = AVAudioSourceNode(format: stereoFormat) { [weak leftRing] _, _, frameCount, audioBufferList -> OSStatus in
             let status = Self.fillFromMonoRing(
                 ring: leftRing,
@@ -469,6 +487,7 @@ final class CATapEngine: ObservableObject {
             if buffers.count > 0,
                let lPtr = buffers[0].mData?.assumingMemoryBound(to: Float.self) {
                 lEQ.process(samples: lPtr, count: Int(frameCount))
+                lDyn.process(samples: lPtr, count: Int(frameCount))
             }
             leftCounter.add(Int(frameCount))
             Self.recordPeak(abl: audioBufferList, frameCount: frameCount, into: outPeak)
@@ -494,6 +513,7 @@ final class CATapEngine: ObservableObject {
             if buffers.count >= 2,
                let rPtr = buffers[1].mData?.assumingMemoryBound(to: Float.self) {
                 rEQ.process(samples: rPtr, count: Int(frameCount))
+                rDyn.process(samples: rPtr, count: Int(frameCount))
             }
             rightCounter.add(Int(frameCount))
             Self.recordPeak(abl: audioBufferList, frameCount: frameCount, into: outPeak)

@@ -126,6 +126,7 @@ struct MainWindowView: View {
         case .audiogram:     AudiogramView()
         case .equalizer:     EqualizerView()
         case .toneFinder:    ToneFinderView()
+        case .clarity:       ClarityView()
         case .safeListening: SafeListeningView()
         case .settings:      SettingsView()
         case .debug:         DebugView()

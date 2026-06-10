@@ -34,6 +34,9 @@ struct ExpertEQView: View {
     @AppStorage("sherlockeq.layer.audiogram") private var showAudiogramLayer = true
     @AppStorage("sherlockeq.layer.safety")    private var showSafetyLayer    = false
     @AppStorage("sherlockeq.layer.peaks")     private var showPeaksLayer     = false
+    /// Live dynamic-feature (Clarity) overlay. Default on, but the chip is
+    /// hidden whenever the active profile has no enabled dynamic features.
+    @AppStorage("sherlockeq.layer.dynamics")  private var showDynamicsLayer  = true
     // Spectrogram-mode layers (separate keys so toggling them doesn't
     // disturb the user's Spectrum-mode chip configuration).
     @AppStorage("sherlockeq.spectrogram.notch")       private var showNotchLineLayer    = true
@@ -84,7 +87,9 @@ struct ExpertEQView: View {
                     showAudiogramTarget: $showAudiogramLayer,
                     showSafetyOverlay: $showSafetyLayer,
                     showPeakCallouts: $showPeaksLayer,
+                    showDynamics: $showDynamicsLayer,
                     hasAudiogram: !target.isEmpty,
+                    hasDynamics: hasEnabledDynamics,
                     earColor: earColor
                 )
             } else if vizMode == .spectrogram {
@@ -129,7 +134,11 @@ struct ExpertEQView: View {
                 // editing the ceiling in Safe Listening or the calibration
                 // in its settings card immediately reshapes the danger fill.
                 safetyCeilingDBA: profile.safeListeningCeilingDB,
-                calibrationOffsetDBA: audioState.calibrationOffsetDBA
+                calibrationOffsetDBA: audioState.calibrationOffsetDBA,
+                dynamicsMonitor: audioState.dynamicActivity,
+                dynamicsEar: tab == .left ? .left : .right,
+                dynamicsKinds: enabledDynamicsKinds(profile),
+                showDynamicsOverlay: showDynamicsLayer && !enabledDynamicsKinds(profile).isEmpty
             )
             // Roomier canvas — there's plenty of vertical real estate
             // below the canvas on Expert, and the spectrum + EQ curve
@@ -605,6 +614,22 @@ struct ExpertEQView: View {
 
     private func shadowBands(for profile: HearingProfile) -> [EQBand] {
         tab == .left ? profile.rightEar.bands : profile.leftEar.bands
+    }
+
+    /// Whether any dynamic (Clarity) feature is enabled on either ear —
+    /// gates the Dynamics layer chip's visibility (mirrors `hasAudiogram`).
+    private var hasEnabledDynamics: Bool {
+        activeProfile?.dynamics.hasAnyEnabled ?? false
+    }
+
+    /// Dynamic features enabled on the *displayed* ear — the candidates for
+    /// the live overlay. In linked mode `tab` is `.left` and both ears carry
+    /// identical settings, so reading the displayed ear is correct either way.
+    private func enabledDynamicsKinds(_ profile: HearingProfile) -> [DynamicFeatureKind] {
+        let ear: EQBandLookup.Ear = tab == .left ? .left : .right
+        return DynamicFeatureKind.allCases.filter {
+            profile.dynamics.settings(for: $0, ear: ear).enabled
+        }
     }
 
     /// Compact "Δ vs target" readout shown next to the Gain field when an

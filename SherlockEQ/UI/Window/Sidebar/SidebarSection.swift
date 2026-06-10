@@ -8,6 +8,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
     case audiogram
     case equalizer
     case toneFinder
+    case clarity
     case safeListening
     case settings
     case debug
@@ -20,6 +21,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
         case .audiogram:     return "Audiogram"
         case .equalizer:     return "Equalizer"
         case .toneFinder:    return "Tinnitus Notch"
+        case .clarity:       return "Listening Comfort"
         case .safeListening: return "Safe Listening"
         case .settings:      return "Settings"
         case .debug:         return "Debug"
@@ -32,6 +34,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
         case .audiogram:     return "ear"
         case .equalizer:     return "slider.horizontal.3"
         case .toneFinder:    return "bandage"
+        case .clarity:       return "waveform.badge.magnifyingglass"
         case .safeListening: return "shield.lefthalf.filled"
         case .settings:      return "gearshape"
         case .debug:         return "wrench.and.screwdriver"
@@ -43,7 +46,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
     /// "Manage Profiles" button at the bottom of the sidebar, not from
     /// this list, to avoid the redundant top + bottom entry.
     static var audioProcessorSections: [SidebarSection] {
-        [.audiogram, .equalizer, .toneFinder, .safeListening]
+        [.audiogram, .equalizer, .toneFinder, .clarity, .safeListening]
     }
 
     /// App-level sections — settings and diagnostics. Grouped under
