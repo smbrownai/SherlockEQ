@@ -21,6 +21,95 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 0.1.4</title>
+      <pubDate>Wed, 10 Jun 2026 16:47:48 +0000</pubDate>
+      <sparkle:version>00104</sparkle:version>
+      <sparkle:shortVersionString>0.1.4</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <sparkle:releaseNotesLink>https://github.com/smbrownai/SherlockEQ/releases/tag/v0.1.4</sparkle:releaseNotesLink>
+      <description><![CDATA[
+<h2>SherlockEQ 0.1.4</h2>
+
+<p>
+  A look-and-feel release. A new app icon, a Liquid Glass pass over the
+  whole window on macOS&nbsp;Tahoe, and Reference Mode promoted to the
+  title bar so you can A/B against the source from anywhere — not just
+  the Equalizer. Under the hood, the audio engine now shrugs off the
+  transient device hiccups that could leave it silent after a wake or a
+  route change.
+</p>
+
+<h3>Added</h3>
+
+<ul>
+  <li>
+    <strong>New app icon.</strong>
+    A dimensional gold magnifying glass over a frequency spectrum —
+    sharper at every size from the Dock down to the menu bar.
+  </li>
+  <li>
+    <strong>Reference Mode in the title bar.</strong>
+    The Bypass toggle moved out of the Equalizer and into the window
+    toolbar, so you can drop to the unprocessed source from any
+    screen. It's renamed <em>Reference Mode</em> to match the popover
+    and ⌘B — one control, three places, same wording. Goes red when
+    active so you always know you're hearing raw audio.
+  </li>
+</ul>
+
+<h3>Changed</h3>
+
+<ul>
+  <li>
+    <strong>Liquid Glass chrome (macOS&nbsp;Tahoe).</strong>
+    On macOS&nbsp;26 the toolbar controls now render as separate Liquid
+    Glass clusters, the notice banner and layer chips pick up the glass
+    material, and detail content softly fades as it scrolls under the
+    toolbar. Sonoma and Sequoia keep their existing look.
+  </li>
+  <li>
+    <strong>Steadier sidebars.</strong>
+    Both the navigation sidebar and the monitor gutter are now pinned to
+    a fixed 240&nbsp;pt and stay put — no width drift between launches,
+    and the primary navigation no longer collapses out from under you.
+  </li>
+</ul>
+
+<h3>Fixed</h3>
+
+<ul>
+  <li>
+    <strong>Silent engine after sleep or a route change.</strong>
+    When the audio device reports a transient "try again" error — common
+    while a sample-rate or output-route change is still settling, or
+    right after waking from sleep — SherlockEQ now retries the engine
+    start automatically instead of surfacing an error and going quiet.
+  </li>
+</ul>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not
+  diagnose, treat, measure, or monitor any hearing condition, tinnitus,
+  or disability. For concerns about your hearing, consult a doctor,
+  audiologist, or licensed healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.1.3">0.1.3 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v0.1.4/SherlockEQ-0.1.4.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="PuMrITdHZDXVcqk2gL0fyO5/WDS68ryU1U+2fB7u9S+s92e1dJe8YQ0nb92rL9MQS6fxrKSKu6K9UHpBLGz8Bg==" length="5960175" />
+    </item>
+
+    <item>
       <title>SherlockEQ 0.1.3</title>
       <pubDate>Mon, 08 Jun 2026 20:48:48 +0000</pubDate>
       <sparkle:version>00103</sparkle:version>
