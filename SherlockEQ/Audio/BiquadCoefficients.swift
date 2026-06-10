@@ -28,18 +28,41 @@ struct BiquadCoefficients {
     /// to ±`gainClampDB` so callers passing in out-of-range values get a
     /// stable filter rather than NaNs.
     static func cookbook(for band: EQBand, sampleRate: Double) -> BiquadCoefficients {
-        let f0 = max(20.0, min(sampleRate / 2 - 1, band.frequencyHz))
-        let gainDB = max(-gainClampDB, min(gainClampDB, band.gaindB))
+        cookbook(
+            filterType: band.filterType,
+            freqHz: band.frequencyHz,
+            q: band.bandwidth,
+            gainDB: band.gaindB,
+            sampleRate: sampleRate
+        )
+    }
+
+    /// Cookbook coefficients from raw filter parameters — no `EQBand`
+    /// construction required. The render thread's `DynamicBandProcessor`
+    /// calls this to recompute a modulated bell's coefficients per block
+    /// without allocating (constructing an `EQBand` would mint a `UUID`),
+    /// while the curve and static cascade reach the identical math via
+    /// the `EQBand` overload above. Same clamping contract: `freqHz` to
+    /// [20, Nyquist−1], `gainDB` to ±`gainClampDB`, `q` floored at 0.1.
+    static func cookbook(
+        filterType: EQFilterType,
+        freqHz: Double,
+        q: Double,
+        gainDB: Double,
+        sampleRate: Double
+    ) -> BiquadCoefficients {
+        let f0 = max(20.0, min(sampleRate / 2 - 1, freqHz))
+        let gainDB = max(-gainClampDB, min(gainClampDB, gainDB))
         let A = pow(10.0, gainDB / 40.0)
         let w0 = 2.0 * .pi * f0 / sampleRate
         let cosW0 = cos(w0)
         let sinW0 = sin(w0)
-        let Q = max(0.1, band.bandwidth)
+        let Q = max(0.1, q)
         let alpha = sinW0 / (2.0 * Q)
         let sqrtA = A.squareRoot()
         let twoSqrtAalpha = 2.0 * sqrtA * alpha
 
-        switch band.filterType {
+        switch filterType {
         case .parametric:
             return BiquadCoefficients(
                 b0: 1 + alpha * A,

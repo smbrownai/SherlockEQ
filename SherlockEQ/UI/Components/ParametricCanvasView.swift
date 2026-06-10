@@ -93,6 +93,20 @@ struct ParametricCanvasView: View {
     var showSafetyOverlay: Bool = true
     var showPeakCallouts: Bool = false
 
+    /// Live dynamic-feature contributions to draw as separate animated
+    /// strokes under the static EQ curve. Each is one feature's main bell
+    /// at its *current* gain delta. Recomputed only in the draw path (the
+    /// static `cachedCurveDB` is never touched) and only while non-empty —
+    /// the caller passes only features whose delta exceeds the rest
+    /// threshold, so at rest nothing animates and nothing recomputes.
+    struct DynamicOverlay: Equatable {
+        var centerHz: Double
+        var q: Double
+        var gainDB: Double
+    }
+    var dynamicOverlays: [DynamicOverlay] = []
+    var showDynamicsOverlay: Bool = false
+
     // MARK: - Spectrogram-mode-specific layer flags
     // Each only consulted when `vizMode == .spectrogram`. Defaults chosen
     // so first-launch users see a sensible annotated heatmap.
@@ -233,6 +247,10 @@ struct ParametricCanvasView: View {
                     // when the user is tracking it perfectly the active hides
                     // it, and any drift is what shows through.
                     if showAudiogramTarget { drawTargetCurve(context, size: size) }
+                    // Live dynamic-feature bells — also under the static
+                    // curve, dashed + ear-tinted so they read as a distinct,
+                    // moving layer.
+                    if showDynamicsOverlay { drawDynamicsOverlay(context, size: size) }
                     if showEQCurve {
                         drawCurve(
                             context, size: size,
@@ -469,6 +487,48 @@ struct ParametricCanvasView: View {
             with: .color(color),
             style: StrokeStyle(lineWidth: thick ? 2.0 : 1.0, lineCap: .round, lineJoin: .round)
         )
+    }
+
+    /// Draw each live dynamic-feature bell as a dashed, ear-tinted stroke.
+    /// Computed on the fly (coarser than the 512-sample static cache — a
+    /// single smooth bell needs far fewer points) so it never disturbs the
+    /// cached static curve. Only invoked when `dynamicOverlays` is non-empty,
+    /// which the caller drives at the meter rate (≤ 20 Hz) and only for
+    /// triggered features — so this is free at rest. The stroke reflects the
+    /// current delta as data, with no implicit SwiftUI animation, so it
+    /// snaps to the live value (Reduce Motion-friendly by construction).
+    private func drawDynamicsOverlay(_ context: GraphicsContext, size: CGSize) {
+        guard !dynamicOverlays.isEmpty else { return }
+        let n = 128
+        let axis = freqAxis
+        let denom = CGFloat(n - 1)
+        for overlay in dynamicOverlays {
+            let band = EQBand(
+                frequencyHz: overlay.centerHz,
+                gaindB: overlay.gainDB,
+                bandwidth: overlay.q,
+                filterType: .parametric,
+                enabled: true
+            )
+            var path = Path()
+            for i in 0..<n {
+                let frac = Double(i) / Double(n - 1)
+                let hz = axis.hz(forFrac: frac)
+                let db = BiquadResponse.compositeMagnitudeDB(at: hz, bands: [band])
+                let x = CGFloat(i) / denom * size.width
+                let y = yForDB(db, height: size.height)
+                if i == 0 {
+                    path.move(to: CGPoint(x: x, y: y))
+                } else {
+                    path.addLine(to: CGPoint(x: x, y: y))
+                }
+            }
+            context.stroke(
+                path,
+                with: .color(earColor.opacity(a11yOpacity(0.7, reduceFactor: 1.3))),
+                style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [3, 3])
+            )
+        }
     }
 
     /// Synthesise an extra band from the tinnitus notch so the curve renderer
@@ -2024,11 +2084,32 @@ struct LiveParametricCanvas: View {
     var safetyCeilingDBA: Double = 85
     var calibrationOffsetDBA: Double = 100
 
+    /// Dynamic-EQ activity telemetry. When supplied (Expert canvas), an
+    /// inner observer reads it at the monitor's ~15 Hz cadence and feeds the
+    /// live per-feature bells into the canvas as a dashed overlay — scoped
+    /// to that inner view so the rest of the canvas (and the host) doesn't
+    /// re-render at meter rate.
+    var dynamicsMonitor: DynamicActivityMonitor? = nil
+    /// Which ear's dynamic activity to visualise (matches the displayed ear).
+    var dynamicsEar: EQBandLookup.Ear = .left
+    /// Enabled dynamic features on the displayed ear — their bells are the
+    /// candidates for the overlay (filtered to currently-triggered ones).
+    var dynamicsKinds: [DynamicFeatureKind] = []
+    /// Master gate for the overlay (the Dynamics layer chip).
+    var showDynamicsOverlay: Bool = false
+
     /// Tracks whether *this view instance* has currently subscribed to each
     /// analyzer. Prevents double-subscribe across re-renders and double-
     /// unsubscribe on teardown.
     @State private var subscribedToSpectrum: Bool = false
     @State private var subscribedToPreSpectrum: Bool = false
+    @State private var subscribedToDynamics: Bool = false
+
+    /// True when the overlay is wanted and wired — gates both the inner
+    /// observer and the monitor subscription.
+    private var dynamicsActive: Bool {
+        showDynamicsOverlay && dynamicsMonitor != nil && !dynamicsKinds.isEmpty
+    }
 
     var body: some View {
         // Only OBSERVE the pre-EQ analyzer when the input layer is on. If
@@ -2036,12 +2117,14 @@ struct LiveParametricCanvas: View {
         // attachment entirely, so this wrapper stops re-rendering at the
         // pre-EQ FFT cadence.
         Group {
-            if let preSpectrum, showInputSpectrum {
-                PreObserver(preSpectrum: preSpectrum) { preBins in
-                    canvas(preBins: preBins)
+            if dynamicsActive, let monitor = dynamicsMonitor {
+                // Inner observer re-renders at the monitor's 15 Hz only —
+                // the host (ExpertEQView) stays off that cadence.
+                DynObserver(monitor: monitor) {
+                    preWrappedCanvas(overlays: currentOverlays(from: monitor))
                 }
             } else {
-                canvas(preBins: [])
+                preWrappedCanvas(overlays: [])
             }
         }
         // Lifecycle: drive both analyzers' subscriber counts from view
@@ -2052,6 +2135,29 @@ struct LiveParametricCanvas: View {
         .onAppear { syncSubscriptions() }
         .onDisappear { releaseSubscriptions() }
         .onChange(of: showInputSpectrum) { _, _ in syncSubscriptions() }
+        .onChange(of: dynamicsActive) { _, _ in syncSubscriptions() }
+    }
+
+    @ViewBuilder
+    private func preWrappedCanvas(overlays: [ParametricCanvasView.DynamicOverlay]) -> some View {
+        if let preSpectrum, showInputSpectrum {
+            PreObserver(preSpectrum: preSpectrum) { preBins in
+                canvas(preBins: preBins, overlays: overlays)
+            }
+        } else {
+            canvas(preBins: [], overlays: overlays)
+        }
+    }
+
+    /// Build the current overlay set from the monitor, keeping only features
+    /// whose live delta exceeds the rest threshold (0.1 dB) — so at rest the
+    /// array is empty and the canvas draws nothing dynamic.
+    private func currentOverlays(from monitor: DynamicActivityMonitor) -> [ParametricCanvasView.DynamicOverlay] {
+        dynamicsKinds.compactMap { kind in
+            let delta = monitor.gain(kind, dynamicsEar)
+            guard abs(delta) >= 0.1 else { return nil }
+            return ParametricCanvasView.DynamicOverlay(centerHz: kind.filterCenterHz, q: kind.filterQ, gainDB: delta)
+        }
     }
 
     private func syncSubscriptions() {
@@ -2063,6 +2169,18 @@ struct LiveParametricCanvas: View {
         // Pre-EQ analyzer: subscribed only when both visible AND the Input
         // chip is on. Two independent gates because pre-EQ has its own
         // upstream cost.
+        // Dynamic-activity monitor: subscribed only while the overlay is
+        // active so its 15 Hz poll loop idles otherwise.
+        if let monitor = dynamicsMonitor {
+            if dynamicsActive && !subscribedToDynamics {
+                monitor.subscribe()
+                subscribedToDynamics = true
+            } else if !dynamicsActive && subscribedToDynamics {
+                monitor.unsubscribe()
+                subscribedToDynamics = false
+            }
+        }
+
         guard let preSpectrum else { return }
         if showInputSpectrum && !subscribedToPreSpectrum {
             preSpectrum.subscribe()
@@ -2082,9 +2200,13 @@ struct LiveParametricCanvas: View {
             preSpectrum.unsubscribe()
             subscribedToPreSpectrum = false
         }
+        if let monitor = dynamicsMonitor, subscribedToDynamics {
+            monitor.unsubscribe()
+            subscribedToDynamics = false
+        }
     }
 
-    private func canvas(preBins: [Float]) -> some View {
+    private func canvas(preBins: [Float], overlays: [ParametricCanvasView.DynamicOverlay] = []) -> some View {
         ParametricCanvasView(
             bands: $bands,
             shadowBands: shadowBands,
@@ -2106,6 +2228,8 @@ struct LiveParametricCanvas: View {
             showAudiogramTarget: showAudiogramTarget,
             showSafetyOverlay: showSafetyOverlay,
             showPeakCallouts: showPeakCallouts,
+            dynamicOverlays: overlays,
+            showDynamicsOverlay: showDynamicsOverlay,
             showNotchLine: showNotchLine,
             showRegionLabels: showRegionLabels,
             showColorLegend: showColorLegend,
@@ -2122,5 +2246,15 @@ struct LiveParametricCanvas: View {
         @ObservedObject var preSpectrum: SpectrumAnalyzer
         let content: ([Float]) -> Content
         var body: some View { content(preSpectrum.logSpectrumDB) }
+    }
+
+    /// Inner view whose only job is to observe the dynamic-activity monitor.
+    /// Scoped here so the ~15 Hz `gains` republishes re-render only the
+    /// canvas subtree, not the Expert screen. The monitor only publishes
+    /// when a value actually changes, so at rest this never re-renders.
+    private struct DynObserver<Content: View>: View {
+        @ObservedObject var monitor: DynamicActivityMonitor
+        let content: () -> Content
+        var body: some View { content() }
     }
 }

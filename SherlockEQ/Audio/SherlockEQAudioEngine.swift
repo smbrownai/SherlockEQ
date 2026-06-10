@@ -31,6 +31,11 @@ final class SherlockEQAudioEngine: ObservableObject {
     /// `applyProfile` can push new coefficients on profile changes.
     private weak var leftEQCascade: BiquadCascade?
     private weak var rightEQCascade: BiquadCascade?
+    /// Per-ear dynamic (level-dependent) EQ stage, owned by CATapEngine
+    /// alongside the cascades. Stored weak at attach time so `applyProfile`
+    /// can push per-feature config and Reference Mode can bypass it.
+    private weak var leftDynamics: DynamicBandProcessor?
+    private weak var rightDynamics: DynamicBandProcessor?
     /// Sample rate the cascades' coefficients were computed at — kept
     /// so `applyProfile` can recompute against the right Nyquist on
     /// rebuilds (e.g. output-device switch with a different rate).
@@ -114,6 +119,8 @@ final class SherlockEQAudioEngine: ObservableObject {
         rightSource: AVAudioSourceNode,
         leftEQCascade: BiquadCascade,
         rightEQCascade: BiquadCascade,
+        leftDynamics: DynamicBandProcessor,
+        rightDynamics: DynamicBandProcessor,
         sampleRate: Double
     ) -> Bool {
         teardownGraph()
@@ -128,6 +135,10 @@ final class SherlockEQAudioEngine: ObservableObject {
         self.tapSampleRate = sampleRate
         self.leftEQCascade = leftEQCascade
         self.rightEQCascade = rightEQCascade
+        self.leftDynamics = leftDynamics
+        self.rightDynamics = rightDynamics
+        leftDynamics.setSampleRate(sampleRate)
+        rightDynamics.setSampleRate(sampleRate)
 
         engine.attach(leftSource)
         engine.attach(rightSource)
@@ -214,9 +225,12 @@ final class SherlockEQAudioEngine: ObservableObject {
         self.leftSource = leftSource
         self.rightSource = rightSource
 
-        // EQ cascades bypass when the user wants to hear raw signal.
+        // EQ cascades + dynamic stage bypass when the user wants to hear
+        // raw signal.
         leftEQCascade.setBypassed(referenceMode)
         rightEQCascade.setBypassed(referenceMode)
+        leftDynamics.setBypassed(referenceMode)
+        rightDynamics.setBypassed(referenceMode)
         return true
     }
 
@@ -363,6 +377,15 @@ final class SherlockEQAudioEngine: ObservableObject {
         rightEQCascade?.setBypassed(true)
         leftEQCascade = nil
         rightEQCascade = nil
+        // Dynamic stage is owned by CATapEngine too — clear to all-disabled
+        // and bypass so no stale feature config survives the teardown, then
+        // drop our refs.
+        leftDynamics?.configure(slots: [])
+        rightDynamics?.configure(slots: [])
+        leftDynamics?.setBypassed(true)
+        rightDynamics?.setBypassed(true)
+        leftDynamics = nil
+        rightDynamics = nil
         if let t = toneSourceNode { engine.detach(t); toneSourceNode = nil }
     }
 
@@ -375,6 +398,10 @@ final class SherlockEQAudioEngine: ObservableObject {
         // so the user hears the truly-unprocessed source signal.
         leftEQCascade?.setBypassed(on)
         rightEQCascade?.setBypassed(on)
+        // Reference Mode means truly unprocessed — the dynamic stage goes
+        // out of the path alongside the cascade.
+        leftDynamics?.setBypassed(on)
+        rightDynamics?.setBypassed(on)
     }
 
     /// Master output gain applied post-limiter via a dedicated AVAudioUnitEQ
@@ -449,6 +476,9 @@ final class SherlockEQAudioEngine: ObservableObject {
         rightBalanceMixer?.outputVolume = 1
         leftEQCascade?.setBands([], preampDB: 0, sampleRate: tapSampleRate)
         rightEQCascade?.setBands([], preampDB: 0, sampleRate: tapSampleRate)
+        // Dynamic features clear too — a flattened chain is fully unprocessed.
+        leftDynamics?.configure(slots: [])
+        rightDynamics?.configure(slots: [])
     }
 
     /// Apply a hearing profile's per-ear bands + global trim to the chain.
@@ -494,6 +524,15 @@ final class SherlockEQAudioEngine: ObservableObject {
         leftEQCascade?.setBypassed(referenceMode)
         rightEQCascade?.setBypassed(referenceMode)
 
+        // Dynamic (level-dependent) features — folded per-ear from
+        // `profile.dynamics`. The strength/sensitivity sliders are mapped
+        // to sign-carrying max delta + threshold offset here so the audio
+        // thread does no slider arithmetic.
+        leftDynamics?.configure(slots: Self.dynamicSlots(profile.dynamics, ear: .left))
+        rightDynamics?.configure(slots: Self.dynamicSlots(profile.dynamics, ear: .right))
+        leftDynamics?.setBypassed(referenceMode)
+        rightDynamics?.setBypassed(referenceMode)
+
         let notchDescription: String = {
             switch (profile.leftNotch.enabled, profile.rightNotch.enabled) {
             case (false, false): return "off"
@@ -505,7 +544,43 @@ final class SherlockEQAudioEngine: ObservableObject {
                     : "L \(Int(profile.leftNotch.frequencyHz)) Hz, R \(Int(profile.rightNotch.frequencyHz)) Hz"
             }
         }()
-        log.debug("Applied profile \(profile.name, privacy: .public) — L:\(combinedLeftBands.count) bands, R:\(combinedRightBands.count) bands, preamp+trim:\(combinedPreampDB) dB, balance:\(profile.balance, format: .fixed(precision: 2)), notch:\(notchDescription, privacy: .public), autoEQ:\(profile.autoEQName ?? "none", privacy: .public)")
+        log.debug("Applied profile \(profile.name, privacy: .public) — L:\(combinedLeftBands.count) bands, R:\(combinedRightBands.count) bands, preamp+trim:\(combinedPreampDB) dB, balance:\(profile.balance, format: .fixed(precision: 2)), notch:\(notchDescription, privacy: .public), autoEQ:\(profile.autoEQName ?? "none", privacy: .public), dynamics:\(Self.dynamicsSummary(profile.dynamics), privacy: .public)")
+    }
+
+    /// Map a profile's dynamic settings for one ear into the processor's
+    /// slot config. All three kinds are passed every time (disabled slots
+    /// are no-ops in the processor); strength/sensitivity are pre-mapped to
+    /// the DSP domain here.
+    private static func dynamicSlots(_ dynamics: DynamicProcessingSettings, ear: EQBandLookup.Ear) -> [DynamicBandProcessor.SlotConfig] {
+        DynamicFeatureKind.allCases.map { kind in
+            let s = dynamics.settings(for: kind, ear: ear)
+            return DynamicBandProcessor.SlotConfig(
+                kind: kind,
+                enabled: s.enabled,
+                maxDeltaDB: kind.maxDeltaDB(strength: s.strength),
+                thresholdOffsetDB: kind.thresholdOffsetDB(sensitivity: s.sensitivity)
+            )
+        }
+    }
+
+    /// Compact one-line summary of enabled dynamic features for the
+    /// applyProfile debug log, e.g. `sib L+R 0.7, harsh off, speech L 0.4`.
+    private static func dynamicsSummary(_ d: DynamicProcessingSettings) -> String {
+        func tag(_ kind: DynamicFeatureKind, _ short: String) -> String {
+            let l = d.settings(for: kind, ear: .left)
+            let r = d.settings(for: kind, ear: .right)
+            switch (l.enabled, r.enabled) {
+            case (false, false): return "\(short) off"
+            case (true, true):
+                return l.strength == r.strength
+                    ? "\(short) L+R \(String(format: "%.1f", l.strength))"
+                    : "\(short) L \(String(format: "%.1f", l.strength)) R \(String(format: "%.1f", r.strength))"
+            case (true, false): return "\(short) L \(String(format: "%.1f", l.strength))"
+            case (false, true): return "\(short) R \(String(format: "%.1f", r.strength))"
+            }
+        }
+        return [tag(.sibilanceTamer, "sib"), tag(.harshnessControl, "harsh"), tag(.speechPresence, "speech")]
+            .joined(separator: ", ")
     }
 
     /// Linear-domain balance attenuation fed to the per-ear

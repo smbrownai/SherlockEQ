@@ -84,6 +84,18 @@ final class EQChainState: ObservableObject {
         didSet { UserDefaults.standard.set(manualEQEnabled, forKey: Self.manualEQEnabledKey) }
     }
 
+    /// Per-stage toggle for the dynamic (level-dependent) features —
+    /// Speech Presence / Harshness Control / Sibilance Tamer. On by
+    /// default; when off, the dynamic stage drops out while the static
+    /// cascade (AutoEQ + bands + notch) keeps working. Profile-stored
+    /// per-feature settings are preserved, so flipping back restores them.
+    @Published var dynamicsEnabled: Bool = EQChainState.loadBool(
+        key: EQChainState.dynamicsEnabledKey,
+        default: true
+    ) {
+        didSet { UserDefaults.standard.set(dynamicsEnabled, forKey: Self.dynamicsEnabledKey) }
+    }
+
     // MARK: - One-shot UI flags
 
     /// Set after the user dismisses the notch-off reminder banner.
@@ -102,6 +114,7 @@ final class EQChainState: ObservableObject {
     private static let autoEQEnabledKey = "sherlockeq.autoEQEnabled"
     private static let notchFilterEnabledKey = "sherlockeq.notchFilterEnabled"
     private static let manualEQEnabledKey = "sherlockeq.manualEQEnabled"
+    private static let dynamicsEnabledKey = "sherlockeq.dynamicsEnabled"
     private static let hasShownNotchOffReminderKey = "sherlockeq.hasShownNotchOffReminder"
 
     private static func loadBool(key: String, default defaultValue: Bool) -> Bool {

@@ -29,6 +29,12 @@ final class AudioState: ObservableObject {
     /// the new bypass mask.
     let eqChain = EQChainState()
 
+    /// Display-rate activity telemetry for the dynamic-EQ stage. A plain
+    /// `let` (not `@Published`) so its 15 Hz refresh is never rebroadcast
+    /// through AudioState — meter views observe it directly. Provider is
+    /// wired in `init` once `tap` exists.
+    let dynamicActivity = DynamicActivityMonitor()
+
     /// Proxy bindings — view code that reads
     /// `audioState.referenceMode`, `.testCurveEnabled`, etc. keeps
     /// working. New code should depend on EQChainState directly.
@@ -150,6 +156,10 @@ final class AudioState: ObservableObject {
     var manualEQEnabled: Bool {
         get { eqChain.manualEQEnabled }
         set { eqChain.manualEQEnabled = newValue }
+    }
+    var dynamicsEnabled: Bool {
+        get { eqChain.dynamicsEnabled }
+        set { eqChain.dynamicsEnabled = newValue }
     }
     var hasShownNotchOffReminder: Bool {
         get { eqChain.hasShownNotchOffReminder }
@@ -351,6 +361,7 @@ final class AudioState: ObservableObject {
             copy.leftEar.bands = []
             copy.rightEar.bands = []
             copy.globalTrimDB = 0
+            copy.dynamics = DynamicProcessingSettings()
             return copy
         }
         if !autoEQEnabled {
@@ -364,6 +375,9 @@ final class AudioState: ObservableObject {
         if !manualEQEnabled {
             copy.leftEar.bands = []
             copy.rightEar.bands = []
+        }
+        if !dynamicsEnabled {
+            copy.dynamics = DynamicProcessingSettings()
         }
         return copy
     }
@@ -399,6 +413,16 @@ final class AudioState: ObservableObject {
         self.preSpectrum = preSpectrum
         self.stereoMonitor = stereoMonitor
         self.safeListening = tracker
+
+        // Activity meters read live gain deltas from the per-ear dynamic
+        // processors (owned by the tap). Provider runs on the main actor
+        // (the monitor's 15 Hz timer) — reading the lock-guarded counters
+        // is cheap and thread-safe.
+        dynamicActivity.deltaMilliDBProvider = { [weak tap] kind, ear in
+            guard let tap else { return 0 }
+            let proc = ear == .left ? tap.leftDynamics : tap.rightDynamics
+            return proc.currentDeltaMilliDB(kind)
+        }
 
         tap.onOutputDeviceChanged = { [weak self] deviceID in
             Task { @MainActor in
@@ -526,6 +550,7 @@ final class AudioState: ObservableObject {
         eqChain.$autoEQEnabled.dropFirst().sink(receiveValue: applyOnFlip).store(in: &eqChainSubscriptions)
         eqChain.$notchFilterEnabled.dropFirst().sink(receiveValue: applyOnFlip).store(in: &eqChainSubscriptions)
         eqChain.$manualEQEnabled.dropFirst().sink(receiveValue: applyOnFlip).store(in: &eqChainSubscriptions)
+        eqChain.$dynamicsEnabled.dropFirst().sink(receiveValue: applyOnFlip).store(in: &eqChainSubscriptions)
         eqChainObserver = eqChain.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
@@ -743,6 +768,8 @@ final class AudioState: ObservableObject {
             rightSource: rightSource,
             leftEQCascade: tap.leftEQCascade,
             rightEQCascade: tap.rightEQCascade,
+            leftDynamics: tap.leftDynamics,
+            rightDynamics: tap.rightDynamics,
             sampleRate: format.sampleRate
         ) else {
             log.error("audio.attach failed — skipping start; lastError preserved")
