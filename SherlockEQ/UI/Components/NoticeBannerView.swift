@@ -78,13 +78,15 @@ struct NoticeBannerView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(tint.opacity(0.12))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(tint.opacity(0.45))
+        // Severity-tinted Liquid Glass on Tahoe (the banner floats over
+        // content, which is exactly the layer glass is for); the pre-26
+        // tinted fill + stroke on Sonoma. Severity keeps its non-color
+        // signal either way (triangle vs octagon icon).
+        .glassChipSurface(
+            tint: tint.opacity(0.3),
+            cornerRadius: 8,
+            fallbackFill: tint.opacity(0.12),
+            fallbackStroke: tint.opacity(0.45)
         )
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isStaticText)

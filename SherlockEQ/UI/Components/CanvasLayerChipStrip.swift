@@ -45,56 +45,78 @@ struct CanvasLayerChipStrip: View {
         }
     }
 
+    /// On Tahoe, GlassEffectContainer lets the chips' glass shapes render
+    /// as one merged group — cheaper than N independent glass surfaces and
+    /// visually continuous when chips sit close together. Sonoma renders
+    /// the bare strip (chips fall back to flat fills there anyway).
+    @ViewBuilder
     private var fullStrip: some View {
-        HStack(spacing: 8) {
-            lensMenu
-            Divider().frame(height: 20)
-            chip(
-                "Output",
-                swatch: Self.outputColor,
-                isOn: $showOutputSpectrum,
-                hint: "Live post-EQ spectrum — what's leaving the chain."
-            )
-            chip(
-                "Input",
-                swatch: Self.inputColor,
-                isOn: $showInputSpectrum,
-                hint: "Pre-EQ spectrum — what's arriving before the EQ runs."
-            )
-            chip(
-                "EQ",
-                swatch: earColor,
-                isOn: $showEQCurve,
-                hint: "Your active equaliser curve and band handles."
-            )
-            if hasAudiogram {
-                chip(
-                    "Audiogram",
-                    swatch: earColor,
-                    pattern: .dashed,
-                    isOn: $showAudiogramTarget,
-                    hint: "Audiogram-derived target curve — the clinical reference your EQ is trying to match."
-                )
-            }
-            chip(
-                "Safety",
-                swatch: Self.safetyColor,
-                isOn: $showSafetyOverlay,
-                hint: "Highlights frequency regions where sustained energy exceeds a hearing-safety threshold."
-            )
-            chip(
-                "Peaks",
-                swatch: Self.peaksColor,
-                isOn: $showPeakCallouts,
-                hint: "Labels the loudest live frequencies on the spectrum with chips showing the frequency."
-            )
-            Spacer()
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: 8) { fullStripContent }
+        } else {
+            fullStripContent
         }
+    }
+
+    private var fullStripContent: some View {
+            HStack(spacing: 8) {
+                lensMenu
+                Divider().frame(height: 20)
+                chip(
+                    "Output",
+                    swatch: Self.outputColor,
+                    isOn: $showOutputSpectrum,
+                    hint: "Live post-EQ spectrum — what's leaving the chain."
+                )
+                chip(
+                    "Input",
+                    swatch: Self.inputColor,
+                    isOn: $showInputSpectrum,
+                    hint: "Pre-EQ spectrum — what's arriving before the EQ runs."
+                )
+                chip(
+                    "EQ",
+                    swatch: earColor,
+                    isOn: $showEQCurve,
+                    hint: "Your active equaliser curve and band handles."
+                )
+                if hasAudiogram {
+                    chip(
+                        "Audiogram",
+                        swatch: earColor,
+                        pattern: .dashed,
+                        isOn: $showAudiogramTarget,
+                        hint: "Audiogram-derived target curve — the clinical reference your EQ is trying to match."
+                    )
+                }
+                chip(
+                    "Safety",
+                    swatch: Self.safetyColor,
+                    isOn: $showSafetyOverlay,
+                    hint: "Highlights frequency regions where sustained energy exceeds a hearing-safety threshold."
+                )
+                chip(
+                    "Peaks",
+                    swatch: Self.peaksColor,
+                    isOn: $showPeakCallouts,
+                    hint: "Labels the loudest live frequencies on the spectrum with chips showing the frequency."
+                )
+                Spacer()
+            }
     }
 
     /// Compact fallback: lens menu still inline (primary control), all
     /// other layer toggles tucked into a popover so the bar never overflows.
+    @ViewBuilder
     private var compactStrip: some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: 8) { compactStripContent }
+        } else {
+            compactStripContent
+        }
+    }
+
+    private var compactStripContent: some View {
         HStack(spacing: 8) {
             lensMenu
             Divider().frame(height: 20)
@@ -119,13 +141,10 @@ struct CanvasLayerChipStrip: View {
             }
             .padding(.horizontal, 11)
             .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(Color.secondary.opacity(0.12))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 7)
-                    .stroke(Color.secondary.opacity(0.40), lineWidth: 1)
+            .glassChipSurface(
+                tint: nil,
+                fallbackFill: Color.secondary.opacity(0.12),
+                fallbackStroke: Color.secondary.opacity(0.40)
             )
             .contentShape(Rectangle())
         }
@@ -250,13 +269,12 @@ struct CanvasLayerChipStrip: View {
             }
             .padding(.horizontal, 11)
             .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(Color.accentColor.opacity(0.16))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 7)
-                    .stroke(Color.accentColor.opacity(0.55), lineWidth: 1)
+            // Accent-tinted surface so the Lens still reads as the strip's
+            // primary control next to the layer chips' plainer bodies.
+            .glassChipSurface(
+                tint: Color.accentColor.opacity(0.25),
+                fallbackFill: Color.accentColor.opacity(0.16),
+                fallbackStroke: Color.accentColor.opacity(0.55)
             )
             .contentShape(Rectangle())
         }
@@ -319,16 +337,14 @@ struct CanvasLayerChipStrip: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(isOn.wrappedValue ? swatch.opacity(0.12) : Color.clear)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 7)
-                    .stroke(
-                        isOn.wrappedValue ? swatch.opacity(0.55) : Color.secondary.opacity(0.35),
-                        lineWidth: 1
-                    )
+            // Glass chip body on Tahoe — tinted with the layer swatch when
+            // on, plain when off; flat fill + stroke on Sonoma. On/off
+            // keeps its non-color signals (checkmark glyph + swatch
+            // opacity) for colorblind users on both.
+            .glassChipSurface(
+                tint: isOn.wrappedValue ? swatch.opacity(0.25) : nil,
+                fallbackFill: isOn.wrappedValue ? swatch.opacity(0.12) : Color.clear,
+                fallbackStroke: isOn.wrappedValue ? swatch.opacity(0.55) : Color.secondary.opacity(0.35)
             )
             .contentShape(Rectangle())
         }

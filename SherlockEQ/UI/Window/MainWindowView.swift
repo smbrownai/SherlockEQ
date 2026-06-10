@@ -72,6 +72,9 @@ struct MainWindowView: View {
             // sidebar slide and the banner drop-in.
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: monitorSidebarVisible)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: audioState.userVisibleNotice)
+            // Soft scroll-edge fade where detail content (the EQ screens'
+            // ScrollViews) passes under the Liquid Glass toolbar (Tahoe+).
+            .softTopScrollEdge()
             .navigationSplitViewColumnWidth(min: 760, ideal: 820)
         }
         .toolbar {
@@ -79,13 +82,19 @@ struct MainWindowView: View {
             // can A/B against the source signal from any screen, not just
             // the Equalizer view. Declared before the monitor toggle so
             // it sits to its left on macOS (primaryAction items render in
-            // declaration order, left → right). The `.spacer` between
-            // them visually separates the two unrelated controls.
+            // declaration order, left → right). On Tahoe, `ToolbarSpacer`
+            // (not a plain Spacer-in-ToolbarItem) splits the two unrelated
+            // controls into separate Liquid Glass clusters instead of one
+            // undifferentiated capsule; Sonoma keeps the plain spacer.
             ToolbarItem(placement: .primaryAction) {
                 EQBypassButton()
             }
-            ToolbarItem(placement: .primaryAction) {
-                Spacer()
+            if #available(macOS 26.0, *) {
+                ToolbarSpacer(.fixed, placement: .primaryAction)
+            } else {
+                ToolbarItem(placement: .primaryAction) {
+                    Spacer()
+                }
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
