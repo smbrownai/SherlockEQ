@@ -154,11 +154,21 @@ ok "tag $TAG not yet shipped"
 
 # ---- phase detection ---------------------------------------------------------
 #
-# Decide whether to run PREP or PUBLISH based on what's on origin:
-#   no release branch on origin            → PREP
-#   release branch on origin, PR open      → exit, tell user to merge
-#   release branch on origin, PR merged    → PUBLISH
-#   release branch on origin, PR closed    → exit, tell user to investigate
+# Decide PREP vs PUBLISH from the release PR, not just the branch. A repo
+# with "auto-delete branch on merge" enabled removes release/<version> the
+# instant the PR merges, so keying purely on the remote branch sends every
+# post-merge re-run back into PREP (it then dies at "no changes to commit").
+# `gh pr view <ref>` keeps resolving the PR by its head-ref name even after
+# the branch is gone, so a MERGED PR is the authoritative PUBLISH signal:
+#
+#   merged PR for release/<version>        → PUBLISH  (branch may be gone)
+#   no branch on origin, no merged PR      → PREP
+#   branch on origin, PR open              → exit, tell user to merge
+#   branch on origin, PR closed unmerged   → exit, tell user to investigate
+#
+# Preflight already aborted if the tag existed, so reaching here with a
+# merged PR guarantees the tag isn't shipped yet — the release content is on
+# main and ready to publish.
 
 step "Detecting phase"
 
@@ -167,37 +177,50 @@ if git ls-remote --heads origin "$BRANCH" | grep -q .; then
   REMOTE_BRANCH_EXISTS=1
 fi
 
-PHASE=""
+# Resolve the PR tied to this release branch's head ref. `gh pr view` works
+# by ref name even after the branch is auto-deleted post-merge; an empty
+# PR_STATE means gh found no PR for the ref at all.
 PR_NUMBER=""
 PR_STATE=""
+PR_URL=""
+if PR_JSON=$(gh pr view "$BRANCH" --json number,state,mergedAt,url 2>/dev/null); then
+  PR_NUMBER=$(echo "$PR_JSON" | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d["number"])')
+  PR_STATE=$(echo "$PR_JSON" | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d["state"])')
+  PR_URL=$(echo "$PR_JSON" | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d["url"])')
+fi
 
-if (( REMOTE_BRANCH_EXISTS == 0 )); then
-  PHASE="prep"
-  info "no $BRANCH on origin — running PREP"
-else
-  # Check PR state. `gh pr view <branch>` works for whatever PR is tied to
-  # this head ref; --json gives us a clean state read without screen scraping.
-  if PR_JSON=$(gh pr view "$BRANCH" --json number,state,mergedAt,url 2>/dev/null); then
-    PR_NUMBER=$(echo "$PR_JSON" | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d["number"])')
-    PR_STATE=$(echo "$PR_JSON" | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d["state"])')
-    PR_URL=$(echo "$PR_JSON" | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d["url"])')
-    case "$PR_STATE" in
-      MERGED)
-        PHASE="publish"
-        info "PR #$PR_NUMBER is merged — running PUBLISH"
-        ;;
-      OPEN)
-        warn "PR #$PR_NUMBER is OPEN. Merge it first, then re-run this script."
-        echo "      $PR_URL" >&2
-        exit 0
-        ;;
-      CLOSED)
-        die "PR #$PR_NUMBER is CLOSED without merge ($PR_URL). Reopen + merge, or delete branch."
-        ;;
-    esac
+PHASE=""
+
+if [[ "$PR_STATE" == "MERGED" ]]; then
+  # Merged PR is authoritative whether or not the branch still exists.
+  PHASE="publish"
+  if (( REMOTE_BRANCH_EXISTS == 1 )); then
+    info "PR #$PR_NUMBER is merged — running PUBLISH"
   else
-    die "branch $BRANCH exists on origin but no PR is open for it. Investigate manually."
+    info "PR #$PR_NUMBER is merged (branch auto-deleted on merge) — running PUBLISH"
   fi
+elif (( REMOTE_BRANCH_EXISTS == 0 )); then
+  # No branch on origin and no merged PR for it → this version isn't prepped.
+  PHASE="prep"
+  info "no $BRANCH on origin, no merged PR — running PREP"
+else
+  # Branch is live on origin; act on the current PR state.
+  case "$PR_STATE" in
+    OPEN)
+      warn "PR #$PR_NUMBER is OPEN. Merge it first, then re-run this script."
+      echo "      $PR_URL" >&2
+      exit 0
+      ;;
+    CLOSED)
+      die "PR #$PR_NUMBER is CLOSED without merge ($PR_URL). Reopen + merge, or delete branch."
+      ;;
+    "")
+      die "branch $BRANCH exists on origin but no PR is open for it. Investigate manually."
+      ;;
+    *)
+      die "branch $BRANCH exists on origin but PR state is '$PR_STATE'. Investigate manually."
+      ;;
+  esac
 fi
 
 # =============================================================================
