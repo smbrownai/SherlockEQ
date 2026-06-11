@@ -31,6 +31,7 @@ enum HelpTopic: String, CaseIterable, Hashable, Sendable {
     case privacy = "privacy-local-data"
     case troubleshooting = "troubleshooting"
     case keyboardShortcuts = "keyboard-shortcuts"
+    case commandLineTool = "command-line-tool"
     case releaseNotes = "release-notes"
     case references = "references"
 

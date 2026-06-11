@@ -22,6 +22,9 @@ enum HelpBlock: Identifiable, Hashable {
     case rule
     /// `[^1]: …` definitions, grouped and rendered as a footnote list.
     case footnotes([(label: String, text: String)])
+    /// GFM pipe table: a header row plus zero or more body rows. Cells
+    /// carry raw inline markdown, rendered per-cell at draw time.
+    case table(header: [String], rows: [[String]])
 
     var id: String {
         switch self {
@@ -33,6 +36,7 @@ enum HelpBlock: Identifiable, Hashable {
         case .quote(let lines): return "q:\(lines.count):\(lines.first ?? "")"
         case .rule: return "hr"
         case .footnotes(let f): return "fn:\(f.count)"
+        case .table(let header, let rows): return "tbl:\(header.joined(separator: "|")):\(rows.count)"
         }
     }
 
@@ -149,6 +153,27 @@ enum MarkdownParser {
                 continue
             }
 
+            // GFM pipe table: a header row immediately followed by a
+            // delimiter row (`| --- | --- |`). Without the delimiter on the
+            // next line a lone `|` is just paragraph text, so this can't
+            // swallow ordinary prose.
+            if trimmed.contains("|"),
+               i + 1 < lines.count,
+               isTableDelimiter(lines[i + 1].trimmingCharacters(in: .whitespaces)) {
+                flushParagraph(); flushFootnotes()
+                let header = tableCells(trimmed)
+                i += 2  // consume header + delimiter
+                var rows: [[String]] = []
+                while i < lines.count {
+                    let row = lines[i].trimmingCharacters(in: .whitespaces)
+                    guard !row.isEmpty, row.contains("|") else { break }
+                    rows.append(tableCells(row))
+                    i += 1
+                }
+                blocks.append(.table(header: header, rows: rows))
+                continue
+            }
+
             // Default: accumulate into the running paragraph.
             paragraph.append(trimmed)
             i += 1
@@ -209,6 +234,33 @@ enum MarkdownParser {
         let label = String(line[line.index(line.startIndex, offsetBy: 2)..<close.lowerBound])
         let text = String(line[close.upperBound...]).trimmingCharacters(in: .whitespaces)
         return (label, text)
+    }
+
+    /// A GFM table delimiter row: every cell is only dashes / colons
+    /// (e.g. `---`, `:--`, `:-:`). Used as the signal that the preceding
+    /// line was a header rather than ordinary text.
+    private static func isTableDelimiter(_ line: String) -> Bool {
+        guard line.contains("-"), line.contains("|") else { return false }
+        let cells = tableCells(line)
+        guard !cells.isEmpty else { return false }
+        return cells.allSatisfy { cell in
+            !cell.isEmpty && cell.allSatisfy { $0 == "-" || $0 == ":" }
+        }
+    }
+
+    /// Split one table row into trimmed cells, dropping the optional
+    /// leading / trailing pipe. A backslash-escaped pipe (`\|`) is treated
+    /// as literal content, not a column boundary.
+    private static func tableCells(_ line: String) -> [String] {
+        var s = line.trimmingCharacters(in: .whitespaces)
+        if s.hasPrefix("|") { s.removeFirst() }
+        if s.hasSuffix("|") { s.removeLast() }
+        let sentinel = "\u{0001}"
+        s = s.replacingOccurrences(of: "\\|", with: sentinel)
+        return s.components(separatedBy: "|").map {
+            $0.replacingOccurrences(of: sentinel, with: "|")
+                .trimmingCharacters(in: .whitespaces)
+        }
     }
 
     private static func isBullet(_ line: String) -> Bool {
@@ -326,7 +378,38 @@ struct MarkdownArticleView: View {
                 }
             }
             .padding(.top, 4)
+        case .table(let header, let rows):
+            tableView(header: header, rows: rows)
         }
+    }
+
+    @ViewBuilder
+    private func tableView(header: [String], rows: [[String]]) -> some View {
+        let columnCount = max(header.count, rows.map(\.count).max() ?? 0)
+        Grid(alignment: .topLeading, horizontalSpacing: 18, verticalSpacing: 9) {
+            GridRow {
+                ForEach(0..<columnCount, id: \.self) { c in
+                    Text(MarkdownParser.inline(c < header.count ? header[c] : ""))
+                        .font(.callout.weight(.semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            Divider()
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                GridRow {
+                    ForEach(0..<columnCount, id: \.self) { c in
+                        Text(MarkdownParser.inline(c < row.count ? row[c] : ""))
+                            .font(.callout)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 7))
     }
 
     @ViewBuilder

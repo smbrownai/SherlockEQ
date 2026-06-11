@@ -42,7 +42,7 @@ final class HelpLibrary {
             .safetyLimits, .privacy,
         ]),
         HelpSection(title: "Reference", topics: [
-            .troubleshooting, .keyboardShortcuts, .releaseNotes, .references,
+            .troubleshooting, .keyboardShortcuts, .commandLineTool, .releaseNotes, .references,
         ]),
     ]
 

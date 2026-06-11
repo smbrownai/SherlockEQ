@@ -260,6 +260,7 @@ struct HelpWindowView: View {
         case .privacy: return "lock.shield"
         case .troubleshooting: return "wrench.and.screwdriver"
         case .keyboardShortcuts: return "keyboard"
+        case .commandLineTool: return "terminal"
         case .releaseNotes: return "sparkles"
         case .references: return "book.closed"
         }
