@@ -132,6 +132,26 @@ if [[ ! -d "$APP" ]]; then
   exit 1
 fi
 
+# ---- 2b. embed the sherlockeq CLI -------------------------------------------
+#
+# Build the command-line tool and drop it inside the bundle at
+# Contents/Helpers/sherlockeq (not Contents/MacOS — `sherlockeq` and the main
+# `SherlockEQ` executable would collide on case-insensitive APFS). Sign the
+# helper with the hardened runtime, then re-seal the whole bundle so the outer
+# signature covers the new file. Notarization (step 5) then includes it.
+
+echo "==> building + embedding sherlockeq CLI"
+bash "$REPO_ROOT/dist/build-cli.sh"
+CLI_BIN="$REPO_ROOT/cli/.build/apple/Products/Release/sherlockeq"
+[[ -f "$CLI_BIN" ]] || { echo "error: CLI binary missing at $CLI_BIN" >&2; exit 1; }
+
+HELPERS="$APP/Contents/Helpers"
+mkdir -p "$HELPERS"
+cp "$CLI_BIN" "$HELPERS/sherlockeq"
+codesign --force --options runtime --timestamp --sign "$DEVELOPER_ID" "$HELPERS/sherlockeq"
+# Re-seal the bundle (deep, same identity) so CodeResources covers the helper.
+codesign --force --deep --options runtime --timestamp --sign "$DEVELOPER_ID" "$APP"
+
 echo "==> verifying app signature + hardened runtime"
 codesign --verify --deep --strict --verbose=2 "$APP"
 codesign -dvv "$APP" 2>&1 | grep -E "flags=.*runtime" \

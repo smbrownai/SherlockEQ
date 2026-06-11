@@ -872,4 +872,44 @@ final class AudioState: ObservableObject {
             preSpectrum.ingest(monoSamples: ptr, frameCount: frames, sampleRate: sr)
         }
     }
+
+    // MARK: - Settings reset (CLI `reset --settings`)
+
+    /// Restore app preferences and engine knobs to their factory defaults.
+    /// Used by the `sherlockeq reset --settings` command. Intentionally
+    /// **does not** touch the user's profiles or which profile is active —
+    /// "settings" means the app/engine preferences, not saved data.
+    ///
+    /// Each assignment flows through the existing `@Published` + Combine
+    /// bridges, so the engine re-applies and every observing GUI surface
+    /// updates live — the same path the Settings screen uses. Login-item
+    /// state and the AutoEQ library folder are left alone: those are
+    /// system-/user-scoped choices, not transient app preferences.
+    func resetSettingsToDefaults() {
+        // Engine / output
+        masterGainDB = 0
+        limiterAttackMs = 12
+        limiterDecayMs = 24
+        limiterPreGainDB = 0
+        calibrationOffsetDBA = 100
+
+        // Transient EQ-chain toggles
+        referenceMode = false
+        testCurveEnabled = false
+        testToneEnabled = false
+        calibrationToneEnabled = false
+
+        // Per-stage bypass mask — all stages on
+        eqMasterEnabled = true
+        autoEQEnabled = true
+        notchFilterEnabled = true
+        manualEQEnabled = true
+        dynamicsEnabled = true
+
+        // UI / shell preferences
+        leftEarColor = AppPreferences.defaultLeftEarColor
+        rightEarColor = AppPreferences.defaultRightEarColor
+        hideFromDockEnabled = true
+        globalReferenceShortcutEnabled = false
+    }
 }

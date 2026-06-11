@@ -368,6 +368,18 @@ PY
     ok "pbxproj bumped to $VERSION"
   fi
 
+  # CLI version constant — `sherlockeq --version`. Bumped here so it's part of
+  # the release commit; dist/build-cli.sh never edits sources.
+  CLI_ROOT="$REPO_ROOT/cli/Sources/sherlockeq/Root.swift"
+  if [[ -f "$CLI_ROOT" ]]; then
+    if grep -qE "let cliVersion = \"$VERSION\"" "$CLI_ROOT"; then
+      info "CLI version already at $VERSION"
+    else
+      /usr/bin/sed -i '' -E "s/let cliVersion = \"[^\"]+\"/let cliVersion = \"$VERSION\"/" "$CLI_ROOT"
+      ok "CLI version bumped to $VERSION"
+    fi
+  fi
+
   # web/index.html: two known references — meta-row badge "v<X>" and install
   # card filename "SherlockEQ-<X>.dmg". The PREV_VERSION sniff makes this
   # idempotent (re-running won't re-replace).

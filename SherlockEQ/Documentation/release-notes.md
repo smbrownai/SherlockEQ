@@ -20,6 +20,15 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.3.2
+
+This release adds a command-line interface. `sherlockeq` is a power-user and automation surface for the app — check status, switch profiles, toggle Reference Mode, nudge gain, balance, and the simple EQ, list output devices, import or export profiles, and dump diagnostics for a bug report. The running app stays in charge: the CLI just asks it to report or change state, so anything you do on the command line shows up in the window and the menu bar right away.
+
+**Added**
+
+- **The `sherlockeq` command-line tool.** `sherlockeq status` for a one-glance summary; `profiles list / active / activate / import / export`; `bypass on|off|toggle`; `gain`, `balance`, and `simple-eq` get/set; `devices list / current`; `diagnostics` for a structured snapshot to attach to a bug report; plus `launch` and `quit`. Most commands take `--json` for scripting, return meaningful exit codes, and fail cleanly with a clear message when the app isn't running. Everything is local — no telemetry, no network.
+- **It installs with the app.** Homebrew (`brew install --cask sherlockeq`) now puts `sherlockeq` on your PATH automatically. If you installed the app directly, the tool ships inside the bundle — run `"/Applications/SherlockEQ.app/Contents/Helpers/sherlockeq" install` once to symlink it onto your PATH.
+
 ## 0.3.1
 
 A focused follow-up to 0.3.0. The Analog Control Unit's OUTPUT row now actually switches your Mac's audio output instead of just labelling it, its COLOR control matches the panel's other switches, and you can quit SherlockEQ straight from the menu-bar popover.

@@ -33,6 +33,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let autoEQRemote = AutoEQRemoteService()
     let autoEQSavedProfiles = AutoEQSavedProfilesStore()
 
+    /// Backs the `sherlockeq` command-line tool. Vends a CFMessagePort the CLI
+    /// connects to; all commands run against `audioState` / `profileStore`, so
+    /// the GUI reflects CLI changes live. See `CLIControlServer`.
+    private var cliServer: CLIControlServer?
+
     private var mainWindow: NSWindow?
     private var analogWindow: NSWindow?
     private var helpWindow: NSWindow?
@@ -86,11 +91,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        cliServer?.stop()
+    }
+
+    /// Stand up the CLI control port. The handler is a plain `(Data) -> Data`
+    /// closure invoked on the main thread by the port's run-loop source, so we
+    /// hop into main-actor isolation to reach `audioState` / `profileStore`.
+    private func startCLIServer() {
+        let handler = CLICommandHandler(audioState: audioState, profileStore: profileStore)
+        let server = CLIControlServer { data in
+            MainActor.assumeIsolated { handler.handle(data) }
+        }
+        server.start()
+        cliServer = server
+    }
+
     private func bootstrap() {
         profileStore.loadAll()
         profileStore.seedDefaultsIfEmpty()
         audioState.adoptDefaultProfileIfNeeded(from: profileStore)
         audioState.connect(profileStore: profileStore)
+        startCLIServer()
         applyGlobalReferenceShortcut(enabled: audioState.preferences.globalReferenceShortcutEnabled)
         audioState.preferences.$globalReferenceShortcutEnabled
             .sink { [weak self] enabled in self?.applyGlobalReferenceShortcut(enabled: enabled) }
