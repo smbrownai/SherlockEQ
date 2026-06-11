@@ -44,6 +44,8 @@ struct MainPopoverView: View {
             TinnitusNotchRow()
             ListeningComfortRow()
             ReferenceButton()
+            Divider()
+            quitRow
         }
         .padding(14)
         .frame(width: 380)
@@ -78,6 +80,27 @@ struct MainPopoverView: View {
             }
             .buttonStyle(.plain)
             .help("Open SherlockEQ")
+        }
+    }
+
+    /// Quit the whole app from the popover. A menu-bar app has no window
+    /// chrome to quit from when it's running headless (the main window may
+    /// never have been opened), and the Dock icon is hidden in accessory
+    /// mode — so without this the only exit is the AppKit menu's ⌘Q, which
+    /// isn't discoverable from the popover. `NSApp.terminate` runs the normal
+    /// termination path (same as the App menu's Quit item).
+    @ViewBuilder private var quitRow: some View {
+        HStack(spacing: 8) {
+            Spacer()
+            Button {
+                NSApp.terminate(nil)
+            } label: {
+                Label("Quit SherlockEQ", systemImage: "power")
+                    .font(.caption)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Quit SherlockEQ (⌘Q)")
         }
     }
 
