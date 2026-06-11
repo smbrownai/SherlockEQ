@@ -51,8 +51,10 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
 
     /// App-level sections — settings and diagnostics. Grouped under
     /// their own header so they read as "things about the app" rather
-    /// than "things about the audio."
-    static var appSections: [SidebarSection] {
-        [.settings, .debug]
+    /// than "things about the audio." `.debug` is opt-in (off by
+    /// default) via the Settings → General "Show Debug in sidebar"
+    /// toggle, so it's only included when `showDebug` is true.
+    static func appSections(showDebug: Bool) -> [SidebarSection] {
+        showDebug ? [.settings, .debug] : [.settings]
     }
 }

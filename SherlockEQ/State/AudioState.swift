@@ -117,6 +117,10 @@ final class AudioState: ObservableObject {
         get { preferences.globalReferenceShortcutEnabled }
         set { preferences.globalReferenceShortcutEnabled = newValue }
     }
+    var showDebugInSidebar: Bool {
+        get { preferences.showDebugInSidebar }
+        set { preferences.showDebugInSidebar = newValue }
+    }
 
     static let defaultLeftEarColor: Color = AppPreferences.defaultLeftEarColor
     static let defaultRightEarColor: Color = AppPreferences.defaultRightEarColor
@@ -911,5 +915,6 @@ final class AudioState: ObservableObject {
         rightEarColor = AppPreferences.defaultRightEarColor
         hideFromDockEnabled = true
         globalReferenceShortcutEnabled = false
+        showDebugInSidebar = false
     }
 }

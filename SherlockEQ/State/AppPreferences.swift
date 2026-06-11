@@ -98,6 +98,19 @@ final class AppPreferences: ObservableObject {
         }
     }
 
+    /// Whether the diagnostic "Debug" entry shows in the main-window
+    /// sidebar's App group. Off by default — it's a developer/support
+    /// surface (counters, force-dose buttons, notification tests), not
+    /// something most users need. Opt in from Settings when troubleshooting.
+    @Published var showDebugInSidebar: Bool = AppPreferences.loadBool(
+        key: AppPreferences.showDebugInSidebarKey,
+        default: false
+    ) {
+        didSet {
+            UserDefaults.standard.set(showDebugInSidebar, forKey: Self.showDebugInSidebarKey)
+        }
+    }
+
     private let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "AppPreferences")
 
     // MARK: - UserDefaults plumbing
@@ -106,6 +119,7 @@ final class AppPreferences: ObservableObject {
     private static let rightEarColorKey = "sherlockeq.rightEarColorHex"
     private static let hideFromDockKey = "sherlockeq.hideFromDock"
     private static let globalReferenceShortcutKey = "sherlockeq.globalReferenceShortcut"
+    private static let showDebugInSidebarKey = "sherlockeq.showDebugInSidebar"
 
     private static func loadBool(key: String, default defaultValue: Bool) -> Bool {
         UserDefaults.standard.object(forKey: key) as? Bool ?? defaultValue

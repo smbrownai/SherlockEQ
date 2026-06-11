@@ -15,7 +15,7 @@ struct SidebarView: View {
             }
 
             Section("App") {
-                ForEach(SidebarSection.appSections) { section in
+                ForEach(SidebarSection.appSections(showDebug: audioState.showDebugInSidebar)) { section in
                     Label(section.title, systemImage: section.symbol)
                         .tag(section)
                 }

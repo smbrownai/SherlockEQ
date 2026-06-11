@@ -113,10 +113,8 @@ struct MainWindowView: View {
         // default Dynamic Type size, with the existing top header bar
         // (ear picker + viz picker + bands badge + Q/Oct + Link L+R + Add
         // band) above it, the main sidebar at left, AND the persistent
-        // 220pt monitor sidebar at right. Width bumped 1180 → 1400 to
-        // accommodate the new right column without compressing the
-        // detail content.
-        .frame(minWidth: 1400, idealWidth: 1480, minHeight: 740, idealHeight: 820)
+        // 240pt monitor sidebar at right.
+        .frame(minWidth: 1366, idealWidth: 1400, minHeight: 716, idealHeight: 800)
         .linkUndoManagerToProfileStore()
     }
 

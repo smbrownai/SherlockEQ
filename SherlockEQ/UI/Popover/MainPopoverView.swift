@@ -66,9 +66,9 @@ struct MainPopoverView: View {
             // Output device — read-only label for now; full picker comes when
             // we enumerate audio devices in a follow-on session.
             HStack(spacing: 4) {
-                Image(systemName: deviceSymbol).font(.caption)
+                Image(systemName: deviceSymbol).font(.callout)
                 Text(audioState.tap.currentOutputDeviceName)
-                    .font(.caption)
+                    .font(.callout)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
@@ -96,7 +96,7 @@ struct MainPopoverView: View {
                 NSApp.terminate(nil)
             } label: {
                 Label("Quit SherlockEQ", systemImage: "power")
-                    .font(.caption)
+                    .font(.callout)
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)

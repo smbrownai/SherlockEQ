@@ -20,6 +20,7 @@ struct SettingsView: View {
                 shortcutsSection
                 autoEQLibrarySection
                 profilesFolderSection
+                diagnosticsSection
                 aboutSection
             }
             .padding(28)
@@ -309,6 +310,26 @@ struct SettingsView: View {
                     Spacer()
                 }
                 Text("When enabled, ⌘⇧B toggles bypass even when SherlockEQ is in the background. The local ⌘B menu item in Audio → Toggle Reference Mode keeps working when the main window is key. Off by default because system-wide shortcuts can collide with whatever app is in front.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
+            }
+        }
+    }
+
+    // MARK: - Diagnostics
+
+    private var diagnosticsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Diagnostics").font(.headline)
+            sectionBox {
+                HStack {
+                    Toggle("Show Debug in sidebar", isOn: $audioState.showDebugInSidebar)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                    Spacer()
+                }
+                Text("Adds a Debug entry to the sidebar's App group with diagnostic counters, force-dose controls, and a notification test. Off by default — turn it on only when troubleshooting.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 4)
