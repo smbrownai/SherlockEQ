@@ -21,6 +21,99 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 0.2.0</title>
+      <pubDate>Thu, 11 Jun 2026 00:01:21 +0000</pubDate>
+      <sparkle:version>00200</sparkle:version>
+      <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <sparkle:releaseNotesLink>https://github.com/smbrownai/SherlockEQ/releases/tag/v0.2.0</sparkle:releaseNotesLink>
+      <description><![CDATA[
+<h2>SherlockEQ 0.2.0</h2>
+
+<p>
+  The first feature release since 0.1: <strong>Listening Comfort</strong> —
+  level-dependent processing that shapes sound only while it needs it,
+  instead of permanently re-tuning the curve. Soften a harsh "sss," ease
+  shouty midrange, or lift dialogue over a score — each engages when the
+  triggering sound is present and relaxes when it's gone. Per ear, zero
+  added latency, and the peak limiter stays the ceiling over any boost.
+</p>
+
+<h3>Added</h3>
+
+<ul>
+  <li>
+    <strong>Listening Comfort panel.</strong>
+    A new sidebar section with three named, preconfigured processors —
+    <em>Speech Presence</em>, <em>Harshness Control</em>, and
+    <em>Sibilance Tamer</em>. Each is just an on/off, a Strength slider,
+    and a Sensitivity slider, with a live activity meter showing how much
+    it's working in the moment. Independent per ear, with the same
+    Separate&nbsp;L/R switch the rest of the app uses.
+  </li>
+  <li>
+    <strong>Adaptive, level-independent triggering.</strong>
+    Each processor measures its target band against a slow rolling
+    average of that band, so it behaves the same on a quiet podcast and a
+    loud movie — no SPL calibration required. Sensitivity sets how far
+    above that average it reacts; Strength sets how much it does.
+  </li>
+  <li>
+    <strong>Dynamics overlay on the Expert canvas.</strong>
+    A new <em>Dynamics</em> layer chip draws each active processor's
+    response live, moving under your static EQ curve, so you can watch
+    the comfort tools engage against the spectrum in real time.
+  </li>
+</ul>
+
+<h3>Changed</h3>
+
+<ul>
+  <li>
+    <strong>Reference Mode and the chain bypass now cover the comfort
+    tools.</strong>
+    Reference Mode (⌘B / the title-bar toggle) drops the Listening
+    Comfort stage along with the rest of the chain, so your A/B is still
+    a true comparison against the unprocessed source. A dedicated
+    per-stage toggle lets you turn the comfort tools off while keeping
+    your EQ, headphone correction, and notch active.
+  </li>
+</ul>
+
+<h3>Fixed</h3>
+
+<ul>
+  <li>
+    <strong>Menu-bar popover lingered behind the main window.</strong>
+    Opening the full app from the popover now closes the popover instead
+    of leaving it floating in front of the window.
+  </li>
+</ul>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not
+  diagnose, treat, measure, or monitor any hearing condition, tinnitus,
+  or disability. The Listening Comfort tools shape audio for comfort and
+  clarity — they are not a hearing aid. For concerns about your hearing,
+  consult a doctor, audiologist, or licensed healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.1.4">0.1.4 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v0.2.0/SherlockEQ-0.2.0.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="ucF6CeICcV9WRmQJgVh91FeWYF8be2pS0b4T7XE9lmTi8m35na5DW3F8HCwAn3+l4C8Hr+LfzR8L9bmvB+/LAw==" length="6073583" />
+    </item>
+
+    <item>
       <title>SherlockEQ 0.1.4</title>
       <pubDate>Wed, 10 Jun 2026 16:47:48 +0000</pubDate>
       <sparkle:version>00104</sparkle:version>
