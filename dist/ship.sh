@@ -499,6 +499,22 @@ if [[ "$PHASE" == "publish" ]]; then
   [[ -f "$DMG" ]] || die "release.sh did not produce $DMG"
   DMG_SHA=$(awk '{print $1}' "${DMG}.sha256")
 
+  # ---- step 1b: patch web/index.html download size ---------------------------
+  #
+  # web/index.html shows the dmg size in two places (meta-row badge + install
+  # card). The version + filename were bumped in PREP, but the real size isn't
+  # known until the dmg is built here — so patch it now. Same MiB formula
+  # release.sh prints in its summary. This file rides along in the step-4
+  # bookkeeping commit and then mirrors out in the step-9 web sync.
+
+  DMG_SIZE_MB=$(awk "BEGIN { printf \"%.1f\", $(stat -f%z "$DMG") / 1024 / 1024 }")
+  if file_has_version "$WEB_INDEX" "$DMG_SIZE_MB MB"; then
+    info "web/index.html already shows $DMG_SIZE_MB MB"
+  else
+    /usr/bin/sed -i '' -E "s/[0-9]+(\.[0-9]+)? MB/$DMG_SIZE_MB MB/g" "$WEB_INDEX"
+    ok "web/index.html dmg size set to $DMG_SIZE_MB MB"
+  fi
+
   # ---- step 2: appcast -------------------------------------------------------
 
   step "Appcast (dist/appcast-publish.sh)"
@@ -530,15 +546,17 @@ if [[ "$PHASE" == "publish" ]]; then
 
   # ---- step 4: commit bookkeeping to main -----------------------------------
   #
-  # Single combined commit for the two release-bookkeeping artifacts: appcast
-  # (changelog entry) and cask (version + sha256). Tagging happens AFTER this
-  # so the tag points at a tree that includes both — keeping `git checkout
-  # v$VERSION` self-consistent with what users actually got.
+  # Single combined commit for the release-bookkeeping artifacts: appcast
+  # (changelog entry), cask (version + sha256), and the web/index.html dmg
+  # size patched above. Tagging happens AFTER this so the tag points at a
+  # tree that includes them — keeping `git checkout v$VERSION` self-consistent
+  # with what users actually got. web/index.html only shows up here when the
+  # size actually changed; an unchanged file is a no-op for `git add`.
 
   step "Commit bookkeeping → main"
-  git add "$APPCAST" "$CASK_FILE"
+  git add "$APPCAST" "$CASK_FILE" "$WEB_INDEX"
   if [[ -n "$(git diff --cached --name-only)" ]]; then
-    git commit -m "Release $VERSION bookkeeping: appcast + cask"
+    git commit -m "Release $VERSION bookkeeping: appcast + cask + web size"
     git push origin main
     ok "bookkeeping commit pushed to main"
   else
