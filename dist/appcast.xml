@@ -26,7 +26,6 @@
       <sparkle:version>00200</sparkle:version>
       <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
-      <sparkle:releaseNotesLink>https://github.com/smbrownai/SherlockEQ/releases/tag/v0.2.0</sparkle:releaseNotesLink>
       <description><![CDATA[
 <h2>SherlockEQ 0.2.0</h2>
 
@@ -119,7 +118,6 @@
       <sparkle:version>00104</sparkle:version>
       <sparkle:shortVersionString>0.1.4</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
-      <sparkle:releaseNotesLink>https://github.com/smbrownai/SherlockEQ/releases/tag/v0.1.4</sparkle:releaseNotesLink>
       <description><![CDATA[
 <h2>SherlockEQ 0.1.4</h2>
 

@@ -87,10 +87,13 @@ print(text.rstrip())
 PY
 )"
 
-# GitHub release page hosts the same release notes — emit as
-# sparkle:releaseNotesLink so third-party readers that prefer external
-# notes (Latest, MacUpdater) have a working URL to fall back to.
-RELEASE_NOTES_LINK="https://github.com/smbrownai/SherlockEQ/releases/tag/v$VERSION"
+# NOTE: do NOT emit <sparkle:releaseNotesLink>. The official Sparkle
+# framework PREFERS that link over the embedded <description> and loads
+# the URL live in its WebView — so a link here makes the updater show the
+# raw GitHub release *page* (chrome and all) instead of our hand-authored
+# CDATA HTML. Third-party readers (Latest, MacUpdater) read the inline
+# <description> fine, so the link bought nothing and broke the main case.
+# Regressed 0.1.4–0.2.0; reverted here.
 
 # Write the new item to its own temp file. BSD awk on macOS rejects
 # multi-line strings via -v, so we splice with head/tail instead.
@@ -103,7 +106,6 @@ cat > "$ITEM_FILE" <<XML
       <sparkle:version>$BUILD</sparkle:version>
       <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>$MIN_OS</sparkle:minimumSystemVersion>
-      <sparkle:releaseNotesLink>$RELEASE_NOTES_LINK</sparkle:releaseNotesLink>
       <description><![CDATA[
 $NOTES_BODY
 ]]></description>
