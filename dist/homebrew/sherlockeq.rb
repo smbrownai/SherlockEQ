@@ -36,6 +36,12 @@ cask "sherlockeq" do
 
   app "SherlockEQ.app"
 
+  # Expose the bundled `sherlockeq` command-line tool on PATH. It lives inside
+  # the app (Contents/Helpers/), built + signed + notarized with the bundle by
+  # dist/release.sh; Homebrew just symlinks it into its bin. Non-Homebrew users
+  # get the same result with `sherlockeq install`.
+  binary "#{appdir}/SherlockEQ.app/Contents/Helpers/sherlockeq"
+
   # `brew uninstall --zap sherlockeq` removes these alongside the .app.
   # Keep this in sync with anything the app writes under ~/Library.
   zap trash: [
