@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let autoEQSavedProfiles = AutoEQSavedProfilesStore()
 
     private var mainWindow: NSWindow?
+    private var analogWindow: NSWindow?
     private let mainWindowUndoManager = UndoManager()
     private let globalReferenceHotKey = GlobalHotKey()
     private var cancellables: Set<AnyCancellable> = []
@@ -184,6 +185,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return window
     }
 
+    // MARK: - Analog Control Unit (optional alternate surface)
+
+    /// Open (or focus) the Analog Control Unit — a fixed-size vintage
+    /// front panel that's a pure view over existing gain / balance /
+    /// simple-EQ state. Same activation dance as `showMainWindow` so the
+    /// menu bar attaches correctly when the app was menu-bar-only.
+    func showAnalogControlUnit() {
+        if analogWindow == nil {
+            analogWindow = createAnalogControlWindow()
+        }
+        guard let window = analogWindow else { return }
+
+        if NSApp.activationPolicy() != .regular {
+            NSApp.setActivationPolicy(.regular)
+            RunLoop.current.run(mode: .common, before: Date(timeIntervalSinceNow: 0.01))
+        }
+        NSRunningApplication.current.activate(options: [.activateAllWindows])
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    private func createAnalogControlWindow() -> NSWindow {
+        let root = AnalogControlUnitView()
+            .environmentObject(audioState)
+            .environmentObject(profileStore)
+            .environmentObject(autoEQRemote)
+            .environmentObject(autoEQSavedProfiles)
+        let hosting = NSHostingController(rootView: root)
+
+        // Fixed size — the dense faceplate doesn't reflow cleanly, so no
+        // `.resizable`. `.fullSizeContentView` + hidden title lets the
+        // brushed metal run edge-to-edge behind the traffic lights.
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Analog Control Unit"
+        window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = true
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.setContentSize(NSSize(width: 700, height: 400))
+        window.setFrameAutosaveName("SherlockEQ.AnalogControlUnit")
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        window.center()
+        return window
+    }
+
     // MARK: - Main menu (AppKit)
 
     private func installMainMenu() {
@@ -305,6 +352,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                               keyEquivalent: "0")
         show.target = self
         menu.addItem(show)
+        let analog = NSMenuItem(title: "Analog Control Unit",
+                                action: #selector(showAnalogControlUnitFromMenu(_:)),
+                                keyEquivalent: "")
+        analog.target = self
+        menu.addItem(analog)
         item.submenu = menu
         NSApp.windowsMenu = menu
         return item
@@ -317,6 +369,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func showMainWindowFromMenu(_ sender: Any?) {
         showMainWindow()
     }
+
+    @objc private func showAnalogControlUnitFromMenu(_ sender: Any?) {
+        showAnalogControlUnit()
+    }
 }
 
 // MARK: - NSWindowDelegate
@@ -325,8 +381,16 @@ extension AppDelegate: NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         // Mirror the old SwiftUI `.onDisappear` policy flip. With the
-        // window-close trigger this fires reliably on every close.
-        if audioState.hideFromDockEnabled {
+        // window-close trigger this fires reliably on every close. Only
+        // drop back to accessory when the *last* managed window closes —
+        // otherwise closing the Analog Control Unit while the main window
+        // is open (or vice versa) would wrongly hide the Dock icon.
+        guard audioState.hideFromDockEnabled else { return }
+        let closing = notification.object as? NSWindow
+        let stillOpen = [mainWindow, analogWindow]
+            .compactMap { $0 }
+            .contains { $0 !== closing && $0.isVisible }
+        if !stillOpen {
             NSApp.setActivationPolicy(.accessory)
         }
     }
