@@ -223,9 +223,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .environmentObject(autoEQSavedProfiles)
         let hosting = NSHostingController(rootView: root)
 
-        // Fixed size — the dense faceplate doesn't reflow cleanly, so no
-        // `.resizable`. `.fullSizeContentView` + hidden title lets the
-        // brushed metal run edge-to-edge behind the traffic lights.
+        // Fixed width; height is owned by the spectrum-expanded flag (collapsed
+        // 700×400, expanded 700×600). The user can't free-resize — no
+        // `.resizable`. `.fullSizeContentView` + hidden title lets the brushed
+        // metal run edge-to-edge behind the traffic lights.
         let window = NSWindow(contentViewController: hosting)
         window.title = "Analog Control Unit"
         window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
@@ -233,12 +234,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
         window.appearance = NSAppearance(named: .darkAqua)
-        window.setContentSize(NSSize(width: 700, height: 400))
+        let expanded = UserDefaults.standard.bool(forKey: AnalogSpectrumConfig.expandedKey)
+        let initialHeight = expanded ? AnalogSpectrumConfig.expandedHeight : AnalogSpectrumConfig.collapsedHeight
+        window.setContentSize(NSSize(width: 700, height: initialHeight))
         window.setFrameAutosaveName("SherlockEQ.AnalogControlUnit")
+        // Autosave may restore a stale size; the expanded flag owns the
+        // height. Re-assert width + height, anchored to a fixed top edge.
+        var frame = window.frame
+        let top = frame.maxY
+        frame.size = NSSize(width: 700, height: initialHeight)
+        frame.origin.y = top - initialHeight
+        window.setFrame(frame, display: false)
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.center()
         return window
+    }
+
+    /// Grow / shrink the Analog Control Unit window to reveal or hide the
+    /// spectrum panel. Anchored to a fixed top edge so it grows downward.
+    func setAnalogControlUnitExpanded(_ expanded: Bool) {
+        guard let window = analogWindow else { return }
+        let height = expanded ? AnalogSpectrumConfig.expandedHeight : AnalogSpectrumConfig.collapsedHeight
+        var frame = window.frame
+        let top = frame.maxY
+        frame.size = NSSize(width: 700, height: height)
+        frame.origin.y = top - height
+        window.setFrame(frame, display: true, animate: true)
     }
 
     // MARK: - Help window
