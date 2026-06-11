@@ -3,10 +3,14 @@ import AVFoundation
 import Combine
 import UserNotifications
 
-/// Diagnostic surface that lived in `ContentView` through Sessions 1–5.
-/// Now scoped to the Debug sidebar entry of the main window. Will be trimmed
-/// or removed once the user-facing equivalents (Safe Listening, Profiles
-/// detail, etc.) exist and we no longer need raw counters.
+/// Diagnostic surface for the audio pipeline — counters, levels, live
+/// dynamics telemetry, and stage-isolation toggles. Originally scaffolded
+/// out of `ContentView` in Sessions 1–5, it's now a deliberate, opt-in
+/// support panel: hidden from the sidebar by default and revealed via
+/// Settings → Diagnostics → "Show Debug in sidebar". Kept around because
+/// it's the one place that exposes the raw signal-chain state (per-stage
+/// bypass, render counters, dynamic gain reduction) the user-facing
+/// screens intentionally don't.
 struct DebugView: View {
     @EnvironmentObject private var state: AudioState
     @EnvironmentObject private var profileStore: ProfileStore
@@ -22,11 +26,19 @@ struct DebugView: View {
                 Divider()
                 engineSection
                 Divider()
+                levelsAndDoseSection
+                Divider()
+                dynamicsSection
+                Divider()
                 profilesSection
                 Divider()
                 diagnosticsSection
                 Divider()
                 controlsSection
+                Divider()
+                signalChainSection
+                Divider()
+                notificationsSection
 
                 if let message = errorMessage {
                     Text(message)
@@ -40,15 +52,18 @@ struct DebugView: View {
         .onReceive(counterTimer) { _ in tick &+= 1 }
         .navigationTitle("Debug")
         // The analyzers' aWeightedDBFS / estimateDBA only update while the
-        // FFT pipeline is running. We subscribe here so the Debug readouts
-        // stay live without forcing a canvas tab to be open.
+        // FFT pipeline is running, and the dynamics monitor's poll loop only
+        // runs while something subscribes. We subscribe here so the Debug
+        // readouts stay live without forcing a canvas / Clarity tab open.
         .onAppear {
             state.spectrum.subscribe()
             state.preSpectrum.subscribe()
+            state.dynamicActivity.subscribe()
         }
         .onDisappear {
             state.spectrum.unsubscribe()
             state.preSpectrum.unsubscribe()
+            state.dynamicActivity.unsubscribe()
         }
     }
 
@@ -66,20 +81,44 @@ struct DebugView: View {
         labeled("Output format", value: state.audio.outputFormatDescription)
         labeled("Spectrum tap", value: state.spectrum.isAttached ? "attached" : "—")
         labeled("Pre-EQ tap", value: state.preSpectrum.isAttached ? "attached" : "—")
-        labeled("L render enters", value: "\(state.tap.preIngest.renderBlockEntries)")
-        labeled("Pre-EQ callback fires", value: "\(state.tap.preIngest.callbackInvocations)")
+        labeled("Last error", value: state.audio.lastError ?? "—")
+    }
+
+    @ViewBuilder private var levelsAndDoseSection: some View {
+        Text("Levels & dose").font(.subheadline).foregroundStyle(.secondary)
         labeled("Post-EQ level (dBFS)", value: String(format: "%.1f", state.spectrum.aWeightedDBFS))
         labeled("Pre-EQ level (dBFS)", value: String(format: "%.1f", state.preSpectrum.aWeightedDBFS))
         labeled("Estimated dBA", value: String(format: "%.1f", state.spectrum.estimateDBA))
         labeled("Session dose", value: String(format: "%.1f %%", state.safeListening.sessionDose * 100))
         labeled("Remaining", value: state.safeListening.remainingMinutes.map { String(format: "%.1f min", $0) } ?? "—")
-        labeled("Last error", value: state.audio.lastError ?? "—")
+    }
+
+    @ViewBuilder private var dynamicsSection: some View {
+        Text("Dynamics — live gain (dB, − = cut)").font(.subheadline).foregroundStyle(.secondary)
+        if state.dynamicsEnabled {
+            ForEach(DynamicFeatureKind.allCases) { kind in
+                labeled(kind.displayName, value: String(
+                    format: "L %+.2f    R %+.2f",
+                    state.dynamicActivity.gain(kind, .left),
+                    state.dynamicActivity.gain(kind, .right)
+                ))
+            }
+        } else {
+            labeled("Stage", value: "bypassed")
+        }
     }
 
     @ViewBuilder private var profilesSection: some View {
         Text("Profiles").font(.subheadline).foregroundStyle(.secondary)
         labeled("Loaded count", value: "\(profileStore.profiles.count)")
-        labeled("Active profile", value: state.activeProfile(in: profileStore)?.name ?? "—")
+        labeled("Active profile", value: activeProfile?.name ?? "—")
+        labeled("AutoEQ correction", value: activeProfile?.autoEQName ?? "—")
+        if let bands = activeProfile?.autoEQBands, !bands.isEmpty {
+            labeled("AutoEQ bands", value: "\(bands.count)")
+        }
+        if let preamp = activeProfile?.autoEQPreampDB {
+            labeled("AutoEQ preamp", value: String(format: "%.1f dB", preamp))
+        }
         labeled("Last error", value: profileStore.lastError ?? "—")
         ForEach(profileStore.profiles) { profile in
             HStack {
@@ -100,6 +139,8 @@ struct DebugView: View {
 
     @ViewBuilder private var diagnosticsSection: some View {
         Text("Diagnostics (10 Hz, tick \(tick))").font(.subheadline).foregroundStyle(.secondary)
+        labeled("L render enters", value: "\(state.tap.preIngest.renderBlockEntries)")
+        labeled("Pre-EQ callback fires", value: "\(state.tap.preIngest.callbackInvocations)")
         labeled("Tap frames in", value: "\(state.tap.tapFramesIn.read())")
         labeled("L source frames out", value: "\(state.tap.leftSourceFramesOut.read())")
         labeled("R source frames out", value: "\(state.tap.rightSourceFramesOut.read())")
@@ -129,7 +170,28 @@ struct DebugView: View {
                 state.safeListening.forceForTesting(dose: 1.0)
             }
         }
+    }
 
+    /// Stage-isolation panel: the global Reference bypass, the two test
+    /// signal generators, plus the per-stage bypass mask so you can mute
+    /// any single stage of the chain to see what it contributes.
+    @ViewBuilder private var signalChainSection: some View {
+        Text("Signal chain").font(.subheadline).foregroundStyle(.secondary)
+
+        chainToggle("Reference Mode (bypass all EQ)", \.referenceMode)
+        chainToggle("Test curve — L: +6 dB @ 3 kHz, R: flat", \.testCurveEnabled)
+        chainToggle("Test tone — 440 Hz sine through mainMixer (bypasses tap)", \.testToneEnabled)
+        chainToggle("Calibration tone — 1 kHz reference (bypasses EQ)", \.calibrationToneEnabled)
+
+        Text("Per-stage bypass").font(.caption).foregroundStyle(.secondary).padding(.top, 4)
+        chainToggle("EQ master stage", \.eqMasterEnabled)
+        chainToggle("AutoEQ headphone correction", \.autoEQEnabled)
+        chainToggle("Manual EQ bands", \.manualEQEnabled)
+        chainToggle("Tinnitus notch", \.notchFilterEnabled)
+        chainToggle("Dynamics", \.dynamicsEnabled)
+    }
+
+    @ViewBuilder private var notificationsSection: some View {
         Text("Notifications").font(.subheadline).foregroundStyle(.secondary)
         labeled("Authorization", value: authorizationLabel)
         HStack(spacing: 12) {
@@ -148,24 +210,6 @@ struct DebugView: View {
                 }
             }
         }
-
-        Toggle("Reference Mode (bypass EQ)", isOn: Binding(
-            get: { state.referenceMode },
-            set: { state.referenceMode = $0 }
-        ))
-        .toggleStyle(.switch)
-
-        Toggle("Test curve — L: +6 dB @ 3 kHz, R: flat", isOn: Binding(
-            get: { state.testCurveEnabled },
-            set: { state.testCurveEnabled = $0 }
-        ))
-        .toggleStyle(.switch)
-
-        Toggle("Test tone — 440 Hz sine through mainMixer (bypasses tap)", isOn: Binding(
-            get: { state.testToneEnabled },
-            set: { state.testToneEnabled = $0 }
-        ))
-        .toggleStyle(.switch)
     }
 
     private func labeled(_ label: String, value: String) -> some View {
@@ -173,6 +217,21 @@ struct DebugView: View {
             Text(label).foregroundStyle(.secondary).frame(width: 200, alignment: .leading)
             Text(value).monospaced().lineLimit(1).truncationMode(.middle)
         }
+    }
+
+    /// Switch toggle bound to a writable Bool on `AudioState` (its proxy
+    /// properties forward to EQChainState). Keeps the signal-chain panel
+    /// from repeating the same get/set Binding boilerplate per row.
+    private func chainToggle(_ title: String, _ keyPath: ReferenceWritableKeyPath<AudioState, Bool>) -> some View {
+        Toggle(title, isOn: Binding(
+            get: { state[keyPath: keyPath] },
+            set: { state[keyPath: keyPath] = $0 }
+        ))
+        .toggleStyle(.switch)
+    }
+
+    private var activeProfile: HearingProfile? {
+        state.activeProfile(in: profileStore)
     }
 
     private var tapStateLabel: String {
