@@ -16,52 +16,16 @@ struct PopoverLevelStrip: View {
     /// boundaries land at consistent dBFS positions.
     let calibrationOffsetDBA: Double
 
-    @State private var mode: Mode = .strip
-
-    /// Easter-egg display mode. `.strip` is the default ambient level
-    /// row; `.analog` swaps in a pair of side-by-side analog VU dials.
-    /// Triple-tapping the "Level" label toggles between them. Mode is
-    /// view-state only — never persisted; closing the popover snaps
-    /// back to `.strip` so the next open starts predictable.
-    private enum Mode { case strip, analog }
-
     var body: some View {
         HStack(spacing: 8) {
             Text("Level")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
                 .frame(width: 80, alignment: .leading)
-                // Hit-target only on the label itself — the rest of the
-                // row stays cleanly non-interactive. Triple-tap toggles
-                // between strip ↔ analog. Single/double taps fall
-                // through untouched.
-                .contentShape(Rectangle())
-                .onTapGesture(count: 3) {
-                    mode = (mode == .strip) ? .analog : .strip
-                }
-                .help("Triple-tap for analog VU.")
 
-            switch mode {
-            case .strip:
-                VStack(spacing: 3) {
-                    bar(label: "L", peak: monitor.leftPeak)
-                    bar(label: "R", peak: monitor.rightPeak)
-                }
-            case .analog:
-                // Explicit height: the popover's parent VStack offers
-                // no height constraint, so without this the dials'
-                // `aspectRatio(.fit)` has nothing to fit against and
-                // collapses to the row's minimum. 100 pt leaves room
-                // for a face ~86 pt tall + the channel label, which
-                // at aspect 1.6 lands each dial near 138 pt wide —
-                // two of them fit comfortably in the popover's 380 pt
-                // width alongside the "Level" gutter.
-                AnalogVUMeter(
-                    monitor: monitor,
-                    mode: .stereo,
-                    calibration: .standardDigital()
-                )
-                .frame(height: 100)
+            VStack(spacing: 3) {
+                bar(label: "L", peak: monitor.leftPeak)
+                bar(label: "R", peak: monitor.rightPeak)
             }
         }
         // Subscribe ties the StereoMonitor's 60 Hz display loop on
@@ -69,13 +33,7 @@ struct PopoverLevelStrip: View {
         // the popover closes. Ref-counted so this composes with the
         // sidebar's subscription on the main window.
         .onAppear { monitor.subscribe() }
-        .onDisappear {
-            monitor.unsubscribe()
-            // Revert the easter-egg mode so the next popover open
-            // starts in the default ambient strip view, regardless of
-            // whether SwiftUI kept this view's @State across the close.
-            mode = .strip
-        }
+        .onDisappear { monitor.unsubscribe() }
     }
 
     /// One horizontal bar. Channel label sits to the left so the row
