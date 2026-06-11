@@ -21,6 +21,72 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 0.3.2</title>
+      <pubDate>Thu, 11 Jun 2026 18:54:56 +0000</pubDate>
+      <sparkle:version>00302</sparkle:version>
+      <sparkle:shortVersionString>0.3.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<h2>SherlockEQ 0.3.2</h2>
+
+<p>
+  This release adds a command-line interface. <code>sherlockeq</code> is a
+  power-user and automation surface for the app — check status, switch
+  profiles, toggle Reference Mode, nudge gain, balance, and the simple EQ,
+  list output devices, import or export profiles, and dump diagnostics for a
+  bug report. The running app stays in charge: the CLI just asks it to report
+  or change state, so anything you do on the command line shows up in the
+  window and the menu bar right away.
+</p>
+
+<h3>Added</h3>
+
+<ul>
+  <li>
+    <strong>The <code>sherlockeq</code> command-line tool.</strong>
+    <code>sherlockeq status</code> for a one-glance summary;
+    <code>profiles list / active / activate / import / export</code>;
+    <code>bypass on|off|toggle</code>; <code>gain</code>, <code>balance</code>,
+    and <code>simple-eq</code> get/set; <code>devices list / current</code>;
+    <code>diagnostics</code> for a structured snapshot to attach to a bug
+    report; plus <code>launch</code> and <code>quit</code>. Most commands take
+    <code>--json</code> for scripting, return meaningful exit codes, and fail
+    cleanly with a clear message when the app isn't running. Everything is
+    local — no telemetry, no network.
+  </li>
+  <li>
+    <strong>It installs with the app.</strong>
+    Homebrew (<code>brew install --cask sherlockeq</code>) now puts
+    <code>sherlockeq</code> on your PATH automatically. If you installed the
+    app directly, the tool ships inside the bundle — run
+    <code>"/Applications/SherlockEQ.app/Contents/Helpers/sherlockeq" install</code>
+    once to symlink it onto your PATH.
+  </li>
+</ul>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not diagnose,
+  treat, measure, or monitor any hearing condition, tinnitus, or disability.
+  For concerns about your hearing, consult a doctor, audiologist, or licensed
+  healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.3.1">0.3.1 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v0.3.2/SherlockEQ-0.3.2.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="a8a13eBKcn3RobP/fjFNqFXU6nisH74/dgcqgpP+qZNXaOQ/e0xeXfuwVFAnHvuHMjwcpvlKKMlF8NjjerdpAg==" length="7740548" />
+    </item>
+
+    <item>
       <title>SherlockEQ 0.3.1</title>
       <pubDate>Thu, 11 Jun 2026 16:19:23 +0000</pubDate>
       <sparkle:version>00301</sparkle:version>
