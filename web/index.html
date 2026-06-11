@@ -313,6 +313,17 @@
     }
 
     /* ---- Install ----------------------------------------------------- */
+    .install-lead {
+      max-width: 80ch;
+      margin: calc(-1 * var(--s-5)) 0 var(--s-8);
+      font-size: var(--fs-14);
+      color: var(--fg-2);
+      line-height: var(--lh-ui);
+    }
+    .install-lead strong {
+      color: var(--fg-1);
+      font-weight: var(--w-medium);
+    }
     .install-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -481,7 +492,7 @@
         <div class="eyebrow" style="margin-bottom: var(--s-6);">FREE · OPEN SOURCE · MACOS 14.6+</div>
         <h1>Notice what other equalizers don't expose.</h1>
         <p class="lede">
-          macOS doesn't ship a per-ear parametric EQ. SherlockEQ is one. It taps system audio, splits the chain by ear, and gives you the controls to investigate a tinnitus tone, shape an audiogram into compensation, refine sound to taste, and soften harshness or lift voices only when they need it. <strong>No virtual driver. No kernel extension. No paywall.</strong>
+          macOS doesn't ship a per-ear parametric EQ. Now there's SherlockEQ. It taps system audio, splits the chain by ear, and gives you the controls to investigate a tinnitus tone, shape an audiogram into compensation, refine sound to taste, and soften harshness or lift voices only when they need it. <strong>No virtual driver. No kernel extension. No paywall.</strong>
         </p>
         <div class="cta-row">
           <a class="btn btn-primary" href="#install">
@@ -493,7 +504,7 @@
           </a>
         </div>
         <div class="meta-row">
-          v0.2.0 <span class="dot"></span> Apple Silicon and Intel <span class="dot"></span> 5.7 MB <span class="dot"></span> <a href="LICENSE" style="color:inherit;text-decoration:none;">MIT licensed</a>
+          v0.2.0 <span class="dot"></span> Apple Silicon and Intel <span class="dot"></span> 5.7 MB 
         </div>
       </div>
     </div>
@@ -533,11 +544,6 @@
         <div class="spec-key">PRESETS</div>
         <div class="spec-num">AutoEQ-compatible</div>
         <p>Pulls headphone correction targets on demand from the AutoEQ project — thousands of measured profiles, no bundle to update.</p>
-      </div>
-      <div class="spec">
-        <div class="spec-key">SIZE</div>
-        <div class="spec-num">~6 MB</div>
-        <p>Native Swift, no Electron. Direct download, not Mac App Store — the App Store sandbox prohibits the cross-process audio read that the Tap API needs. The DMG is Apple-signed and notarized.</p>
       </div>
     </div>
   </section>
@@ -608,17 +614,33 @@
         </figure>
 
         <figure class="shot">
-          <img src="assets/shot-eq.png" alt="Equalizer view — a parametric EQ curve overlaid on a live spectrum with selectable Output, Input, EQ, and Audiogram lenses, plus an output-level meter sidebar." loading="lazy" />
+          <img src="assets/shot-eq.png" alt="Equalizer view — a parametric EQ curve over a live spectrum with selectable Output, Input, EQ, Audiogram, Safety, Peaks, and Dynamics lenses, plus an output-level meter sidebar." loading="lazy" />
           <figcaption class="cap">
             <span class="key">03 · REFINE</span>
-            <span class="label">Parametric bands over a live spectrum. Four lenses, one chain.</span>
+            <span class="label">Parametric bands over a live spectrum. Stack the lenses you need.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="shot">
+          <img src="assets/shot-comfort.png" alt="Listening Comfort view — Speech Presence, Harshness Control, and Sibilance Tamer processors, each with Strength and Sensitivity sliders and a live activity meter." loading="lazy" />
+          <figcaption class="cap">
+            <span class="key">04 · COMFORT</span>
+            <span class="label">Ease sibilance, harshness, and shouty mids — only while they spike.</span>
+          </figcaption>
+        </figure>
+
+        <figure class="shot">
+          <img src="assets/shot-safe.png" alt="Safe Listening dashboard — a live SPL meter reading 71 dBA, today's NIOSH dose at 0.1 percent, and settings for ceiling, quiet threshold, and playback calibration." loading="lazy" />
+          <figcaption class="cap">
+            <span class="key">05 · PROTECT</span>
+            <span class="label">Live SPL and NIOSH dose, with a calibration-aware safety ceiling.</span>
           </figcaption>
         </figure>
 
         <figure class="shot">
           <img src="assets/shot-popover.png" alt="Menu-bar popover — today's dose, left/right level meters, master gain and balance sliders, profile picker, compensation slider, tinnitus notch toggle, and a reference-mode bypass." loading="lazy" />
           <figcaption class="cap">
-            <span class="key">04 · MENU BAR</span>
+            <span class="key">06 · MENU BAR</span>
             <span class="label">Live levels, dose, gain, balance, and the notch toggle — without opening the app.</span>
           </figcaption>
         </figure>
@@ -701,6 +723,8 @@
         <div class="nav-spacer"></div>
         <span class="index">FREE · SIGNED · NOTARIZED</span>
       </div>
+
+      <p class="install-lead">Native Swift, no Electron. Direct download, not Mac App Store — the App Store sandbox prohibits the cross-process audio read that the Core Audio Tap API needs. The DMG is Apple-signed and notarized.</p>
 
       <div class="install-grid">
         <div class="install-card">

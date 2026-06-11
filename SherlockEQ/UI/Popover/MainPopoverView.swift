@@ -2,9 +2,10 @@ import SwiftUI
 import AppKit
 
 /// The menu-bar popover. The 5-second surface: pick a profile, scrub the
-/// compensation slider, toggle the tinnitus notch, hit Reference Mode.
-/// Configuration (audiogram entry, parametric EQ, etc.) lives in the main
-/// window — opened by the arrow button in the header.
+/// compensation slider, toggle the tinnitus notch or Listening Comfort,
+/// hit Reference Mode. Configuration (audiogram entry, parametric EQ,
+/// per-processor comfort tuning, etc.) lives in the main window — opened
+/// by the arrow button in the header.
 struct MainPopoverView: View {
     @EnvironmentObject private var audioState: AudioState
     @EnvironmentObject private var profileStore: ProfileStore
@@ -41,6 +42,7 @@ struct MainPopoverView: View {
             ProfilePickerRow()
             CompensationSliderView()
             TinnitusNotchRow()
+            ListeningComfortRow()
             ReferenceButton()
         }
         .padding(14)
