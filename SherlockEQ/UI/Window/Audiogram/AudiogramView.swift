@@ -81,6 +81,7 @@ struct AudiogramView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            HelpContextButton(.audiogramProfiles, label: "audiogram and hearing profiles")
         }
     }
 

@@ -325,6 +325,65 @@ final class AudioState: ObservableObject {
         activeProfileID = match.id
     }
 
+    // MARK: - Analog Control Unit override
+
+    /// While the Analog Control Unit window is open, this transient profile
+    /// drives the audio in place of the store's active profile. The store's
+    /// active profile is never touched, so closing the window restores it
+    /// automatically — and this profile never enters the store, so it never
+    /// appears in the picker.
+    ///
+    /// Deliberately bare — a simple bass/mid/treble tone + balance, nothing
+    /// else: no audiogram, notch, clarity, or AutoEQ ("really old school";
+    /// revisit later). Persisted across opens so the analog tone is remembered.
+    @Published private(set) var analogOverrideProfile: HearingProfile?
+
+    private static let analogProfileKey = "sherlockeq.analogControlUnit.profile"
+
+    /// Enter analog mode: load the persisted bare profile (or a fresh flat
+    /// one) and route the audio through it.
+    func beginAnalogOverride() {
+        analogOverrideProfile = Self.loadAnalogProfile() ?? Self.makeAnalogProfile()
+        applyActiveProfile()
+    }
+
+    /// Leave analog mode: persist the tone and resume the real active profile.
+    func endAnalogOverride() {
+        if let profile = analogOverrideProfile { Self.saveAnalogProfile(profile) }
+        analogOverrideProfile = nil
+        applyActiveProfile()
+    }
+
+    /// Apply a knob edit to the analog profile and re-apply it live. Persists
+    /// on every change so the tone survives across opens.
+    func updateAnalogOverride(_ mutate: (inout HearingProfile) -> Void) {
+        guard var profile = analogOverrideProfile else { return }
+        mutate(&profile)
+        analogOverrideProfile = profile
+        Self.saveAnalogProfile(profile)
+        applyActiveProfile()
+    }
+
+    /// A bare profile: flat audiogram, no notch / clarity / AutoEQ, Simple-EQ
+    /// mode, linked channels. Only the simple shelves + balance ever change.
+    private static func makeAnalogProfile() -> HearingProfile {
+        var profile = HearingProfile.makeDefault(name: "Analog Control Unit", symbol: "dial.medium.fill")
+        profile.eqMode = .simple
+        profile.separateChannels = false
+        return profile
+    }
+
+    private static func saveAnalogProfile(_ profile: HearingProfile) {
+        if let data = try? JSONEncoder().encode(profile) {
+            UserDefaults.standard.set(data, forKey: analogProfileKey)
+        }
+    }
+
+    private static func loadAnalogProfile() -> HearingProfile? {
+        guard let data = UserDefaults.standard.data(forKey: analogProfileKey) else { return nil }
+        return try? JSONDecoder().decode(HearingProfile.self, from: data)
+    }
+
     /// Look up the active profile in the connected store and push it to the
     /// engine. No-op if a store isn't connected yet or the test curve is
     /// currently overriding. When the active profile resolves to nil (the
@@ -338,6 +397,12 @@ final class AudioState: ObservableObject {
     /// without re-reading anything from disk.
     private func applyActiveProfile() {
         guard !testCurveEnabled else { return }
+        // The Analog Control Unit overrides the applied profile while open;
+        // the store's active profile is left untouched and resumes on close.
+        if let override = analogOverrideProfile {
+            audio.applyProfile(applyBypassMask(to: override))
+            return
+        }
         guard let store = connectedStore else { return }
         guard let original = activeProfile(in: store) else {
             audio.flattenChain()

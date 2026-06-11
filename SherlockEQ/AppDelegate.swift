@@ -35,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var mainWindow: NSWindow?
     private var analogWindow: NSWindow?
+    private var helpWindow: NSWindow?
     private let mainWindowUndoManager = UndoManager()
     private let globalReferenceHotKey = GlobalHotKey()
     private var cancellables: Set<AnyCancellable> = []
@@ -61,6 +62,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // `showMainWindow`; flips back on window close if the user has
         // `hideFromDockEnabled` set.
         NSApp.setActivationPolicy(.accessory)
+        // Let `HelpCenter.shared.open(topic:)` (called from menu items and
+        // contextual `?` buttons anywhere in the app) bring the help window
+        // forward without knowing anything about NSWindow. Window lifecycle
+        // stays here; routing stays in HelpCenter.
+        HelpCenter.shared.onShow = { [weak self] in self?.showHelpWindow() }
         bootstrap()
         // SwiftUI's scene system installs its own NSApp.mainMenu *after*
         // applicationDidFinishLaunching returns, wiping anything we set
@@ -192,10 +198,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// simple-EQ state. Same activation dance as `showMainWindow` so the
     /// menu bar attaches correctly when the app was menu-bar-only.
     func showAnalogControlUnit() {
+        // First open (window absent or currently closed) enters analog mode;
+        // re-triggering the menu while it's up just refocuses.
+        let firstOpen = !(analogWindow?.isVisible ?? false)
         if analogWindow == nil {
             analogWindow = createAnalogControlWindow()
         }
         guard let window = analogWindow else { return }
+        if firstOpen { audioState.beginAnalogOverride() }
 
         if NSApp.activationPolicy() != .regular {
             NSApp.setActivationPolicy(.regular)
@@ -231,6 +241,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return window
     }
 
+    // MARK: - Help window
+
+    /// Open (or focus) the SherlockEQ Help window. Idempotent — reuses the
+    /// one window and brings it forward, navigating to whatever article
+    /// `HelpCenter` currently points at. Same `.accessory → .regular`
+    /// activation dance as the other windows so the menu bar attaches when
+    /// the app was menu-bar-only (e.g. help opened from a popover `?` button).
+    func showHelpWindow() {
+        if helpWindow == nil {
+            helpWindow = createHelpWindow()
+        }
+        guard let window = helpWindow else { return }
+
+        if NSApp.activationPolicy() != .regular {
+            NSApp.setActivationPolicy(.regular)
+            RunLoop.current.run(mode: .common, before: Date(timeIntervalSinceNow: 0.01))
+        }
+        NSRunningApplication.current.activate(options: [.activateAllWindows])
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    private func createHelpWindow() -> NSWindow {
+        let root = HelpWindowView()
+            .environmentObject(HelpCenter.shared)
+        let hosting = NSHostingController(rootView: root)
+
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "SherlockEQ Help"
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+        window.toolbarStyle = .unified
+        window.setContentSize(NSSize(width: 1040, height: 680))
+        window.minSize = NSSize(width: 820, height: 560)
+        // Persist size/position so the help window reopens where the user left it.
+        window.setFrameAutosaveName("SherlockEQ.HelpWindow")
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        window.center()
+        return window
+    }
+
+    @objc private func openHelpHome(_ sender: Any?) {
+        HelpCenter.shared.open(topic: .home)
+    }
+
+    @objc private func openHelpTopic(_ sender: NSMenuItem) {
+        guard let slug = sender.representedObject as? String else { return }
+        HelpCenter.shared.open(slug: slug)
+    }
+
     // MARK: - Main menu (AppKit)
 
     private func installMainMenu() {
@@ -240,7 +299,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(makeEditMenuItem())
         mainMenu.addItem(makeAudioMenuItem())
         mainMenu.addItem(makeWindowMenuItem())
+        mainMenu.addItem(makeHelpMenuItem())
         NSApp.mainMenu = mainMenu
+    }
+
+    /// Standard macOS Help menu. The first item opens the help window at
+    /// its home article; the rest jump straight to a topic. Assigning
+    /// `NSApp.helpMenu` gives us the system-provided Spotlight-for-Help
+    /// search field at the top of the menu for free, and positions the
+    /// menu correctly as the trailing menu.
+    private func makeHelpMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Help", action: nil, keyEquivalent: "")
+        let menu = NSMenu(title: "Help")
+
+        // Primary entry — opens (or focuses) the window at the home page.
+        let main = NSMenuItem(title: "SherlockEQ Help",
+                              action: #selector(openHelpHome(_:)),
+                              keyEquivalent: "?")
+        main.target = self
+        menu.addItem(main)
+        menu.addItem(.separator())
+
+        // One item per documented topic, in the spec's order. Each carries
+        // its slug as `representedObject`, so a single action handles them all.
+        let topics: [HelpTopic] = [
+            .gettingStarted, .featureGuide, .understandingEQ,
+            .audiogramProfiles, .tinnitusToneMatching, .headphoneCorrection,
+            .vuMeters, .analogControlUnit, .safetyLimits, .privacy,
+            .troubleshooting, .keyboardShortcuts, .releaseNotes,
+        ]
+        for topic in topics {
+            let title = HelpCenter.shared.library.title(for: topic.slug)
+            let mi = NSMenuItem(title: title,
+                                action: #selector(openHelpTopic(_:)),
+                                keyEquivalent: "")
+            mi.target = self
+            mi.representedObject = topic.slug
+            menu.addItem(mi)
+        }
+
+        item.submenu = menu
+        NSApp.helpMenu = menu
+        return item
     }
 
     private func makeFileMenuItem() -> NSMenuItem {
@@ -380,14 +480,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 extension AppDelegate: NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
+        let closing = notification.object as? NSWindow
+        // Leaving the Analog Control Unit restores the real active profile.
+        if closing === analogWindow {
+            audioState.endAnalogOverride()
+        }
         // Mirror the old SwiftUI `.onDisappear` policy flip. With the
         // window-close trigger this fires reliably on every close. Only
         // drop back to accessory when the *last* managed window closes —
         // otherwise closing the Analog Control Unit while the main window
         // is open (or vice versa) would wrongly hide the Dock icon.
         guard audioState.hideFromDockEnabled else { return }
-        let closing = notification.object as? NSWindow
-        let stillOpen = [mainWindow, analogWindow]
+        let stillOpen = [mainWindow, analogWindow, helpWindow]
             .compactMap { $0 }
             .contains { $0 !== closing && $0.isVisible }
         if !stillOpen {

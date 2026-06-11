@@ -1,27 +1,27 @@
 import SwiftUI
 
-/// The Analog Control Unit — an optional, playful "front panel" for the
-/// five adjustments people understand immediately: Volume, Balance, Bass,
-/// Mid, Treble. It is a pure *view over* SherlockEQ's existing state:
+/// The Analog Control Unit — an optional, playful "front panel" for five
+/// adjustments people understand immediately: Volume, Balance, Bass, Mid,
+/// Treble.
 ///
-///   • Volume  → `audioState.masterGainDB`
-///   • Balance → active profile's `balance`
-///   • Bass / Mid / Treble → the same Simple-EQ shelves `SimpleEQView` edits
-///   • VU meters → the shared `AnalogVUMeter` + `StereoMonitor`
-///   • Output  → read-only indicator of the current system output
-///
-/// No new DSP, no parallel state. Changes here flow through the same
-/// `ProfileStore` / `EngineParameters` paths the rest of the app uses, so
-/// edits made anywhere stay in sync both directions.
+///   • Volume → macOS system output volume (`SystemVolumeController`).
+///   • Balance + Bass/Mid/Treble → a dedicated, hidden "analog" override
+///     profile (`AudioState.analogOverrideProfile`): a bare Simple-EQ tone
+///     with no audiogram / notch / clarity / AutoEQ. Opening the window
+///     routes audio through it; closing restores the real active profile,
+///     which is never touched. The tone persists across opens.
+///   • VU meters → the shared `AnalogVUMeter` + `StereoMonitor`.
+///   • Output → read-only indicator of the current system output.
 struct AnalogControlUnitView: View {
     @EnvironmentObject private var audioState: AudioState
-    @EnvironmentObject private var profileStore: ProfileStore
     /// The one knob that reaches outside SherlockEQ: VOLUME drives the macOS
     /// system output level, not the app's internal gain.
     @StateObject private var systemVolume = SystemVolumeController()
 
-    private var hasProfile: Bool {
-        audioState.activeProfile(in: profileStore) != nil
+    /// The analog override is present while the window is open (set by
+    /// `AppDelegate.showAnalogControlUnit`), so the tone knobs are live.
+    private var hasOverride: Bool {
+        audioState.analogOverrideProfile != nil
     }
 
     var body: some View {
@@ -46,11 +46,17 @@ struct AnalogControlUnitView: View {
                 }
 
                 knobRow
-                footer
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, 22)
             .padding(.top, 24)
             .padding(.bottom, 14)
+        }
+        // Contextual help — the panel maps onto existing controls, so the
+        // `?` explains that mapping (Volume→gain, Bass/Mid/Treble→Simple EQ).
+        .overlay(alignment: .topTrailing) {
+            HelpContextButton(.analogControlUnit, label: "Analog Control Unit")
+                .padding(10)
         }
         .frame(minWidth: 700, idealWidth: 700, minHeight: 400, idealHeight: 400)
         .environment(\.colorScheme, .dark)
@@ -119,7 +125,7 @@ struct AnalogControlUnitView: View {
                 formatter: Self.balanceLabel,
                 accessibilityValue: Self.balanceSpoken
             )
-            .disabled(!hasProfile)
+            .disabled(!hasOverride)
             hairline
             AnalogKnob(
                 title: "BASS",
@@ -127,21 +133,21 @@ struct AnalogControlUnitView: View {
                 range: -12...12, defaultValue: 0, step: 0.5, detentValue: 0,
                 formatter: Self.dbLabel, accessibilityValue: Self.dbSpoken
             )
-            .disabled(!hasProfile)
+            .disabled(!hasOverride)
             AnalogKnob(
                 title: "MID",
                 value: eqBinding(frequencyHz: 1000, bandwidth: 1.8, filterType: .parametric),
                 range: -12...12, defaultValue: 0, step: 0.5, detentValue: 0,
                 formatter: Self.dbLabel, accessibilityValue: Self.dbSpoken
             )
-            .disabled(!hasProfile)
+            .disabled(!hasOverride)
             AnalogKnob(
                 title: "TREBLE",
                 value: eqBinding(frequencyHz: 5000, bandwidth: 0.707, filterType: .highShelf),
                 range: -12...12, defaultValue: 0, step: 0.5, detentValue: 0,
                 formatter: Self.dbLabel, accessibilityValue: Self.dbSpoken
             )
-            .disabled(!hasProfile)
+            .disabled(!hasOverride)
             hairline
             AnalogOutputIndicator(tap: audioState.tap)
         }
@@ -154,13 +160,6 @@ struct AnalogControlUnitView: View {
             .frame(width: 1, height: 68)
             .padding(.horizontal, 8)
             .padding(.top, 12)
-    }
-
-    private var footer: some View {
-        Text("VOLUME controls macOS output level · Balance & tone map to SherlockEQ")
-            .font(.system(size: 10, weight: .regular))
-            .foregroundStyle(AnalogTheme.engraveDim)
-            .frame(maxWidth: .infinity)
     }
 
     // MARK: - Bindings (views over existing state)
@@ -177,32 +176,28 @@ struct AnalogControlUnitView: View {
 
     private var balanceBinding: Binding<Double> {
         Binding(
-            get: { audioState.activeProfile(in: profileStore)?.balance ?? 0 },
+            get: { audioState.analogOverrideProfile?.balance ?? 0 },
             set: { newValue in
-                guard var p = audioState.activeProfile(in: profileStore) else { return }
-                p.balance = newValue
-                try? profileStore.save(p)
+                audioState.updateAnalogOverride { $0.balance = newValue }
             }
         )
     }
 
-    /// Mirrors `SimpleEQView`: edits the shelf/parametric band at the given
-    /// frequency on the active profile, honouring its `separateChannels`
-    /// link the same way the Simple tab does. Reads the left ear as the
-    /// representative value (identical to the linked Simple slider).
+    /// Edits one Simple-EQ shelf/parametric band on the Analog Unit's own
+    /// override profile (never the user's active profile). Mono tone —
+    /// writes both ears in lockstep; reads the left ear as representative.
     private func eqBinding(frequencyHz: Double, bandwidth: Double, filterType: EQFilterType) -> Binding<Double> {
         Binding(
             get: {
-                guard let p = audioState.activeProfile(in: profileStore) else { return 0 }
+                guard let p = audioState.analogOverrideProfile else { return 0 }
                 return EQBandLookup.gain(at: frequencyHz, filterType: filterType, in: p.leftEar.bands)
             },
             set: { newValue in
-                guard var p = audioState.activeProfile(in: profileStore) else { return }
-                let link = !p.separateChannels
-                EQBandLookup.mutateBands(of: &p, ear: .left, linkChannels: link) { bands in
-                    EQBandLookup.setGain(newValue, at: frequencyHz, bandwidth: bandwidth, filterType: filterType, in: &bands)
+                audioState.updateAnalogOverride { p in
+                    EQBandLookup.mutateBothEars(of: &p) { bands in
+                        EQBandLookup.setGain(newValue, at: frequencyHz, bandwidth: bandwidth, filterType: filterType, in: &bands)
+                    }
                 }
-                try? profileStore.save(p)
             }
         )
     }
@@ -262,7 +257,7 @@ struct AnalogOutputIndicator: View {
 
             HStack(spacing: 4) {
                 ForEach(OutputCategory.allCases) { c in
-                    AnalogPushButton(label: c.label, isActive: c == category)
+                    AnalogPushButton(icon: c.icon, isActive: c == category)
                 }
             }
 
@@ -283,51 +278,50 @@ struct AnalogOutputIndicator: View {
 /// current output category reads as engaged (depressed + amber lamp); the
 /// others sit raised. No routing — pressing does nothing.
 private struct AnalogPushButton: View {
-    let label: String
+    let icon: String
     let isActive: Bool
 
+    private let capW: CGFloat = 22
+    private let capH: CGFloat = 34
+
     var body: some View {
-        VStack(spacing: 4) {
-            ZStack {
-                // Socket the button sits in.
-                Circle()
-                    .fill(Color.black.opacity(0.5))
-                    .frame(width: 26, height: 26)
-                    .blur(radius: 1.5)
-                    .offset(y: 1)
+        ZStack {
+            // Socket the pill sits in.
+            RoundedRectangle(cornerRadius: capW / 2 + 2, style: .continuous)
+                .fill(Color.black.opacity(0.5))
+                .frame(width: capW + 4, height: capH + 4)
+                .blur(radius: 1.5)
+                .offset(y: 1)
 
-                Circle()
-                    .fill(isActive ? AnalogTheme.buttonPressed : AnalogTheme.buttonRaised)
-                    .frame(width: 22, height: 22)
-                    .overlay(Circle().strokeBorder(AnalogTheme.rim, lineWidth: 1))
-                    .overlay {
-                        if isActive {
-                            Circle()
-                                .fill(AnalogTheme.amber)
-                                .frame(width: 5, height: 5)
-                                .shadow(color: AnalogTheme.amber.opacity(0.9), radius: 3)
-                        } else {
-                            Ellipse()
-                                .fill(Color.white.opacity(0.4))
-                                .frame(width: 10, height: 4)
-                                .offset(y: -4)
-                                .blur(radius: 1.5)
-                        }
+            // Vertical pill cap. Active = depressed (dark) with a lit amber
+            // glyph; inactive = raised silver with a dark engraved glyph.
+            RoundedRectangle(cornerRadius: capW / 2, style: .continuous)
+                .fill(isActive ? AnalogTheme.buttonPressed : AnalogTheme.buttonRaised)
+                .frame(width: capW, height: capH)
+                .overlay(
+                    RoundedRectangle(cornerRadius: capW / 2, style: .continuous)
+                        .strokeBorder(AnalogTheme.rim, lineWidth: 1)
+                )
+                .overlay(alignment: .top) {
+                    if !isActive {
+                        Ellipse()
+                            .fill(Color.white.opacity(0.4))
+                            .frame(width: capW * 0.55, height: 4)
+                            .padding(.top, 3)
+                            .blur(radius: 1.5)
                     }
-                    .shadow(color: .black.opacity(isActive ? 0.6 : 0.4),
-                            radius: isActive ? 1 : 3,
-                            y: isActive ? 0 : 2)
-            }
-            .frame(width: 26, height: 26)
-
-            Text(label)
-                .font(.system(size: 7, weight: .semibold))
-                .tracking(0.3)
-                .foregroundStyle(isActive ? AnalogTheme.cream : AnalogTheme.engraveDim)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
+                }
+                .overlay {
+                    Image(systemName: icon)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(isActive ? AnalogTheme.amber : Color(white: 0.26))
+                        .shadow(color: isActive ? AnalogTheme.amber.opacity(0.8) : .clear, radius: 2)
+                }
+                .shadow(color: .black.opacity(isActive ? 0.6 : 0.4),
+                        radius: isActive ? 1 : 3,
+                        y: isActive ? 0 : 2)
         }
-        .frame(width: 44)
+        .frame(width: capW + 4, height: capH + 4)
     }
 }
 
@@ -338,6 +332,18 @@ enum OutputCategory: CaseIterable, Identifiable {
     case builtIn, external, headphones, bluetooth, other
 
     var id: Self { self }
+
+    /// SF Symbol shown on the push button. The label is too small to read,
+    /// so the icon carries the category; `spoken` covers VoiceOver.
+    var icon: String {
+        switch self {
+        case .builtIn:    return "laptopcomputer"
+        case .external:   return "hifispeaker.fill"
+        case .headphones: return "headphones"
+        case .bluetooth:  return "wave.3.right"
+        case .other:      return "questionmark"
+        }
+    }
 
     var label: String {
         switch self {

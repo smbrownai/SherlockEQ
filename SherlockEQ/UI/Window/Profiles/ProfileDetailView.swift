@@ -214,7 +214,7 @@ struct ProfileDetailView: View {
     }
 
     @ViewBuilder private func autoEQSection(_ profile: HearingProfile) -> some View {
-        sectionHeader("Headphone correction")
+        sectionHeader("Headphone correction", help: .headphoneCorrection)
         sectionBox {
             VStack(alignment: .leading, spacing: 14) {
                 appliedAutoEQRow(profile)
@@ -608,10 +608,15 @@ struct ProfileDetailView: View {
 
     // MARK: - Building blocks
 
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.headline)
-            .foregroundStyle(.primary)
+    private func sectionHeader(_ title: String, help: HelpTopic? = nil) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(.primary)
+            if let help {
+                HelpContextButton(help, label: title.lowercased())
+            }
+        }
     }
 
     @ViewBuilder
