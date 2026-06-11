@@ -148,6 +148,8 @@ struct ToneFinderView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+            Spacer()
+            HelpContextButton(.tinnitusToneMatching, label: "tinnitus tone matching")
         }
     }
 

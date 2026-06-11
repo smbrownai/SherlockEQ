@@ -25,6 +25,11 @@ struct SafeListeningView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Safe Listening")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                HelpContextButton(.safetyLimits, label: "safety, limits, and listening responsibility")
+            }
+        }
         // Safety: if the user navigates away while the calibration tone is
         // playing, kill it so they don't return to find a 1 kHz tone still
         // looping. Toggling the same flag is cheap if it's already off.

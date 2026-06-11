@@ -67,13 +67,17 @@ struct MonitorSidebar: View {
 
     @ViewBuilder private var vuPanel: some View {
         VStack(spacing: 8) {
-            Text(displayMode.label)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .onTapGesture(count: 3) { displayMode = displayMode.next }
-                .help("Triple-tap to cycle display modes.")
+            HStack(spacing: 4) {
+                Text(displayMode.label)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 3) { displayMode = displayMode.next }
+                    .help("Triple-tap to cycle display modes.")
+                Spacer()
+                HelpContextButton(.vuMeters, label: "VU meters and visualization")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             switch displayMode {
             case .digital:
