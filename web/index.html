@@ -357,6 +357,14 @@
     .install-card .btn {
       margin-top: var(--s-6);
     }
+    .install-notes-link {
+      display: inline-block;
+      margin-top: var(--s-4);
+      font-size: var(--fs-13);
+      color: var(--fg-3);
+      text-decoration: none;
+    }
+    .install-notes-link:hover { color: var(--fg-1); text-decoration: underline; text-underline-offset: 3px; }
 
     /* ---- Requirements ------------------------------------------------- */
     .req-grid {
@@ -476,6 +484,7 @@
         <a href="#what">What it does</a>
         <a href="#screenshots">See it</a>
         <a href="compare.html">Compare</a>
+        <a href="release-notes.html">Release notes</a>
         <a href="#install">Install</a>
         <a href="https://github.com/smbrownai/SherlockEQ">Source <i data-lucide="arrow-up-right" style="width:12px;height:12px"></i></a>
       </nav>
@@ -504,7 +513,7 @@
           </a>
         </div>
         <div class="meta-row">
-          v0.3.0 <span class="dot"></span> Apple Silicon and Intel <span class="dot"></span> 5.7 MB 
+          v0.3.1 <span class="dot"></span> Apple Silicon and Intel <span class="dot"></span> 5.7 MB 
         </div>
       </div>
     </div>
@@ -730,12 +739,13 @@
         <div class="install-card">
           <h3><i data-lucide="arrow-down-to-line" style="width:14px;height:14px;color:var(--fg-2)"></i> Direct download</h3>
           <p>Signed and notarized .dmg from GitHub Releases. Drag SherlockEQ into Applications and launch.</p>
-          <pre><code>SherlockEQ-0.3.0.dmg
+          <pre><code>SherlockEQ-0.3.1.dmg
 5.7 MB</code></pre>
           <a class="btn btn-primary" href="https://github.com/smbrownai/SherlockEQ/releases/latest">
             Download .dmg
             <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i>
           </a>
+          <a class="install-notes-link" href="release-notes.html">What's new in this version →</a>
         </div>
 
         <div class="install-card">

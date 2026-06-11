@@ -211,58 +211,6 @@ struct AnalogPillCap: View {
     }
 }
 
-/// Toggles the bars between all-green and the colourful per-region palette.
-/// Same pill size as the output selector; the cap shows the current mode
-/// (green vs a rainbow) with a "COLOR" label underneath.
-struct AnalogColorPill: View {
-    @Binding var colorful: Bool
-
-    private static let rainbow = LinearGradient(
-        colors: [
-            Color(red: 0.30, green: 0.55, blue: 0.92),
-            Color(red: 0.25, green: 0.85, blue: 0.50),
-            Color(red: 0.60, green: 0.90, blue: 0.30),
-            Color(red: 1.00, green: 0.78, blue: 0.25),
-        ],
-        startPoint: .bottom, endPoint: .top
-    )
-
-    var body: some View {
-        Button {
-            colorful.toggle()
-        } label: {
-            VStack(spacing: 4) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: AnalogPillCap.capW / 2 + 2, style: .continuous)
-                        .fill(Color.black.opacity(0.5))
-                        .frame(width: AnalogPillCap.capW + 4, height: AnalogPillCap.capH + 4)
-                        .blur(radius: 1.5)
-                        .offset(y: 1)
-                    RoundedRectangle(cornerRadius: AnalogPillCap.capW / 2, style: .continuous)
-                        .fill(colorful ? AnyShapeStyle(Self.rainbow)
-                                       : AnyShapeStyle(Color(red: 0.22, green: 0.92, blue: 0.38)))
-                        .frame(width: AnalogPillCap.capW, height: AnalogPillCap.capH)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AnalogPillCap.capW / 2, style: .continuous)
-                                .strokeBorder(AnalogTheme.rim, lineWidth: 1)
-                        )
-                        .shadow(color: .black.opacity(0.4), radius: 3, y: 2)
-                }
-                .frame(width: AnalogPillCap.capW + 4, height: AnalogPillCap.capH + 4)
-
-                Text("COLOR")
-                    .font(.system(size: 7, weight: .semibold))
-                    .tracking(0.4)
-                    .foregroundStyle(AnalogTheme.engraveDim)
-            }
-        }
-        .buttonStyle(.plain)
-        .help(colorful ? "Colourful bars — tap for green" : "Green bars — tap for colourful")
-        .accessibilityLabel("Bar colour")
-        .accessibilityValue(colorful ? "colourful" : "green")
-    }
-}
-
 /// A latching pill push button with its label underneath — same pill size as
 /// the output selector. Lit (amber lamp, depressed) when on.
 struct AnalogToggleButton: View {

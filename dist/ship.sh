@@ -12,8 +12,8 @@
 #
 # Phases
 #   PREP    (no release/<version> branch on origin)
-#     write notes → bump versions → commit → push branch → open PR → exit.
-#     Re-run after merging the PR.
+#     write notes → sync in-app Help notes → regen web changelog → bump
+#     versions → commit → push branch → open PR → exit. Re-run after merge.
 #
 #   PUBLISH (release/<version> branch exists on origin, PR is merged)
 #     dist/release.sh → dist/appcast-publish.sh → tag → GitHub release →
@@ -92,6 +92,7 @@ cd "$REPO_ROOT"
 BRANCH="release/$VERSION"
 TAG="v$VERSION"
 NOTES_FILE="$REPO_ROOT/dist/release-notes/$VERSION.md"
+HELP_NOTES_DOC="$REPO_ROOT/SherlockEQ/Documentation/release-notes.md"
 PBXPROJ="$REPO_ROOT/SherlockEQ.xcodeproj/project.pbxproj"
 WEB_INDEX="$REPO_ROOT/web/index.html"
 DMG="$REPO_ROOT/dist/build/SherlockEQ-$VERSION.dmg"
@@ -326,7 +327,36 @@ PY
   fi
   ok "release notes saved to $NOTES_FILE"
 
-  # ---- step 2: version bumps (idempotent) -----------------------------------
+  # ---- step 2: sync in-app Help release notes (idempotent) ------------------
+  #
+  # The HTML notes above ship via Sparkle/GitHub; the in-app Help article
+  # (bundled into the app) is Markdown and used to be hand-updated, so it
+  # drifted. Convert + insert here in PREP so the updated article rides along
+  # in the release commit/PR and is present at build time in PUBLISH.
+  # Non-fatal: a hiccup converting the in-app changelog shouldn't block a
+  # release — the maintainer can fix the article by hand and re-run.
+
+  step "Help release notes"
+
+  if python3 "$REPO_ROOT/dist/help-release-notes.py" \
+       "$VERSION" "$NOTES_FILE" "$HELP_NOTES_DOC"; then
+    ok "in-app Help release notes synced ($HELP_NOTES_DOC)"
+  else
+    warn "could not sync in-app Help release notes — update $HELP_NOTES_DOC by hand"
+    confirm "continue the release without the in-app changelog update?"
+  fi
+
+  # Regenerate the website changelog page (web/release-notes.html) from all
+  # dist/release-notes/*.md. Lands in the release commit/PR here; the PUBLISH
+  # web-sync step mirrors it to snxt.ai. Non-fatal, same as above.
+  if python3 "$REPO_ROOT/dist/web-release-notes.py"; then
+    ok "website release-notes page regenerated (web/release-notes.html)"
+  else
+    warn "could not regenerate web/release-notes.html — check it by hand"
+    confirm "continue the release without the website changelog update?"
+  fi
+
+  # ---- step 3: version bumps (idempotent) -----------------------------------
 
   step "Version bumps"
 
@@ -355,7 +385,7 @@ PY
     info "edit web/index.html by hand if it has stale version strings"
   fi
 
-  # ---- step 3: confirm working tree -----------------------------------------
+  # ---- step 4: confirm working tree -----------------------------------------
 
   step "Working tree to be committed"
 
@@ -368,7 +398,7 @@ PY
   warn "the above files will all go into the '$VERSION' commit"
   confirm "include them?"
 
-  # ---- step 4: branch + commit + push + PR ----------------------------------
+  # ---- step 5: branch + commit + push + PR ----------------------------------
 
   step "Branch, commit, push, PR"
 

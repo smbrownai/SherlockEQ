@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SherlockEQ — release notes</title>
+  <meta name="description" content="Full release notes for SherlockEQ, the per-ear audio equalizer for macOS. Every version, newest first — what was added, changed, and fixed." />
+
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="stylesheet" href="colors_and_type.css" />
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+
+  <style>
+    :root {
+      --container: 880px;
+      --gutter: 32px;
+    }
+
+    body { margin: 0; }
+
+    .container {
+      max-width: var(--container);
+      margin: 0 auto;
+      padding-left: var(--gutter);
+      padding-right: var(--gutter);
+    }
+
+    /* ---- Nav ---------------------------------------------------------- */
+    header.nav { padding-top: var(--s-9); }
+    .nav-inner { display: flex; align-items: center; gap: var(--s-7); }
+    .nav-mark {
+      display: inline-flex; align-items: center; gap: var(--s-4);
+      text-decoration: none; color: var(--fg-1);
+    }
+    .nav-mark img { width: 22px; height: 22px; border-radius: var(--r-sm); }
+    .nav-mark .name {
+      font-family: var(--font-mono);
+      font-size: var(--fs-14);
+      font-weight: var(--w-medium);
+      letter-spacing: -0.01em;
+    }
+    .nav-spacer { flex: 1; }
+    .nav-links { display: flex; gap: var(--s-7); font-size: var(--fs-14); }
+    .nav-links a { color: var(--fg-2); text-decoration: none; }
+    .nav-links a[aria-current="page"] { color: var(--fg-1); }
+    .nav-links a:hover { color: var(--fg-1); text-decoration: underline; text-underline-offset: 3px; }
+
+    /* ---- Hero --------------------------------------------------------- */
+    section.hero { padding-top: var(--s-12); padding-bottom: var(--s-9); }
+    .hero h1 {
+      font-size: var(--fs-36);
+      font-weight: var(--w-bold);
+      line-height: 1.1;
+      letter-spacing: -0.015em;
+      margin: var(--s-5) 0 var(--s-6);
+      text-wrap: balance;
+    }
+    .hero p.lede {
+      font-size: var(--fs-18);
+      color: var(--fg-2);
+      line-height: var(--lh-body);
+      max-width: 60ch;
+      margin: 0;
+    }
+
+    /* ---- Release notes list ------------------------------------------ */
+    section.notes-list { padding-top: var(--s-9); padding-bottom: var(--s-11); }
+
+    .rn-item {
+      padding-top: var(--s-9);
+      border-top: 1px solid var(--line);
+    }
+    .rn-item:first-child { border-top: 0; padding-top: 0; }
+
+    .rn-head {
+      display: flex;
+      align-items: baseline;
+      gap: var(--s-6);
+      margin-bottom: var(--s-7);
+    }
+    .rn-head h2 {
+      font-size: var(--fs-28);
+      font-weight: var(--w-bold);
+      letter-spacing: var(--ls-tight);
+      margin: 0;
+      color: var(--fg-1);
+    }
+    .rn-tag {
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+      text-decoration: none;
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .rn-tag:hover { color: var(--fg-1); text-decoration: underline; text-underline-offset: 3px; }
+
+    /* The release fragment is raw HTML (h3 / p / ul / li). Style it here. */
+    .rn-body { color: var(--fg-2); }
+    .rn-body > p {
+      font-size: var(--fs-16);
+      line-height: var(--lh-body);
+      color: var(--fg-2);
+      max-width: 68ch;
+      margin: 0 0 var(--s-6);
+    }
+    .rn-body h3 {
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      font-weight: var(--w-medium);
+      color: var(--fg-3);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+      margin: var(--s-7) 0 var(--s-4);
+    }
+    .rn-body ul {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 var(--s-6);
+    }
+    .rn-body li {
+      position: relative;
+      padding-left: var(--s-6);
+      margin-bottom: var(--s-4);
+      font-size: var(--fs-14);
+      line-height: var(--lh-body);
+      color: var(--fg-2);
+      max-width: 72ch;
+    }
+    .rn-body li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.65em;
+      width: 4px; height: 4px;
+      border-radius: 999px;
+      background: var(--fg-4);
+    }
+    .rn-body strong { color: var(--fg-1); font-weight: var(--w-medium); }
+    .rn-body em { color: var(--fg-1); font-style: normal; font-weight: var(--w-medium); }
+    .rn-body a { color: var(--fg-1); text-underline-offset: 2px; }
+    .rn-body code {
+      font-family: var(--font-mono);
+      font-size: 0.92em;
+      background: var(--bg-2);
+      border: 1px solid var(--line-soft);
+      border-radius: var(--r-sm);
+      padding: 0.05em 0.35em;
+    }
+    .rn-body pre {
+      background: var(--bg-2);
+      border: 1px solid var(--line-soft);
+      border-radius: var(--r-md);
+      padding: var(--s-5);
+      overflow-x: auto;
+      font-size: var(--fs-13);
+      margin: 0 0 var(--s-6);
+    }
+    .rn-body pre code { background: none; border: 0; padding: 0; }
+
+    /* ---- Footer ------------------------------------------------------- */
+    footer.site-footer {
+      border-top: 1px solid var(--line);
+      margin-top: var(--s-12);
+      padding: var(--s-8) 0;
+    }
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      gap: var(--s-7);
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+    }
+    .footer-inner a { color: var(--fg-3); text-decoration: none; }
+    .footer-inner a:hover { color: var(--fg-1); text-decoration: underline; text-underline-offset: 3px; }
+    .footer-spacer { flex: 1; }
+
+    /* ---- Responsive --------------------------------------------------- */
+    @media (max-width: 720px) {
+      .hero h1 { font-size: var(--fs-28); }
+      .rn-head { flex-direction: column; gap: var(--s-3); }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="nav-mark" href="index.html">
+        <img src="assets/sherlockeq-mark.png" alt="" />
+        <span class="name">SherlockEQ</span>
+      </a>
+      <div class="nav-spacer"></div>
+      <nav class="nav-links">
+        <a href="index.html#what">What it does</a>
+        <a href="index.html#screenshots">See it</a>
+        <a href="compare.html">Compare</a>
+        <a href="release-notes.html" aria-current="page">Release notes</a>
+        <a href="index.html#install">Install</a>
+        <a href="https://github.com/smbrownai/SherlockEQ">Source <i data-lucide="arrow-up-right" style="width:12px;height:12px"></i></a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- =================================================================
+       Hero
+       ================================================================= -->
+  <section class="hero">
+    <div class="container">
+      <div class="eyebrow">CHANGELOG · EVERY VERSION</div>
+      <h1>Release notes.</h1>
+      <p class="lede">
+        Every release of SherlockEQ, newest first — what was added, changed, and fixed. The in-app updater shows the same notes when a new version is available; install or update via <a href="index.html#install">Install</a>.
+      </p>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       Notes — the list below is regenerated by dist/web-release-notes.py
+       from dist/release-notes/*.md. Do not hand-edit between the markers.
+       ================================================================= -->
+  <section class="notes-list">
+    <div class="container">
+      <!-- RELEASE NOTES START (generated by dist/web-release-notes.py) -->
+        <article class="rn-item" id="v0.3.1">
+          <div class="rn-head">
+            <h2>0.3.1</h2>
+            <a class="rn-tag" href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.3.1">v0.3.1 on GitHub <i data-lucide="arrow-up-right" style="width:12px;height:12px"></i></a>
+          </div>
+          <div class="rn-body">
+            <p>
+              A focused follow-up to 0.3.0. The Analog Control Unit's OUTPUT row now
+              actually switches your Mac's audio output instead of just labelling it, its
+              COLOR control matches the panel's other switches, and you can quit SherlockEQ
+              straight from the menu-bar popover.
+            </p>
+
+            <h3>Added</h3>
+
+            <ul>
+              <li>
+                <strong>Switch audio output from the Analog Control Unit.</strong>
+                The OUTPUT buttons now scan for your Mac's available output devices and let
+                you switch between them — built-in speakers, headphones, an external DAC —
+                right from the panel. It sets the system output (the same selection as the
+                menu-bar sound control), and SherlockEQ follows the new device
+                automatically. The lit button is the current output.
+              </li>
+              <li>
+                <strong>Quit from the menu bar.</strong>
+                A <em>Quit&nbsp;SherlockEQ</em> option now sits at the bottom of the
+                menu-bar popover, so you can quit without opening the main window or hunting
+                through the app menu.
+              </li>
+            </ul>
+
+            <h3>Changed</h3>
+
+            <ul>
+              <li>
+                <strong>The spectrum analyzer's COLOR control is now a normal switch.</strong>
+                It no longer paints the palette onto the switch itself — off is green, on is
+                the colourful palette, matching the PEAK switch beside it.
+              </li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="rn-item" id="v0.3.0">
+          <div class="rn-head">
+            <h2>0.3.0</h2>
+            <a class="rn-tag" href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.3.0">v0.3.0 on GitHub <i data-lucide="arrow-up-right" style="width:12px;height:12px"></i></a>
+          </div>
+          <div class="rn-body">
+            <p>
+              A big optional addition plus a round of polish. The headline is the
+              <strong>Analog Control Unit</strong> — a vintage hi-fi front panel you can
+              leave open on the desktop for the five adjustments people understand
+              immediately: volume, balance, bass, mid, and treble. There's also a new
+              in-app Help system, a quick Listening Comfort toggle in the menu bar, and a
+              more readable accent colour in light mode.
+            </p>
+
+            <h3>Added</h3>
+
+            <ul>
+              <li>
+                <strong>Analog Control Unit.</strong>
+                Open it from <em>Window&nbsp;→&nbsp;Analog Control Unit</em>: warm stereo
+                VU meters, a system-volume knob, balance, and a simple bass&nbsp;/&nbsp;mid
+                &nbsp;/&nbsp;treble tone on a dark brushed-metal faceplate. It runs on its
+                own isolated profile, so casual knob-twiddling never touches your
+                carefully tuned EQ. The VOLUME knob drives the macOS output level
+                directly; balance and tone map to SherlockEQ's simple EQ.
+              </li>
+              <li>
+                <strong>Built-in spectrum analyzer.</strong>
+                Click the chevron at the bottom of the Analog Control Unit to slide out a
+                classic rack spectrum analyzer — 31 third-octave bars with a frequency
+                label under each. Switch between a green and a colourful palette, dim the
+                display, dial in sensitivity, and flip between full bars and a moving peak
+                tick.
+              </li>
+              <li>
+                <strong>In-app Help.</strong>
+                A proper Help menu and contextual <em>?</em> buttons throughout the app
+                open a searchable help window covering every feature — what it does, how
+                to use it, and the safety boundaries.
+              </li>
+              <li>
+                <strong>Listening Comfort toggle in the menu bar.</strong>
+                Turn the comfort processors on or off from the menu-bar popover without
+                opening the full window — right next to the Tinnitus Notch toggle.
+              </li>
+            </ul>
+
+            <h3>Changed</h3>
+
+            <ul>
+              <li>
+                <strong>Accent colour reads better in light mode.</strong>
+                The gold accent is now appearance-aware — a deeper gold on light
+                backgrounds so sliders, toggles, and the active sidebar item meet contrast
+                guidelines, with the brighter gold kept for dark mode.
+              </li>
+              <li>
+                <strong>Equalizer moved to the top of the sidebar.</strong>
+                Audio Processing now lists Equalizer first, then Audiogram, Tinnitus
+                Notch, Listening Comfort, and Safe Listening.
+              </li>
+              <li>
+                <strong>Expert EQ shows the spectrum only.</strong>
+                The Spectrum&nbsp;/&nbsp;Bars switch is hidden for now; the Expert canvas
+                always shows the live spectrum behind your curve. Bars will return.
+              </li>
+            </ul>
+
+            <h3>Fixed</h3>
+
+            <ul>
+              <li>
+                <strong>The updater shows real release notes again.</strong>
+                "Check for Updates" now renders these formatted notes in the update window
+                instead of loading the GitHub release web page.
+              </li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="rn-item" id="v0.2.0">
+          <div class="rn-head">
+            <h2>0.2.0</h2>
+            <a class="rn-tag" href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.2.0">v0.2.0 on GitHub <i data-lucide="arrow-up-right" style="width:12px;height:12px"></i></a>
+          </div>
+          <div class="rn-body">
+            <p>
+              The first feature release since 0.1: <strong>Listening Comfort</strong> —
+              level-dependent processing that shapes sound only while it needs it,
+              instead of permanently re-tuning the curve. Soften a harsh "sss," ease
+              shouty midrange, or lift dialogue over a score — each engages when the
+              triggering sound is present and relaxes when it's gone. Per ear, zero
+              added latency, and the peak limiter stays the ceiling over any boost.
+            </p>
+
+            <h3>Added</h3>
+
+            <ul>
+              <li>
+                <strong>Listening Comfort panel.</strong>
+                A new sidebar section with three named, preconfigured processors —
+                <em>Speech Presence</em>, <em>Harshness Control</em>, and
+                <em>Sibilance Tamer</em>. Each is just an on/off, a Strength slider,
+                and a Sensitivity slider, with a live activity meter showing how much
+                it's working in the moment. Independent per ear, with the same
+                Separate&nbsp;L/R switch the rest of the app uses.
+              </li>
+              <li>
+                <strong>Adaptive, level-independent triggering.</strong>
+                Each processor measures its target band against a slow rolling
+                average of that band, so it behaves the same on a quiet podcast and a
+                loud movie — no SPL calibration required. Sensitivity sets how far
+                above that average it reacts; Strength sets how much it does.
+              </li>
+              <li>
+                <strong>Dynamics overlay on the Expert canvas.</strong>
+                A new <em>Dynamics</em> layer chip draws each active processor's
+                response live, moving under your static EQ curve, so you can watch
+                the comfort tools engage against the spectrum in real time.
+              </li>
+            </ul>
+
+            <h3>Changed</h3>
+
+            <ul>
+              <li>
+                <strong>Reference Mode and the chain bypass now cover the comfort
+                tools.</strong>
+                Reference Mode (⌘B / the title-bar toggle) drops the Listening
+                Comfort stage along with the rest of the chain, so your A/B is still
+                a true comparison against the unprocessed source. A dedicated
+                per-stage toggle lets you turn the comfort tools off while keeping
+                your EQ, headphone correction, and notch active.
+              </li>
+            </ul>
+
+            <h3>Fixed</h3>
+
+            <ul>
+              <li>
+                <strong>Menu-bar popover lingered behind the main window.</strong>
+                Opening the full app from the popover now closes the popover instead
+                of leaving it floating in front of the window.
+              </li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="rn-item" id="v0.1.4">
+          <div class="rn-head">
+            <h2>0.1.4</h2>
+            <a class="rn-tag" href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.1.4">v0.1.4 on GitHub <i data-lucide="arrow-up-right" style="width:12px;height:12px"></i></a>
+          </div>
+          <div class="rn-body">
+            <p>
+              A look-and-feel release. A new app icon, a Liquid Glass pass over the
+              whole window on macOS&nbsp;Tahoe, and Reference Mode promoted to the
+              title bar so you can A/B against the source from anywhere — not just
+              the Equalizer. Under the hood, the audio engine now shrugs off the
+              transient device hiccups that could leave it silent after a wake or a
+              route change.
+            </p>
+
+            <h3>Added</h3>
+
+            <ul>
+              <li>
+                <strong>New app icon.</strong>
+                A dimensional gold magnifying glass over a frequency spectrum —
+                sharper at every size from the Dock down to the menu bar.
+              </li>
+              <li>
+                <strong>Reference Mode in the title bar.</strong>
+                The Bypass toggle moved out of the Equalizer and into the window
+                toolbar, so you can drop to the unprocessed source from any
+                screen. It's renamed <em>Reference Mode</em> to match the popover
+                and ⌘B — one control, three places, same wording. Goes red when
+                active so you always know you're hearing raw audio.
+              </li>
+            </ul>
+
+            <h3>Changed</h3>
+
+            <ul>
+              <li>
+                <strong>Liquid Glass chrome (macOS&nbsp;Tahoe).</strong>
+                On macOS&nbsp;26 the toolbar controls now render as separate Liquid
+                Glass clusters, the notice banner and layer chips pick up the glass
+                material, and detail content softly fades as it scrolls under the
+                toolbar. Sonoma and Sequoia keep their existing look.
+              </li>
+              <li>
+                <strong>Steadier sidebars.</strong>
+                Both the navigation sidebar and the monitor gutter are now pinned to
+                a fixed 240&nbsp;pt and stay put — no width drift between launches,
+                and the primary navigation no longer collapses out from under you.
+              </li>
+            </ul>
+
+            <h3>Fixed</h3>
+
+            <ul>
+              <li>
+                <strong>Silent engine after sleep or a route change.</strong>
+                When the audio device reports a transient "try again" error — common
+                while a sample-rate or output-route change is still settling, or
+                right after waking from sleep — SherlockEQ now retries the engine
+                start automatically instead of surfacing an error and going quiet.
+              </li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="rn-item" id="v0.1.3">
+          <div class="rn-head">
+            <h2>0.1.3</h2>
+            <a class="rn-tag" href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.1.3">v0.1.3 on GitHub <i data-lucide="arrow-up-right" style="width:12px;height:12px"></i></a>
+          </div>
+          <div class="rn-body">
+            <!--
+              Release notes for SherlockEQ 0.1.3.
+
+              Authored as HTML so Sparkle's update dialog renders the formatting;
+              GitHub renders inline HTML in release notes the same way.
+            -->
+
+            <h2>SherlockEQ 0.1.3</h2>
+
+            <p>
+              A pass over every Equalizer tab — the input (pre-EQ) and post-EQ
+              spectra now ride together behind the curve so you can see what
+              your correction is actually doing to your music in real time.
+              Advanced gets the layer chip strip and tap-to-type gain chips
+              that used to be Expert-only, and a dedicated Bypass button
+              finally lives on the Equalizer surface itself.
+            </p>
+
+            <h3>Added</h3>
+
+            <ul>
+              <li>
+                <strong>Live input + post-EQ spectrum overlay.</strong>
+                The dry input and the post-EQ output spectra are now both
+                rendered behind the EQ curve on every Equalizer tab — Simple,
+                Speech, Advanced, and Expert. The input layer used to be
+                Expert-only (and off by default); it's now on by default
+                everywhere. The overlay also takes up more of the canvas
+                (50&nbsp;%&nbsp;→&nbsp;70&nbsp;% vertical) so it reads as a real
+                background fill rather than a thin ribbon at the bottom.
+              </li>
+              <li>
+                <strong>Bypass button on the Equalizer.</strong>
+                A pill toggle now sits at the top of every Equalizer tab — flip
+                it to A/B between your tuning and the raw source without leaving
+                the screen. Goes red + "Bypassed" when active so you can't lose
+                track of which state you're in. Drives the same Reference Mode
+                that ⌘B and the popover already used; nothing new to learn.
+              </li>
+              <li>
+                <strong>Layer chip strip on Advanced.</strong>
+                Advanced now exposes the same Input&nbsp;/&nbsp;Output&nbsp;/&nbsp;EQ
+                curve&nbsp;/&nbsp;Audiogram target&nbsp;/&nbsp;Safety overlay&nbsp;/&nbsp;Peak
+                callouts chips that Expert has had. Your chip preferences are
+                shared across the two modes — what you toggle in one shows up
+                the same way in the other.
+              </li>
+              <li>
+                <strong>Tap-to-type gain chips on Advanced.</strong>
+                Each of Advanced's ten octave bands now shows its current gain
+                in a small editable chip above the slider. Tap it, type a
+                value ("+2.5", "−3", "0", a trailing "dB" is fine), press
+                Return — or just click anywhere outside the chip and it
+                commits. Esc cancels. Keyboard nudges (±0.5&nbsp;dB) work for
+                VoiceOver users too.
+              </li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="rn-item" id="v0.1.2">
+          <div class="rn-head">
+            <h2>0.1.2</h2>
+            <a class="rn-tag" href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.1.2">v0.1.2 on GitHub <i data-lucide="arrow-up-right" style="width:12px;height:12px"></i></a>
+          </div>
+          <div class="rn-body">
+            <!--
+              Release notes for SherlockEQ 0.1.2.
+
+              Authored as HTML so Sparkle's update dialog renders the formatting;
+              GitHub renders inline HTML in release notes the same way.
+            -->
+
+            <h2>SherlockEQ 0.1.2</h2>
+
+            <p>
+              Moves the system-audio permission into Apple's narrower "System Audio
+              Recording" bucket on macOS 15+, makes audio-engine failures actually
+              tell you what went wrong, and bumps the minimum window size so the
+              Equalizer and Tinnitus Notch screens fit without scrolling.
+            </p>
+
+            <h3>Changed</h3>
+
+            <ul>
+              <li>
+                <strong>Permission moved to "System Audio Recording".</strong>
+                Previously SherlockEQ asked for "Screen &amp; System Audio Recording"
+                — the same broad permission used by screen-recording apps like Loom
+                and Microsoft Teams. macOS 15 Sequoia introduced a narrower,
+                audio-only TCC bucket called "System Audio Recording" — where
+                Audio Hijack and Audio Routing Kit live — and SherlockEQ now uses
+                that instead. On macOS 14, it appears under Screen Recording in
+                Settings (Apple hadn't split the UI yet); on macOS 15+, it has its
+                own row.
+              </li>
+              <li>
+                <strong>Minimum window size bumped (1400×740 → 1400×860).</strong>
+                The Equalizer and Tinnitus Notch screens now fit without scrolling
+                at the smallest allowed size.
+              </li>
+            </ul>
+
+            <h3>Fixed</h3>
+
+            <ul>
+              <li>
+                <strong>"Graph not attached" replaced with the real reason.</strong>
+                When the audio engine failed to start, the banner used to say
+                "Audio engine: Graph not attached" — a generic message that masked
+                the actual problem (a format build failure, an unexpected
+                sample-rate mismatch). The engine now surfaces the specific cause
+                so the notice is actionable.
+              </li>
+            </ul>
+
+            <h3>If you installed 0.1.0 or 0.1.1</h3>
+
+            <p>
+              On first launch after upgrading, macOS will prompt for the new
+              "System Audio Recording" permission. Grant it, then quit and
+              relaunch SherlockEQ — TCC permissions don't take effect for a
+              running process until the next launch.
+            </p>
+
+            <p>
+              Your previous grant under "Screen &amp; System Audio Recording" is
+              orphaned but harmless. If you want to clean it up: System Settings
+              → Privacy &amp; Security → Screen &amp; System Audio Recording →
+              select SherlockEQ → click the minus button. Optional.
+            </p>
+          </div>
+        </article>
+
+        <article class="rn-item" id="v0.1.1">
+          <div class="rn-head">
+            <h2>0.1.1</h2>
+            <a class="rn-tag" href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.1.1">v0.1.1 on GitHub <i data-lucide="arrow-up-right" style="width:12px;height:12px"></i></a>
+          </div>
+          <div class="rn-body">
+            <!--
+              Release notes for SherlockEQ 0.1.1.
+
+              Authored as HTML so Sparkle's update dialog renders the formatting;
+              GitHub renders inline HTML in release notes the same way.
+            -->
+
+            <h2>SherlockEQ 0.1.1</h2>
+
+            <p>
+              Bug-fix release. Two surfaces in 0.1.0 shipped without Info.plist keys
+              they needed; both are fixed here. No feature changes.
+            </p>
+
+            <h3>Fixed</h3>
+
+            <ul>
+              <li>
+                <strong>Check for Updates now works.</strong> The 0.1.0 bundle was
+                missing <code>SUFeedURL</code> and <code>SUPublicEDKey</code>, so
+                Sparkle surfaced an "Update Error" dialog and refused to check.
+                Both keys are present in 0.1.1; signature verification is wired
+                against this app's EdDSA public key.
+              </li>
+              <li>
+                <strong>Screen Recording permission prompt is now properly
+                explained.</strong> macOS requires a usage description
+                (<code>NSScreenCaptureUsageDescription</code>) for any app that
+                captures system audio through Core Audio Taps. 0.1.0 was missing
+                it, which made the prompt either silent or empty depending on
+                macOS version, and the app could not get past the gate even after
+                enabling the permission in System Settings. The usage description
+                is present in 0.1.1 and macOS now prompts with a clear explanation.
+              </li>
+            </ul>
+
+            <h3>Changed</h3>
+
+            <ul>
+              <li>
+                The build number (<code>CFBundleVersion</code>) is now derived from
+                the marketing version by the release pipeline, so the bundle and
+                the Sparkle appcast stay in sync across future bumps without manual
+                intervention.
+              </li>
+            </ul>
+
+            <h3>If you installed 0.1.0</h3>
+
+            <p>
+              After upgrading, clear the stale TCC entries so macOS re-prompts
+              with the new usage descriptions:
+            </p>
+
+            <pre><code>tccutil reset ScreenCapture com.shawnbrown.SherlockEQ
+            tccutil reset Microphone    com.shawnbrown.SherlockEQ</code></pre>
+
+            <p>
+              Then quit SherlockEQ from the menu bar and relaunch. macOS shows the
+              Screen Recording prompt with the usage string. Approve it, then quit
+              and relaunch one more time — Screen Recording does not take effect
+              for a running process until the next launch.
+            </p>
+
+            <h3>0.1.0 changelog</h3>
+
+            <p>
+              For the full feature list shipped at 0.1.0, see the
+              <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.1.0">0.1.0 release notes</a>.
+            </p>
+          </div>
+        </article>
+
+        <article class="rn-item" id="v0.1.0">
+          <div class="rn-head">
+            <h2>0.1.0</h2>
+            <a class="rn-tag" href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.1.0">v0.1.0 on GitHub <i data-lucide="arrow-up-right" style="width:12px;height:12px"></i></a>
+          </div>
+          <div class="rn-body">
+            <!--
+              Release notes for SherlockEQ 0.1.0.
+
+              Authored as HTML so Sparkle's update dialog renders the formatting.
+              GitHub also accepts inline HTML in release notes via `gh release create
+              --notes-file`, so a single source covers both surfaces.
+            -->
+
+            <h2>SherlockEQ 0.1.0</h2>
+
+            <p>
+              First public release. SherlockEQ is a per-ear audio equalizer for macOS,
+              useful for anyone who wants better control over how their Mac sounds —
+              not only listeners with hearing differences or tinnitus. It taps system
+              audio through Apple's native Core Audio Tap API. No virtual driver, no
+              kernel extension, no audio-routing setup. Use the master gain by itself,
+              or layer in audiogram-shaped curves, tinnitus notch filtering, AutoEQ
+              headphone correction, and dose tracking — as few or as many features as
+              you want.
+            </p>
+
+            <h3>What's in 0.1</h3>
+
+            <p><strong>Equalization</strong></p>
+            <ul>
+              <li>Independent left and right EQ chains, implemented as Direct Form II
+                Transposed biquad cascades. No AVAudioUnitEQ on the user-signal path —
+                real per-channel separation, not coupled stereo processing.</li>
+              <li>Four EQ modes per profile: Simple (bass / mid / treble shelves), Speech
+                (six speech-frequency bands with presets), Advanced (ten octave-spaced
+                parametric bands), and Expert (any band, any frequency, any filter type —
+                keyboard-driven).</li>
+              <li>AutoEQ headphone correction upstream of the profile EQ. Imports the
+                standard ParametricEQ.txt format.</li>
+              <li>Master output gain with a dedicated post-limiter stage (-60 dB to +24 dB)
+                and per-profile stereo balance.</li>
+            </ul>
+
+            <p><strong>Tinnitus</strong></p>
+            <ul>
+              <li>Continuous-phase sine sweep across 20 Hz to 20 kHz, fine-tunable to
+                one hertz.</li>
+              <li>Per-ear notch filtering. Set the tone for the left ear, the right ear,
+                or both.</li>
+            </ul>
+
+            <p><strong>Audiogram</strong></p>
+            <ul>
+              <li>Per-ear threshold entry on a log-frequency chart.</li>
+              <li>Translated into an EQ curve in real time with severity bars and a
+                live preview.</li>
+            </ul>
+
+            <p><strong>Safety</strong></p>
+            <ul>
+              <li>NIOSH dose tracking with a remaining-time readout smoothed over short
+                transients (60-second EMA in the power domain).</li>
+              <li>Per-frequency safety overlay on the spectrum, calibration-aware.</li>
+              <li>Menu-bar dose tint and notifications at warning and danger thresholds.</li>
+              <li>Apple AUPeakLimiter on the output bus.</li>
+            </ul>
+
+            <p><strong>Workflow</strong></p>
+            <ul>
+              <li>Menu-bar popover with master gain, balance, profile picker, level
+                meters, and a reference-mode bypass.</li>
+              <li>Main window with profile management, audiogram entry, four EQ surfaces,
+                tinnitus tone finder, safe listening dashboard, and a persistent
+                right-side monitor sidebar.</li>
+              <li>Profile import and export. Undo and redo with per-band coalescing.</li>
+              <li>Built-in profiles cannot be edited; duplicate to customize.</li>
+              <li>Device auto-switch when a profile is linked to an output.</li>
+            </ul>
+
+            <p><strong>Accessibility</strong></p>
+            <ul>
+              <li>VoiceOver and keyboard control across every custom canvas and drag
+                surface, including audiogram entry, EQ band sliders, and the tinnitus
+                sweep.</li>
+              <li>Color-blind redundant encoding on safety zones (icon plus position,
+                not just color).</li>
+              <li>Reduced-motion guards on transitions. Dynamic Type respected on
+                labels.</li>
+            </ul>
+
+            <h3>What's not in 0.1</h3>
+
+            <ul>
+              <li><strong>Onboarding wizard.</strong> First launch goes straight to the
+                main UI; you will be prompted for Microphone and Screen &amp; System
+                Audio Recording permissions cold. The second prompt is non-obvious —
+                macOS requires it for any system-audio capture. SherlockEQ does not
+                record video or screen contents.</li>
+              <li><strong>Localization beyond English.</strong> The String Catalog
+                infrastructure is in place; translations are not yet wired.</li>
+              <li><strong>Spectrogram visualization.</strong> Code is present but
+                disabled pending a performance and UX revision.</li>
+            </ul>
+
+            <h3>Requirements</h3>
+
+            <ul>
+              <li>macOS 14.6 or later</li>
+              <li>Apple Silicon or Intel (universal binary)</li>
+              <li>Microphone permission and Screen &amp; System Audio Recording permission</li>
+            </ul>
+
+            <h3>Acknowledgments</h3>
+
+            <p>
+              NIOSH dose math. Audio EQ Cookbook (Robert Bristow-Johnson) for biquad
+              coefficients. AutoEQ project, oratory1990, and Crinacle for headphone
+              correction profiles.
+            </p>
+          </div>
+        </article>
+        <!-- RELEASE NOTES END -->
+    </div>
+  </section>
+
+  <!-- =================================================================
+       Footer
+       ================================================================= -->
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <span>SherlockEQ · snxt.ai</span>
+      <div class="footer-spacer"></div>
+      <span>Not a medical device.</span>
+      <span>·</span>
+      <a href="https://github.com/smbrownai/SherlockEQ">Source</a>
+      <span>·</span>
+      <a href="mailto:dev@snxt.ai">dev@snxt.ai</a>
+    </div>
+  </footer>
+
+  <script>
+    if (window.lucide) window.lucide.createIcons();
+    else window.addEventListener('load', () => window.lucide && window.lucide.createIcons());
+  </script>
+</body>
+</html>

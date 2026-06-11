@@ -17,6 +17,10 @@ struct AnalogControlUnitView: View {
     /// The one knob that reaches outside SherlockEQ: VOLUME drives the macOS
     /// system output level, not the app's internal gain.
     @StateObject private var systemVolume = SystemVolumeController()
+    /// OUTPUT selector — enumerates output devices and switches the macOS
+    /// default output (the tap follows it). Like VOLUME, this reaches outside
+    /// SherlockEQ: it reroutes all system audio, not just the app.
+    @StateObject private var systemOutput = SystemOutputDeviceController()
 
     // Spectrum-analyzer panel state (persisted, view-only display settings).
     @AppStorage(AnalogSpectrumConfig.expandedKey) private var spectrumExpanded = false
@@ -79,10 +83,12 @@ struct AnalogControlUnitView: View {
         .onAppear {
             audioState.stereoMonitor.subscribe()
             systemVolume.start()
+            systemOutput.start()
         }
         .onDisappear {
             audioState.stereoMonitor.unsubscribe()
             systemVolume.stop()
+            systemOutput.stop()
         }
     }
 
@@ -148,7 +154,11 @@ struct AnalogControlUnitView: View {
                 )
             }
             HStack(spacing: 14) {
-                AnalogColorPill(colorful: $spectrumColorful)
+                AnalogToggleButton(
+                    isOn: $spectrumColorful,
+                    label: "COLOR",
+                    accessibilityName: "Colourful bars"
+                )
                 AnalogToggleButton(
                     isOn: $spectrumPeakOnly,
                     label: "PEAK",
@@ -244,7 +254,7 @@ struct AnalogControlUnitView: View {
             )
             .disabled(!hasOverride)
             hairline
-            AnalogOutputIndicator(tap: audioState.tap)
+            AnalogOutputSelector(controller: systemOutput)
         }
         .frame(maxWidth: .infinity)
     }
@@ -330,18 +340,22 @@ struct AnalogControlUnitView: View {
     }
 }
 
-// MARK: - Output indicator (read-only)
+// MARK: - Output selector (switches the system default output)
 
-/// Read-only "OUTPUT" strip: lamps the simplified category of the current
-/// system output and shows the actual device name. SherlockEQ has no
-/// device-selection API yet (the tap follows the system default output),
-/// so this is intentionally an indicator, not a router — no unstable
-/// routing is introduced just to satisfy the visual.
-struct AnalogOutputIndicator: View {
-    @ObservedObject var tap: CATapEngine
+/// "OUTPUT" strip: one push button per available output device. The lit
+/// (depressed, amber-lamped) button is the current system default; pressing
+/// another makes *it* the system default — SherlockEQ's tap follows the
+/// default output and rebuilds onto it. The actual device name shows below.
+///
+/// This reroutes all system audio, exactly like the menu-bar Sound control:
+/// SherlockEQ taps whatever the default output is, so switching the default
+/// is the only honest way to change speakers from the panel.
+struct AnalogOutputSelector: View {
+    @ObservedObject var controller: SystemOutputDeviceController
 
-    private var deviceName: String { tap.currentOutputDeviceName }
-    private var category: OutputCategory { OutputCategory(deviceName: deviceName) }
+    private var activeName: String {
+        controller.devices.first(where: { $0.id == controller.currentDeviceID })?.name ?? "—"
+    }
 
     var body: some View {
         VStack(spacing: 5) {
@@ -351,53 +365,64 @@ struct AnalogOutputIndicator: View {
                 .foregroundStyle(AnalogTheme.engrave)
 
             HStack(spacing: 14) {
-                ForEach(OutputCategory.allCases) { c in
-                    AnalogPushButton(icon: c.icon, isActive: c == category)
+                ForEach(controller.devices) { device in
+                    AnalogOutputButton(
+                        device: device,
+                        isActive: device.id == controller.currentDeviceID,
+                        action: { controller.select(device) }
+                    )
                 }
             }
 
-            Text(deviceName)
+            Text(activeName)
                 .font(.system(size: 8, weight: .regular, design: .monospaced))
                 .foregroundStyle(AnalogTheme.engraveDim)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .frame(maxWidth: 200)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("Output"))
-        .accessibilityValue(Text("\(category.spoken), \(deviceName)"))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text("Output device"))
     }
 }
 
-/// A vintage metal push button for the output selector: a vertical pill with
-/// the category icon *underneath* it. The current category reads as engaged
-/// (depressed pill + lit amber lamp, amber icon); the others sit raised with a
-/// dim icon. Read-only — pressing does nothing.
-private struct AnalogPushButton: View {
-    let icon: String
+/// A vintage metal push button for one output device: a vertical pill with the
+/// device's category icon *underneath* it. The active (default) device reads
+/// as engaged — depressed pill + lit amber lamp, amber icon; the others sit
+/// raised with a dim icon. Pressing makes this device the system default.
+private struct AnalogOutputButton: View {
+    let device: CATapEngine.OutputDevice
     let isActive: Bool
+    let action: () -> Void
+
+    private var icon: String { OutputCategory(deviceName: device.name).icon }
 
     var body: some View {
-        VStack(spacing: 4) {
-            AnalogPillCap(isActive: isActive)
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(isActive ? AnalogTheme.amber : AnalogTheme.engraveDim)
-                .shadow(color: isActive ? AnalogTheme.amber.opacity(0.7) : .clear, radius: 2)
+        Button(action: action) {
+            VStack(spacing: 4) {
+                AnalogPillCap(isActive: isActive)
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(isActive ? AnalogTheme.amber : AnalogTheme.engraveDim)
+                    .shadow(color: isActive ? AnalogTheme.amber.opacity(0.7) : .clear, radius: 2)
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .help(isActive ? "\(device.name) (current output)" : "Switch output to \(device.name)")
+        .accessibilityLabel(Text(device.name))
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 }
 
-/// Coarse category for the current output, derived from the device name
-/// (SherlockEQ exposes only the name). The real device name is shown
+/// Coarse category for an output device, derived from its name — picks the SF
+/// Symbol shown under each OUTPUT button. The real device name is shown
 /// verbatim alongside, so this never hides which device is selected.
-enum OutputCategory: CaseIterable, Identifiable {
+enum OutputCategory {
     case builtIn, external, headphones, bluetooth, other
 
-    var id: Self { self }
-
-    /// SF Symbol shown on the push button. The label is too small to read,
-    /// so the icon carries the category; `spoken` covers VoiceOver.
+    /// SF Symbol shown on the push button. The device name (below the row)
+    /// carries the precise identity; this icon just hints at the kind.
     var icon: String {
         switch self {
         case .builtIn:    return "laptopcomputer"
@@ -405,26 +430,6 @@ enum OutputCategory: CaseIterable, Identifiable {
         case .headphones: return "headphones"
         case .bluetooth:  return "wave.3.right"
         case .other:      return "questionmark"
-        }
-    }
-
-    var label: String {
-        switch self {
-        case .builtIn:    return "BUILT-IN"
-        case .external:   return "EXTERNAL"
-        case .headphones: return "HEADPHONES"
-        case .bluetooth:  return "BLUETOOTH"
-        case .other:      return "OTHER"
-        }
-    }
-
-    var spoken: String {
-        switch self {
-        case .builtIn:    return "Built-in speakers"
-        case .external:   return "External speakers"
-        case .headphones: return "Headphones"
-        case .bluetooth:  return "Bluetooth"
-        case .other:      return "Other output"
         }
     }
 
