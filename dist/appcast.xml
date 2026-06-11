@@ -21,6 +21,73 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 0.3.1</title>
+      <pubDate>Thu, 11 Jun 2026 16:19:23 +0000</pubDate>
+      <sparkle:version>00301</sparkle:version>
+      <sparkle:shortVersionString>0.3.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<h2>SherlockEQ 0.3.1</h2>
+
+<p>
+  A focused follow-up to 0.3.0. The Analog Control Unit's OUTPUT row now
+  actually switches your Mac's audio output instead of just labelling it, its
+  COLOR control matches the panel's other switches, and you can quit SherlockEQ
+  straight from the menu-bar popover.
+</p>
+
+<h3>Added</h3>
+
+<ul>
+  <li>
+    <strong>Switch audio output from the Analog Control Unit.</strong>
+    The OUTPUT buttons now scan for your Mac's available output devices and let
+    you switch between them — built-in speakers, headphones, an external DAC —
+    right from the panel. It sets the system output (the same selection as the
+    menu-bar sound control), and SherlockEQ follows the new device
+    automatically. The lit button is the current output.
+  </li>
+  <li>
+    <strong>Quit from the menu bar.</strong>
+    A <em>Quit&nbsp;SherlockEQ</em> option now sits at the bottom of the
+    menu-bar popover, so you can quit without opening the main window or hunting
+    through the app menu.
+  </li>
+</ul>
+
+<h3>Changed</h3>
+
+<ul>
+  <li>
+    <strong>The spectrum analyzer's COLOR control is now a normal switch.</strong>
+    It no longer paints the palette onto the switch itself — off is green, on is
+    the colourful palette, matching the PEAK switch beside it.
+  </li>
+</ul>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not diagnose,
+  treat, measure, or monitor any hearing condition, tinnitus, or disability.
+  For concerns about your hearing, consult a doctor, audiologist, or licensed
+  healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.3.0">0.3.0 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v0.3.1/SherlockEQ-0.3.1.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="YT1J6xipX1nKFDtl8wmbA0SQ2V1faDPPq7Ee3DJ5GyDFQ2WlQ+L41bFVIUCfkmKt5vjudne8TSCflpTn6PW+DA==" length="6469223" />
+    </item>
+
+    <item>
       <title>SherlockEQ 0.3.0</title>
       <pubDate>Thu, 11 Jun 2026 11:30:05 +0000</pubDate>
       <sparkle:version>00300</sparkle:version>
