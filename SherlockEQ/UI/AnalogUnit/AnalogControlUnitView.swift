@@ -18,6 +18,13 @@ struct AnalogControlUnitView: View {
     /// system output level, not the app's internal gain.
     @StateObject private var systemVolume = SystemVolumeController()
 
+    // Spectrum-analyzer panel state (persisted, view-only display settings).
+    @AppStorage(AnalogSpectrumConfig.expandedKey) private var spectrumExpanded = false
+    @AppStorage("sherlockeq.analogControlUnit.spectrumColorful") private var spectrumColorful = true
+    @AppStorage("sherlockeq.analogControlUnit.spectrumDimmer") private var spectrumDimmer = 0.85
+    @AppStorage("sherlockeq.analogControlUnit.spectrumSensitivity") private var spectrumSensitivity = 0.0
+    @AppStorage("sherlockeq.analogControlUnit.spectrumPeakOnly") private var spectrumPeakOnly = false
+
     /// The analog override is present while the window is open (set by
     /// `AppDelegate.showAnalogControlUnit`), so the tone knobs are live.
     private var hasOverride: Bool {
@@ -29,23 +36,26 @@ struct AnalogControlUnitView: View {
             AnalogFaceplate()
             VStack(spacing: 12) {
                 header
-                HStack(alignment: .center, spacing: 16) {
+                HStack(alignment: .center, spacing: 12) {
                     AnalogVUMeter(
                         monitor: audioState.stereoMonitor,
                         mode: .stereo,
                         calibration: .standardDigital(),
-                        showReadout: true
+                        showReadout: false
                     )
-                    .frame(height: 138)
                     .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    .frame(height: 152)
+                    .padding(8)
                     .recessed()
 
                     volumeColumn
                 }
 
                 knobRow
+                if spectrumExpanded {
+                    spectrumPanel
+                        .transition(.opacity)
+                }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 22)
@@ -58,7 +68,13 @@ struct AnalogControlUnitView: View {
             HelpContextButton(.analogControlUnit, label: "Analog Control Unit")
                 .padding(10)
         }
-        .frame(minWidth: 700, idealWidth: 700, minHeight: 400, idealHeight: 400)
+        .overlay(alignment: .bottomTrailing) {
+            disclosureButton
+                .padding(.horizontal, 14)
+                .padding(.bottom, 8)
+        }
+        .frame(minWidth: 700, idealWidth: 700,
+               minHeight: AnalogSpectrumConfig.collapsedHeight, maxHeight: .infinity)
         .environment(\.colorScheme, .dark)
         .onAppear {
             audioState.stereoMonitor.subscribe()
@@ -82,7 +98,7 @@ struct AnalogControlUnitView: View {
                 step: 0.02,
                 formatter: Self.percentLabel,
                 accessibilityValue: Self.percentSpoken,
-                size: 96,
+                size: 116,
                 resettable: false
             )
             .disabled(!systemVolume.isAvailable)
@@ -91,7 +107,86 @@ struct AnalogControlUnitView: View {
                 .tracking(2)
                 .foregroundStyle(AnalogTheme.engraveDim)
         }
-        .frame(width: 118)
+        .frame(width: 150)
+    }
+
+    // MARK: Spectrum analyzer (expandable)
+
+    private var spectrumPanel: some View {
+        HStack(alignment: .center, spacing: 12) {
+            AnalogSpectrumBars(
+                spectrum: audioState.spectrum,
+                colorful: spectrumColorful,
+                dimmer: spectrumDimmer,
+                sensitivityDB: spectrumSensitivity,
+                peakOnly: spectrumPeakOnly
+            )
+            .frame(maxWidth: .infinity)
+            .frame(height: 152)
+            .padding(8)
+            .recessed()
+
+            spectrumControls
+        }
+        .frame(height: 176)
+    }
+
+    private var spectrumControls: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 4) {
+                AnalogKnob(
+                    title: "DIMMER", value: $spectrumDimmer,
+                    range: 0.2...1.0, defaultValue: 0.85, step: 0.05,
+                    formatter: Self.percentLabel, accessibilityValue: Self.percentSpoken,
+                    size: 46
+                )
+                AnalogKnob(
+                    title: "SENS", value: $spectrumSensitivity,
+                    range: -12...24, defaultValue: 0, step: 1, detentValue: 0,
+                    formatter: Self.dbLabel, accessibilityValue: Self.dbSpoken,
+                    size: 46
+                )
+            }
+            HStack(spacing: 14) {
+                AnalogColorPill(colorful: $spectrumColorful)
+                AnalogToggleButton(
+                    isOn: $spectrumPeakOnly,
+                    label: "PEAK",
+                    accessibilityName: "Peak-tick mode"
+                )
+            }
+        }
+        .frame(width: 150)
+    }
+
+    private var disclosureButton: some View {
+        Button { toggleExpanded() } label: {
+            Image(systemName: spectrumExpanded ? "chevron.up" : "chevron.down")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AnalogTheme.engraveDim)
+                .padding(6)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(spectrumExpanded ? "Hide spectrum analyzer" : "Show spectrum analyzer")
+        .accessibilityLabel("Spectrum analyzer")
+        .accessibilityValue(spectrumExpanded ? "shown" : "hidden")
+    }
+
+    private func toggleExpanded() {
+        if spectrumExpanded {
+            // Collapse: fade the spectrum out first, then slide the window up
+            // to close the gap it leaves.
+            withAnimation(.easeInOut(duration: 0.18)) { spectrumExpanded = false }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                AppDelegate.shared?.setAnalogControlUnitExpanded(false)
+            }
+        } else {
+            // Expand: add the panel, then grow the window to reveal it as it
+            // slides into view (open already felt smooth — keep it snappy).
+            spectrumExpanded = true
+            AppDelegate.shared?.setAnalogControlUnitExpanded(true)
+        }
     }
 
     // MARK: Header
@@ -255,7 +350,7 @@ struct AnalogOutputIndicator: View {
                 .tracking(1.6)
                 .foregroundStyle(AnalogTheme.engrave)
 
-            HStack(spacing: 4) {
+            HStack(spacing: 14) {
                 ForEach(OutputCategory.allCases) { c in
                     AnalogPushButton(icon: c.icon, isActive: c == category)
                 }
@@ -274,54 +369,22 @@ struct AnalogOutputIndicator: View {
     }
 }
 
-/// A vintage round metal push button. Read-only here: the button for the
-/// current output category reads as engaged (depressed + amber lamp); the
-/// others sit raised. No routing — pressing does nothing.
+/// A vintage metal push button for the output selector: a vertical pill with
+/// the category icon *underneath* it. The current category reads as engaged
+/// (depressed pill + lit amber lamp, amber icon); the others sit raised with a
+/// dim icon. Read-only — pressing does nothing.
 private struct AnalogPushButton: View {
     let icon: String
     let isActive: Bool
 
-    private let capW: CGFloat = 22
-    private let capH: CGFloat = 34
-
     var body: some View {
-        ZStack {
-            // Socket the pill sits in.
-            RoundedRectangle(cornerRadius: capW / 2 + 2, style: .continuous)
-                .fill(Color.black.opacity(0.5))
-                .frame(width: capW + 4, height: capH + 4)
-                .blur(radius: 1.5)
-                .offset(y: 1)
-
-            // Vertical pill cap. Active = depressed (dark) with a lit amber
-            // glyph; inactive = raised silver with a dark engraved glyph.
-            RoundedRectangle(cornerRadius: capW / 2, style: .continuous)
-                .fill(isActive ? AnalogTheme.buttonPressed : AnalogTheme.buttonRaised)
-                .frame(width: capW, height: capH)
-                .overlay(
-                    RoundedRectangle(cornerRadius: capW / 2, style: .continuous)
-                        .strokeBorder(AnalogTheme.rim, lineWidth: 1)
-                )
-                .overlay(alignment: .top) {
-                    if !isActive {
-                        Ellipse()
-                            .fill(Color.white.opacity(0.4))
-                            .frame(width: capW * 0.55, height: 4)
-                            .padding(.top, 3)
-                            .blur(radius: 1.5)
-                    }
-                }
-                .overlay {
-                    Image(systemName: icon)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(isActive ? AnalogTheme.amber : Color(white: 0.26))
-                        .shadow(color: isActive ? AnalogTheme.amber.opacity(0.8) : .clear, radius: 2)
-                }
-                .shadow(color: .black.opacity(isActive ? 0.6 : 0.4),
-                        radius: isActive ? 1 : 3,
-                        y: isActive ? 0 : 2)
+        VStack(spacing: 4) {
+            AnalogPillCap(isActive: isActive)
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(isActive ? AnalogTheme.amber : AnalogTheme.engraveDim)
+                .shadow(color: isActive ? AnalogTheme.amber.opacity(0.7) : .clear, radius: 2)
         }
-        .frame(width: capW + 4, height: capH + 4)
     }
 }
 

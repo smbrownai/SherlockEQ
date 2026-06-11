@@ -46,7 +46,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
     /// "Manage Profiles" button at the bottom of the sidebar, not from
     /// this list, to avoid the redundant top + bottom entry.
     static var audioProcessorSections: [SidebarSection] {
-        [.audiogram, .equalizer, .toneFinder, .clarity, .safeListening]
+        [.equalizer, .audiogram, .toneFinder, .clarity, .safeListening]
     }
 
     /// App-level sections — settings and diagnostics. Grouped under

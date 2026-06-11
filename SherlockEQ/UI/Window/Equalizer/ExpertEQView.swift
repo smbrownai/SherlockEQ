@@ -285,7 +285,10 @@ struct ExpertEQView: View {
     // MARK: - Sections
 
     private var vizMode: CanvasVizMode {
-        get { Self.resolveVizMode(vizModeRaw) }
+        // Spectrum is the only view for now — the Spectrum/Bars toggle below
+        // is commented out. Restore the resolved line to bring the toggle back.
+        get { .spectrum }
+        // get { Self.resolveVizMode(vizModeRaw) }
     }
 
     private var vizModeBinding: Binding<CanvasVizMode> {
@@ -323,14 +326,19 @@ struct ExpertEQView: View {
                 .frame(maxWidth: 240)
             }
 
-            Picker("", selection: vizModeBinding) {
-                ForEach(CanvasVizMode.userVisibleCases) { mode in
-                    Text(mode.label).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 160)
-            .help("Pick the visualisation behind the EQ curve")
+            // Spectrum / Bars toggle — temporarily disabled so Spectrum is the
+            // only view. Underlying code (CanvasVizMode, drawOctaveBars, the
+            // bindings) is left intact; un-comment this and restore the
+            // resolved `vizMode` getter above to bring Bars back.
+            //
+            // Picker("", selection: vizModeBinding) {
+            //     ForEach(CanvasVizMode.userVisibleCases) { mode in
+            //         Text(mode.label).tag(mode)
+            //     }
+            // }
+            // .pickerStyle(.segmented)
+            // .frame(maxWidth: 160)
+            // .help("Pick the visualisation behind the EQ curve")
 
             Spacer()
 
