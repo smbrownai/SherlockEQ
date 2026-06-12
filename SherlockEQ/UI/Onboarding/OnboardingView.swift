@@ -1,9 +1,10 @@
 import SwiftUI
 import UserNotifications
 
-/// First-launch onboarding wizard (spec §8.4). A lean three-step flow:
+/// First-launch onboarding wizard (spec §8.4). A lean four-step flow:
 ///
-///   1. Welcome — what SherlockEQ does + the mandatory upstream-EQ note.
+///   1. Welcome — a full-bleed hero video + what SherlockEQ does + the
+///      mandatory upstream-EQ note.
 ///   2. Permissions — primes the non-obvious **System Audio Recording**
 ///      TCC prompt (and the optional notifications prompt) with a plain-
 ///      language explanation *before* macOS asks. Without this, the first
@@ -11,12 +12,14 @@ import UserNotifications
 ///      system dialog with zero context — which reads as malware for a
 ///      hearing-correction app, and silently captures zero buffers if
 ///      dismissed. See `catap-screen-recording-permission.md`.
-///   3. Profile — pick a starter profile (both are already seeded) and,
-///      optionally, jump straight to a deeper screen.
+///   3. Pick a starting point — choose a starter preset (all already seeded).
+///   4. Personalization — optional deep-link rows to the audiogram, tinnitus,
+///      and calibration screens, plus a note that they're all optional and
+///      saved per profile.
 ///
 /// Deliberately *not* a deep guided audiogram / tinnitus / calibration
-/// wizard: those are first-class screens now, so onboarding points at them
-/// (the "Where to next?" rows) rather than duplicating them inline.
+/// wizard: those are first-class screens now, so the Personalization step
+/// points at them rather than duplicating them inline.
 ///
 /// Visual language matches the rest of the app (system colors + a
 /// `sectionBox`-style card), per the SettingsView pattern — no separate
@@ -37,7 +40,7 @@ struct OnboardingView: View {
     let onFinish: (SidebarSection?) -> Void
 
     private enum Step: Int, CaseIterable {
-        case welcome, permissions, profile
+        case welcome, permissions, profile, personalization
     }
     @State private var step: Step = .welcome
 
@@ -60,9 +63,10 @@ struct OnboardingView: View {
             // while the other steps keep the standard 28 pt inset.
             Group {
                 switch step {
-                case .welcome:     OnboardingWelcomeStep()
-                case .permissions: OnboardingPermissionsStep().padding(28)
-                case .profile:     OnboardingProfileStep(onJump: finish).padding(28)
+                case .welcome:         OnboardingWelcomeStep()
+                case .permissions:     OnboardingPermissionsStep().padding(28)
+                case .profile:         OnboardingProfileStep().padding(28)
+                case .personalization: OnboardingPersonalizationStep(onJump: finish).padding(28)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -72,25 +76,30 @@ struct OnboardingView: View {
     // MARK: - Footer (Back / progress dots / primary action)
 
     private var footer: some View {
-        HStack(spacing: 12) {
-            if step != .welcome {
-                Button("Back") { goBack() }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-            }
-            Spacer()
+        ZStack {
+            // Progress dots sit at the absolute horizontal center of the
+            // window, independent of the Back / primary buttons flanking them.
             dots
-            Spacer()
-            Button(primaryTitle) { goForward() }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .keyboardShortcut(.defaultAction)
+
+            HStack(spacing: 12) {
+                if step != .welcome {
+                    Button("Back") { goBack() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                }
+                Spacer()
+                Button(primaryTitle) { goForward() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .keyboardShortcut(.defaultAction)
+            }
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 16)
         .overlay(alignment: .topTrailing) {
             // A persistent escape hatch — first launch shouldn't trap anyone.
-            if step != .profile {
+            // Hidden on the final step, where "Finish" already completes things.
+            if step != .personalization {
                 Button("Skip") { finish(nil) }
                     .buttonStyle(.borderless)
                     .controlSize(.small)
@@ -113,14 +122,15 @@ struct OnboardingView: View {
     }
 
     private var primaryTitle: String {
-        step == .profile ? "Finish" : "Continue"
+        step == .personalization ? "Finish" : "Continue"
     }
 
     private func goForward() {
         switch step {
-        case .welcome:     step = .permissions
-        case .permissions: step = .profile
-        case .profile:     finish(nil)
+        case .welcome:         step = .permissions
+        case .permissions:     step = .profile
+        case .profile:         step = .personalization
+        case .personalization: finish(nil)
         }
     }
 
@@ -376,9 +386,6 @@ private struct OnboardingProfileStep: View {
     @EnvironmentObject private var audioState: AudioState
     @EnvironmentObject private var profileStore: ProfileStore
 
-    /// Finish onboarding and deep-link to a screen.
-    let onJump: (SidebarSection?) -> Void
-
     /// Default selection — the neutral preset, matching the app's cold default.
     @State private var selected: HearingProfile.Factory = .musicBalanced
 
@@ -402,23 +409,6 @@ private struct OnboardingProfileStep: View {
             Text("These are listening-comfort presets, not medical hearing correction.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-
-            Divider().padding(.vertical, 2)
-
-            Text("Where to next? (optional)")
-                .font(.headline)
-            nextStepRow(.audiogram,
-                        title: "Enter your audiogram",
-                        subtitle: "Have a hearing test? Plot it for a tailored correction.",
-                        symbol: "ear")
-            nextStepRow(.toneFinder,
-                        title: "Find your tinnitus pitch",
-                        subtitle: "Match a tone to your ringing and notch it out.",
-                        symbol: "bandage")
-            nextStepRow(.safeListening,
-                        title: "Calibrate safe listening",
-                        subtitle: "Match levels to an SPL meter for accurate dose tracking.",
-                        symbol: "shield.lefthalf.filled")
         }
     }
 
@@ -439,9 +429,6 @@ private struct OnboardingProfileStep: View {
                     if let description = preset.presetDescription {
                         Text(description).font(.caption).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if !preset.presetTags.isEmpty {
-                        TagChips(tags: preset.presetTags)
                     }
                 }
                 Spacer()
@@ -468,6 +455,51 @@ private struct OnboardingProfileStep: View {
     private func applySelection() {
         if profileStore.profiles.contains(where: { $0.id == selected.id }) {
             audioState.activeProfileID = selected.id
+        }
+    }
+}
+
+// MARK: - Step 4: Personalization
+
+private struct OnboardingPersonalizationStep: View {
+    /// Finish onboarding and deep-link to a screen.
+    let onJump: (SidebarSection?) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Personalization")
+                .font(.title.weight(.semibold))
+            Text("Tune SherlockEQ to your own hearing. Each opens a dedicated screen — do any of them now, or come back later.")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            nextStepRow(.audiogram,
+                        title: "Enter your audiogram",
+                        subtitle: "Have a hearing test? Plot it for a tailored correction.",
+                        symbol: "ear")
+            nextStepRow(.toneFinder,
+                        title: "Find your tinnitus pitch",
+                        subtitle: "Match a tone to your ringing and notch it out.",
+                        symbol: "bandage")
+            nextStepRow(.safeListening,
+                        title: "Calibrate safe listening",
+                        subtitle: "Match levels to an SPL meter for accurate dose tracking.",
+                        symbol: "shield.lefthalf.filled")
+
+            OnboardingCard {
+                Label {
+                    Text("All optional")
+                        .font(.callout.weight(.medium))
+                } icon: {
+                    Image(systemName: "slider.horizontal.3")
+                        .foregroundStyle(.tint)
+                }
+                Text("None of these are required to start listening. Set them up now or anytime later — each is saved per profile, so every profile can be personalized differently.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
