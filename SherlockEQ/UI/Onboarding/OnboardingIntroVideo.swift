@@ -26,6 +26,10 @@ struct OnboardingIntroVideo: View {
     /// asset can't report one). 16:9 is the most common capture ratio.
     private static let fallbackAspect: CGFloat = 16.0 / 9.0
 
+    /// Beat to hold on the first frame before playback begins, so the welcome
+    /// screen settles before the motion starts.
+    private static let startDelay: TimeInterval = 3
+
     @State private var aspect: CGFloat?
 
     private static func resourceURL() -> URL? {
@@ -39,7 +43,7 @@ struct OnboardingIntroVideo: View {
 
     var body: some View {
         if let url = Self.resourceURL() {
-            IntroPlayerView(url: url)
+            IntroPlayerView(url: url, startDelay: Self.startDelay)
                 .aspectRatio(aspect ?? Self.fallbackAspect, contentMode: .fit)
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -69,10 +73,14 @@ struct OnboardingIntroVideo: View {
     }
 }
 
-/// Thin AppKit bridge: an `AVPlayerView` with no chrome that auto-plays once
-/// and freezes on the final frame.
+/// Thin AppKit bridge: an `AVPlayerView` with no chrome that holds the first
+/// frame for `startDelay` seconds, plays through once, and freezes on the
+/// final frame.
 private struct IntroPlayerView: NSViewRepresentable {
     let url: URL
+    let startDelay: TimeInterval
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> AVPlayerView {
         let view = AVPlayerView()
@@ -84,14 +92,25 @@ private struct IntroPlayerView: NSViewRepresentable {
         player.actionAtItemEnd = .pause   // hold the last frame; do not loop
         player.isMuted = false            // it's a deliberate intro — let it speak
         view.player = player
-        player.play()
+
+        // Hold on the first frame, then play once. Cancellable so advancing
+        // past the welcome screen before the beat elapses can't leave a
+        // detached player playing audio in the background.
+        let start = DispatchWorkItem { player.play() }
+        context.coordinator.pendingStart = start
+        DispatchQueue.main.asyncAfter(deadline: .now() + startDelay, execute: start)
         return view
     }
 
     func updateNSView(_ nsView: AVPlayerView, context: Context) {}
 
-    static func dismantleNSView(_ nsView: AVPlayerView, coordinator: ()) {
+    static func dismantleNSView(_ nsView: AVPlayerView, coordinator: Coordinator) {
+        coordinator.pendingStart?.cancel()
         nsView.player?.pause()
         nsView.player = nil
+    }
+
+    final class Coordinator {
+        var pendingStart: DispatchWorkItem?
     }
 }
