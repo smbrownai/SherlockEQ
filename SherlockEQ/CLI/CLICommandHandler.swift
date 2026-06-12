@@ -24,20 +24,13 @@ final class CLICommandHandler {
         self.profileStore = profileStore
     }
 
-    // Simple-EQ band layout — must match the app's Simple mode slots
-    // (HearingProfile.EQMode.ownedSlots) so the CLI edits the same bands the
-    // GUI's Simple sliders do.
-    private struct SimpleSlot {
-        let key: String
-        let frequencyHz: Double
-        let filterType: EQFilterType
+    /// The shared, transport-agnostic control surface. The CLI is one adapter
+    /// over it (App Intents are the other); validation, ranges, the Simple-EQ
+    /// slot layout, and profile-name resolution all live there so the two can't
+    /// drift. See `AppControlService`.
+    private var service: AppControlService {
+        AppControlService(audioState: audioState, profileStore: profileStore)
     }
-    private static let simpleSlots = [
-        SimpleSlot(key: "bass",   frequencyHz: 250,  filterType: .lowShelf),
-        SimpleSlot(key: "mid",    frequencyHz: 1000, filterType: .parametric),
-        SimpleSlot(key: "treble", frequencyHz: 5000, filterType: .highShelf),
-    ]
-    private static let simpleBandwidth = 1.0
 
     // MARK: - Entry point
 
@@ -155,13 +148,14 @@ final class CLICommandHandler {
         guard let mode = request["mode"] as? String else {
             return Self.fail(code: "invalid_argument", "Missing bypass mode.")
         }
+        let action: BypassMode
         switch mode {
-        case "on":     audioState.referenceMode = true
-        case "off":    audioState.referenceMode = false
-        case "toggle": audioState.referenceMode.toggle()
+        case "on":     action = .on
+        case "off":    action = .off
+        case "toggle": action = .toggle
         default:       return Self.fail(code: "invalid_argument", "Expected on, off, or toggle.")
         }
-        return Self.ok(["bypass": audioState.referenceMode])
+        return Self.ok(["bypass": service.setBypass(action)])
     }
 
     // MARK: - Profiles
@@ -194,12 +188,12 @@ final class CLICommandHandler {
         guard let name = request["name"] as? String, !name.isEmpty else {
             return Self.fail(code: "invalid_argument", "Missing profile name.")
         }
-        switch resolveProfile(named: name) {
-        case .found(let profile):
-            audioState.activeProfileID = profile.id
+        do {
+            let profile = try service.resolveProfile(named: name)
+            service.activate(profile)
             return Self.ok(["activated": ["name": profile.name, "id": profile.id.uuidString]])
-        case .error(let response):
-            return response
+        } catch {
+            return Self.fail(error)
         }
     }
 
@@ -245,39 +239,17 @@ final class CLICommandHandler {
         guard let name = request["name"] as? String, !name.isEmpty else {
             return Self.fail(code: "invalid_argument", "Provide a profile name or --all.")
         }
-        switch resolveProfile(named: name) {
-        case .found(let profile):
-            do {
-                try profileStore.exportProfile(profile, to: url)
-                return Self.ok(["exported": ["name": profile.name, "path": url.path]])
-            } catch {
-                return Self.fail(code: "export_failed", "Could not export profile: \(error.localizedDescription)")
-            }
-        case .error(let response):
-            return response
+        let profile: HearingProfile
+        do {
+            profile = try service.resolveProfile(named: name)
+        } catch {
+            return Self.fail(error)
         }
-    }
-
-    /// Outcome of a name lookup: either the profile, or a ready-to-send error
-    /// reply (not found / ambiguous). Avoids `Result`, whose failure must be
-    /// an `Error` — here the failure is already an encoded JSON reply.
-    private enum ProfileResolution {
-        case found(HearingProfile)
-        case error(Data)
-    }
-
-    /// Resolve a profile by name: exact match first, then a single
-    /// case-insensitive match.
-    private func resolveProfile(named name: String) -> ProfileResolution {
-        if let exact = profileStore.profiles.first(where: { $0.name == name }) {
-            return .found(exact)
-        }
-        let lower = name.lowercased()
-        let matches = profileStore.profiles.filter { $0.name.lowercased() == lower }
-        switch matches.count {
-        case 0:  return .error(Self.fail(code: "not_found", "No profile named \"\(name)\"."))
-        case 1:  return .found(matches[0])
-        default: return .error(Self.fail(code: "ambiguous", "Multiple profiles named \"\(name)\" — names differ only by case."))
+        do {
+            try profileStore.exportProfile(profile, to: url)
+            return Self.ok(["exported": ["name": profile.name, "path": url.path]])
+        } catch {
+            return Self.fail(code: "export_failed", "Could not export profile: \(error.localizedDescription)")
         }
     }
 
@@ -313,92 +285,71 @@ final class CLICommandHandler {
         guard let db = Self.number(request["db"]) else {
             return Self.fail(code: "invalid_argument", "Missing or non-numeric gain value.")
         }
-        guard (-60...12).contains(db) else {
-            return Self.fail(code: "out_of_range", "Gain must be between -60 and +12 dB.")
+        do {
+            return Self.ok(["gainDB": try service.setGain(db)])
+        } catch {
+            return Self.fail(error)
         }
-        audioState.masterGainDB = db
-        return Self.ok(["gainDB": audioState.masterGainDB])
     }
 
     // MARK: - Balance
 
     private func balanceGet() -> Data {
-        guard let profile = audioState.activeProfile(in: profileStore) else {
-            return Self.fail(code: "no_active_profile", "No active profile to read balance from.")
+        do {
+            return Self.ok(["balance": try service.currentBalance()])
+        } catch {
+            return Self.fail(error)
         }
-        return Self.ok(["balance": profile.balance])
     }
 
     private func balanceSet(_ request: [String: Any]) -> Data {
         guard let value = Self.number(request["value"]) else {
             return Self.fail(code: "invalid_argument", "Missing or non-numeric balance value.")
         }
-        guard (-1.0...1.0).contains(value) else {
-            return Self.fail(code: "out_of_range", "Balance must be between -1 (left) and 1 (right).")
-        }
-        guard var profile = audioState.activeProfile(in: profileStore) else {
-            return Self.fail(code: "no_active_profile", "No active profile to set balance on.")
-        }
-        profile.balance = value
         do {
-            try profileStore.save(profile)
-            return Self.ok(["balance": value])
+            return Self.ok(["balance": try service.setBalance(value)])
         } catch {
-            return Self.fail(code: "save_failed", "Could not save profile: \(error.localizedDescription)")
+            return Self.fail(error)
         }
     }
 
     // MARK: - Simple EQ
 
     private func simpleEQGet() -> Data {
-        guard let profile = audioState.activeProfile(in: profileStore) else {
-            return Self.fail(code: "no_active_profile", "No active profile to read EQ from.")
+        do {
+            return Self.ok(["simpleEQ": try service.currentSimpleEQ()])
+        } catch {
+            return Self.fail(error)
         }
-        return Self.ok(["simpleEQ": simpleEQValues(of: profile)])
     }
 
     private func simpleEQSet(_ request: [String: Any]) -> Data {
-        guard var profile = audioState.activeProfile(in: profileStore) else {
-            return Self.fail(code: "no_active_profile", "No active profile to set EQ on.")
-        }
-        // Only the bands that were provided are changed; omitted bands keep
-        // their current value. At least one must be present.
-        var applied: [String: Double] = [:]
-        for slot in Self.simpleSlots {
+        // Parse only the bands that were provided; omitted bands keep their
+        // value. Per-key numeric parsing stays in the CLI (the wire arrives as
+        // untyped JSON); range / empty / save validation lives in the service.
+        var values: [String: Double?] = ["bass": nil, "mid": nil, "treble": nil]
+        for slot in AppControlService.simpleSlots {
             guard request[slot.key] != nil else { continue }
             guard let db = Self.number(request[slot.key]) else {
                 return Self.fail(code: "invalid_argument", "Non-numeric value for \(slot.key).")
             }
-            guard (-24.0...24.0).contains(db) else {
-                return Self.fail(code: "out_of_range", "\(slot.key) must be between -24 and +24 dB.")
-            }
-            applied[slot.key] = db
+            values[slot.key] = db
         }
-        guard !applied.isEmpty else {
+        guard values.values.contains(where: { $0 != nil }) else {
             return Self.fail(code: "invalid_argument", "Provide at least one of --bass, --mid, --treble.")
         }
-        EQBandLookup.mutateBothEars(of: &profile) { bands in
-            for slot in Self.simpleSlots {
-                guard let db = applied[slot.key] else { continue }
-                EQBandLookup.setGain(db, at: slot.frequencyHz, bandwidth: Self.simpleBandwidth,
-                                     filterType: slot.filterType, in: &bands)
-            }
-        }
         do {
-            try profileStore.save(profile)
-            return Self.ok(["simpleEQ": simpleEQValues(of: profile)])
+            let applied = try service.setSimpleEQ(bass: values["bass"] ?? nil,
+                                                  mid: values["mid"] ?? nil,
+                                                  treble: values["treble"] ?? nil)
+            return Self.ok(["simpleEQ": applied])
         } catch {
-            return Self.fail(code: "save_failed", "Could not save profile: \(error.localizedDescription)")
+            return Self.fail(error)
         }
     }
 
     private func simpleEQValues(of profile: HearingProfile) -> [String: Double] {
-        var out: [String: Double] = [:]
-        for slot in Self.simpleSlots {
-            out[slot.key] = EQBandLookup.gain(at: slot.frequencyHz, filterType: slot.filterType,
-                                              in: profile.leftEar.bands)
-        }
-        return out
+        service.simpleEQValues(of: profile)
     }
 
     // MARK: - Lifecycle
@@ -423,6 +374,15 @@ final class CLICommandHandler {
 
     private static func fail(code: String, _ message: String) -> Data {
         encode(["ok": false, "code": code, "error": message])
+    }
+
+    /// Map any thrown error to a reply, preserving a `ControlError`'s machine
+    /// `code` (so CLI exit codes stay stable) and message.
+    private static func fail(_ error: Error) -> Data {
+        if let control = error as? ControlError {
+            return fail(code: control.code, control.message)
+        }
+        return fail(code: "error", error.localizedDescription)
     }
 
     private static func encode(_ dict: [String: Any]) -> Data {
