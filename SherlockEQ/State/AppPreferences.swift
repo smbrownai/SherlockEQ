@@ -111,6 +111,20 @@ final class AppPreferences: ObservableObject {
         }
     }
 
+    /// Set once the first-launch onboarding wizard has been completed (or
+    /// skipped). Gates whether `AppDelegate.bootstrap()` shows the wizard
+    /// instead of immediately firing the system-audio + notification
+    /// permission prompts cold. Defaults to false so a fresh install runs
+    /// onboarding; flipping it back to false (or `defaults delete`) replays it.
+    @Published var hasCompletedOnboarding: Bool = AppPreferences.loadBool(
+        key: AppPreferences.hasCompletedOnboardingKey,
+        default: false
+    ) {
+        didSet {
+            UserDefaults.standard.set(hasCompletedOnboarding, forKey: Self.hasCompletedOnboardingKey)
+        }
+    }
+
     private let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "AppPreferences")
 
     // MARK: - UserDefaults plumbing
@@ -120,6 +134,7 @@ final class AppPreferences: ObservableObject {
     private static let hideFromDockKey = "sherlockeq.hideFromDock"
     private static let globalReferenceShortcutKey = "sherlockeq.globalReferenceShortcut"
     private static let showDebugInSidebarKey = "sherlockeq.showDebugInSidebar"
+    private static let hasCompletedOnboardingKey = "sherlockeq.hasCompletedOnboarding"
 
     private static func loadBool(key: String, default defaultValue: Bool) -> Bool {
         UserDefaults.standard.object(forKey: key) as? Bool ?? defaultValue

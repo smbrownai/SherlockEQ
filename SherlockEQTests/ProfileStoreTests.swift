@@ -78,30 +78,103 @@ struct ProfileStoreTests {
         #expect(urls.filter { $0.pathExtension == "json" }.isEmpty)
     }
 
-    // MARK: - Seeding
+    // MARK: - Factory presets
 
-    @Test func seedDefaultsCreatesDefaultAndVoiceClarity() {
+    /// The version-gate key lives in shared UserDefaults; reset it per test so
+    /// each starts "pre-migration" and the gated reconcile actually runs.
+    private static let factoryVersionKey = "sherlockeq.factoryPresetsVersion"
+
+    @Test func reconcileInstallsFourFactoryPresetsInOrder() {
         let dir = Self.makeTempDir()
         defer { Self.cleanup(dir) }
+        UserDefaults.standard.set(0, forKey: Self.factoryVersionKey)
+        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
 
         let store = Self.makeStore(at: dir)
-        store.seedDefaultsIfEmpty()
-        #expect(store.profiles.count == 2)
-        #expect(store.profiles.contains { $0.name == "Default" })
-        #expect(store.profiles.contains { $0.name == "Voice Clarity" })
+        store.reconcileFactoryPresets()
+        #expect(store.profiles.map(\.name) == ["Voice Clarity", "Music Balanced", "Gentle Listening", "Presence Boost"])
+        #expect(store.profiles.allSatisfy { $0.isBuiltIn })
+        #expect(store.profiles.allSatisfy { $0.eqMode == .advanced })
+        #expect(store.profiles.allSatisfy { $0.leftEar.bands.count == 10 })
     }
 
-    @Test func seedDefaultsIsIdempotent() throws {
-        // A second call when profiles already exist is a no-op.
+    @Test func reconcileRemovesLegacyBuiltIns() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+        UserDefaults.standard.set(0, forKey: Self.factoryVersionKey)
+        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
+
+        let store = Self.makeStore(at: dir)
+        try store.save(.makeDefault(name: "Default", isBuiltIn: true)) // legacy random-id built-in
+        store.reconcileFactoryPresets()
+        #expect(!store.profiles.contains { $0.name == "Default" })
+        #expect(store.profiles.count == 4)
+    }
+
+    @Test func reconcileDoesNotReAddDeletedPresetAtSameVersion() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+        UserDefaults.standard.set(0, forKey: Self.factoryVersionKey)
+        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
+
+        let store = Self.makeStore(at: dir)
+        store.reconcileFactoryPresets()                       // installs 4, bumps version
+        let gentle = try #require(store.profiles.first { $0.name == "Gentle Listening" })
+        try store.delete(gentle)
+        store.reconcileFactoryPresets()                       // version current → no-op
+        #expect(store.profiles.count == 3)
+        #expect(!store.profiles.contains { $0.name == "Gentle Listening" })
+    }
+
+    @Test func restoreFactoryPresetsRecreatesDeleted() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+        UserDefaults.standard.set(0, forKey: Self.factoryVersionKey)
+        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
+
+        let store = Self.makeStore(at: dir)
+        store.reconcileFactoryPresets()
+        let gentle = try #require(store.profiles.first { $0.name == "Gentle Listening" })
+        try store.delete(gentle)
+        store.restoreFactoryPresets()
+        #expect(store.profiles.count == 4)
+        #expect(store.profiles.contains { $0.name == "Gentle Listening" })
+    }
+
+    @Test func resetProfileToFactoryRestoresValues() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+        UserDefaults.standard.set(0, forKey: Self.factoryVersionKey)
+        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
+
+        let store = Self.makeStore(at: dir)
+        store.reconcileFactoryPresets()
+        var vc = try #require(store.profiles.first { $0.name == "Voice Clarity" })
+        let id = vc.id
+        #expect(!store.differsFromFactory(vc))   // pristine
+        vc.leftEar.bands[0].gaindB = 11          // tamper
+        vc.globalTrimDB = 5
+        try store.save(vc)
+        #expect(store.differsFromFactory(try #require(store.profiles.first { $0.id == id })))
+
+        store.resetProfileToFactory(id)
+        let restored = try #require(store.profiles.first { $0.id == id })
+        #expect(!store.differsFromFactory(restored))
+        let canonical = HearingProfile.factoryVoiceClarity()
+        #expect(restored.leftEar.bands.audiblyEquivalent(to: canonical.leftEar.bands))
+        #expect(restored.globalTrimDB == canonical.globalTrimDB)
+    }
+
+    @Test func resetIsNoOpForUserProfiles() throws {
         let dir = Self.makeTempDir()
         defer { Self.cleanup(dir) }
 
         let store = Self.makeStore(at: dir)
-        store.seedDefaultsIfEmpty()
-        let firstCount = store.profiles.count
-
-        store.seedDefaultsIfEmpty()
-        #expect(store.profiles.count == firstCount)
+        let user = HearingProfile.makeDefault(name: "Mine")
+        try store.save(user)
+        store.resetProfileToFactory(user.id)   // not a factory id → no change
+        #expect(store.profiles.count == 1)
+        #expect(store.profiles[0].name == "Mine")
     }
 
     // MARK: - Import / Export

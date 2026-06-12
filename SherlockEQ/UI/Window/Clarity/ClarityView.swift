@@ -33,18 +33,11 @@ struct ClarityView: View {
 
     @ViewBuilder
     private func content(_ profile: HearingProfile) -> some View {
-        let locked = profile.isBuiltIn
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                if locked {
-                    BuiltInProfileBanner(profileName: profile.name) {
-                        duplicateActive(profile)
-                    }
-                }
                 introCard
                 separateToggleRow(profile)
                 featureCards(profile)
-                    .disabled(locked)
                 disclaimer
             }
             .padding(24)
@@ -132,7 +125,6 @@ struct ClarityView: View {
             ))
             .toggleStyle(.switch)
             .controlSize(.small)
-            .disabled(profile.isBuiltIn)
             Spacer()
             Text("Tune each ear independently.")
                 .font(.callout)
@@ -182,22 +174,5 @@ struct ClarityView: View {
                 try? profileStore.save(updated)
             }
         )
-    }
-
-    private func duplicateActive(_ profile: HearingProfile) {
-        var copy = profile.duplicated()
-        copy.name = uniqueName(base: copy.name)
-        do {
-            try profileStore.save(copy)
-            audioState.activeProfileID = copy.id
-        } catch { /* surfaced via ProfileStore.lastError */ }
-    }
-
-    private func uniqueName(base: String) -> String {
-        let existing = Set(profileStore.profiles.map(\.name))
-        if !existing.contains(base) { return base }
-        var i = 2
-        while existing.contains("\(base) \(i)") { i += 1 }
-        return "\(base) \(i)"
     }
 }

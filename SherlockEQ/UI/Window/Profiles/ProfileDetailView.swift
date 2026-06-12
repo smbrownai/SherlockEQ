@@ -38,29 +38,20 @@ struct ProfileDetailView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     headerBlock(profile)
                     if profile.isBuiltIn {
-                        BuiltInProfileBanner(profileName: profile.name) {
-                            duplicateAndHandoff(profile)
-                        }
+                        FactoryPresetBanner(
+                            profileName: profile.name,
+                            canReset: profileStore.differsFromFactory(profile),
+                            onReset: { profileStore.resetProfileToFactory(profile.id) },
+                            onDuplicate: { duplicateAndHandoff(profile) }
+                        )
                     }
-                    Group {
-                        identitySection(profile)
-                        deviceSection(profile)
-                    }
-                    .disabled(profile.isBuiltIn)
-                    // Headphone correction lives OUTSIDE the built-in
-                    // disable group: the search + saved-list panel
-                    // browses and imports to global AppStorage state,
-                    // not to the profile itself, so it must stay
-                    // tappable even when the active profile is locked.
-                    // The writable parts inside (Apply, file-picker
-                    // import, clear button) gate themselves on
-                    // `profile.isBuiltIn` individually.
+                    // Factory presets are editable in place — no section is
+                    // locked. The banner above offers reset/duplicate recovery.
+                    identitySection(profile)
+                    deviceSection(profile)
                     autoEQSection(profile)
-                    Group {
-                        tuningSection(profile)
-                        safetySection(profile)
-                    }
-                    .disabled(profile.isBuiltIn)
+                    tuningSection(profile)
+                    safetySection(profile)
                     metadataSection(profile)
                 }
                 .padding(28)
@@ -79,29 +70,40 @@ struct ProfileDetailView: View {
     // MARK: - Sections
 
     @ViewBuilder private func headerBlock(_ profile: HearingProfile) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: profile.symbol)
-                .font(.system(size: 32))
-                .foregroundStyle(.tint)
-                .frame(width: 48, height: 48)
-                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(profile.name).font(.title2.weight(.semibold))
-                Text(audioState.activeProfileID == profile.id ? "Active" : "Inactive")
-                    .font(.caption)
-                    .foregroundStyle(audioState.activeProfileID == profile.id ? .green : .secondary)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 14) {
+                Image(systemName: profile.symbol)
+                    .font(.system(size: 32))
+                    .foregroundStyle(.tint)
+                    .frame(width: 48, height: 48)
+                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(profile.name).font(.title2.weight(.semibold))
+                    Text(audioState.activeProfileID == profile.id ? "Active" : "Inactive")
+                        .font(.caption)
+                        .foregroundStyle(audioState.activeProfileID == profile.id ? .green : .secondary)
+                }
+                Spacer()
+                Button {
+                    audioState.activeProfileID = profile.id
+                } label: {
+                    Label(
+                        audioState.activeProfileID == profile.id ? "Active" : "Make Active",
+                        systemImage: audioState.activeProfileID == profile.id ? "checkmark.circle.fill" : "circle"
+                    )
+                }
+                .buttonStyle(.bordered)
+                .disabled(audioState.activeProfileID == profile.id)
             }
-            Spacer()
-            Button {
-                audioState.activeProfileID = profile.id
-            } label: {
-                Label(
-                    audioState.activeProfileID == profile.id ? "Active" : "Make Active",
-                    systemImage: audioState.activeProfileID == profile.id ? "checkmark.circle.fill" : "circle"
-                )
+            if let description = profile.presetDescription, !description.isEmpty {
+                Text(description)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .buttonStyle(.bordered)
-            .disabled(audioState.activeProfileID == profile.id)
+            if !profile.presetTags.isEmpty {
+                TagChips(tags: profile.presetTags)
+            }
         }
     }
 
@@ -228,17 +230,12 @@ struct ProfileDetailView: View {
                 AutoEQSavedProfilesList(profile: profile) { saved in
                     applySavedAutoEQ(saved, to: profile)
                 }
-                .disabled(profile.isBuiltIn)
-                if profile.isBuiltIn {
-                    builtInCorrectionHint
-                }
                 if !audioState.autoEQEnabled {
                     autoEQDisabledHint
                 }
                 if AutoEQLibrary.entries(in: audioState.autoEQLibraryFolder).isEmpty == false ||
                     profile.autoEQName == nil {
                     legacyImportRow(for: profile)
-                        .disabled(profile.isBuiltIn)
                 }
             }
         }
@@ -276,7 +273,6 @@ struct ProfileDetailView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Remove headphone correction")
-                .disabled(profile.isBuiltIn)
             }
         } else {
             HStack(spacing: 10) {
@@ -344,21 +340,6 @@ struct ProfileDetailView: View {
         Label("AutoEQ stage is currently bypassed (toggle is off).", systemImage: "speaker.slash")
             .font(.caption)
             .foregroundStyle(.secondary)
-    }
-
-    /// Search + importing to the saved list works on a built-in
-    /// profile (those operations write to global AppStorage, not the
-    /// locked profile), but actually applying a correction does not.
-    /// Surface that so users aren't confused when Apply is greyed out
-    /// after a successful import.
-    @ViewBuilder
-    private var builtInCorrectionHint: some View {
-        Label(
-            "Search and importing work here, but Apply is disabled on built-in profiles. Duplicate the profile above to apply a correction.",
-            systemImage: "lock"
-        )
-        .font(.caption)
-        .foregroundStyle(.secondary)
     }
 
     /// File-picker / library-folder import path. Kept because users
@@ -478,14 +459,6 @@ struct ProfileDetailView: View {
                 }
                 .pickerStyle(.menu)
                 .frame(maxWidth: 220)
-                // Belt-and-braces: the parent `Group { ... }
-                // .disabled(profile.isBuiltIn)` higher up *should*
-                // propagate to this picker too, but `.pickerStyle(.menu)`
-                // has a SwiftUI quirk where the environment-level
-                // disabled state doesn't reliably grey + block the
-                // popup. Mark it explicitly here so built-in profiles
-                // stay genuinely read-only.
-                .disabled(profile.isBuiltIn)
                 Spacer()
             }
             Text(profile.eqMode.tagline)

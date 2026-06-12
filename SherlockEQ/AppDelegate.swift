@@ -41,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var mainWindow: NSWindow?
     private var analogWindow: NSWindow?
     private var helpWindow: NSWindow?
+    private var onboardingWindow: NSWindow?
     private let mainWindowUndoManager = UndoManager()
     private let globalReferenceHotKey = GlobalHotKey()
     private var cancellables: Set<AnyCancellable> = []
@@ -109,7 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func bootstrap() {
         profileStore.loadAll()
-        profileStore.seedDefaultsIfEmpty()
+        profileStore.reconcileFactoryPresets()
         audioState.adoptDefaultProfileIfNeeded(from: profileStore)
         audioState.connect(profileStore: profileStore)
         startCLIServer()
@@ -117,13 +118,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         audioState.preferences.$globalReferenceShortcutEnabled
             .sink { [weak self] enabled in self?.applyGlobalReferenceShortcut(enabled: enabled) }
             .store(in: &cancellables)
+
+        if audioState.preferences.hasCompletedOnboarding {
+            // Returning launch: bring the tap up and reconcile the
+            // notification grant exactly as before.
+            requestNotificationsAndStartAudio()
+        } else {
+            // Fresh install: do NOT fire the system-audio + notification
+            // prompts cold here. The onboarding wizard explains the
+            // non-obvious System Audio Recording grant first, then triggers
+            // the same work via `finishOnboarding` so the prompts arrive
+            // *after* the explanation rather than as the app's opening act.
+            showOnboardingWindow()
+        }
+    }
+
+    /// Request notification authorization (no-op if already answered) and
+    /// bring up the audio pipeline. Shared by the returning-launch path and
+    /// by onboarding completion so the order of operations is identical.
+    private func requestNotificationsAndStartAudio() {
         Task {
             await NotificationManager.shared.requestAuthorization()
-            // If the user denied notifications (either just now on
-            // first launch or in a prior session), surface that as a
-            // one-shot warning. Without it the user has no idea
-            // they've lost the safe-listening alerts until they
-            // happen to dose past amber later.
+            // If the user denied notifications (either just now or in a
+            // prior session), surface that as a one-shot warning. Without
+            // it the user has no idea they've lost the safe-listening
+            // alerts until they happen to dose past amber later.
             audioState.noticeCenter.warnIfNotificationsDenied(
                 status: NotificationManager.shared.authorizationStatus
             )
@@ -316,6 +335,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.delegate = self
         window.center()
         return window
+    }
+
+    // MARK: - Onboarding window
+
+    /// Open (or focus) the first-launch onboarding wizard. Public so the
+    /// Settings → "Replay intro" button can re-run it on demand. Same
+    /// `.accessory → .regular` activation dance as the other windows.
+    func showOnboardingWindow() {
+        if onboardingWindow == nil {
+            onboardingWindow = createOnboardingWindow()
+        }
+        guard let window = onboardingWindow else { return }
+
+        if NSApp.activationPolicy() != .regular {
+            NSApp.setActivationPolicy(.regular)
+            RunLoop.current.run(mode: .common, before: Date(timeIntervalSinceNow: 0.01))
+        }
+        NSRunningApplication.current.activate(options: [.activateAllWindows])
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    private func createOnboardingWindow() -> NSWindow {
+        let root = OnboardingView(onFinish: { [weak self] section in
+            self?.finishOnboarding(deepLink: section)
+        })
+        .environmentObject(audioState)
+        .environmentObject(profileStore)
+        .environmentObject(autoEQRemote)
+        .environmentObject(autoEQSavedProfiles)
+        let hosting = NSHostingController(rootView: root)
+
+        // Fixed-size welcome panel (the SwiftUI root is a fixed 560×640).
+        // No `.resizable` — the content owns the size. Not in the frame-
+        // autosave set: it should always open centered, not wherever a
+        // prior run left it.
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Welcome to SherlockEQ"
+        window.styleMask = [.titled, .closable, .fullSizeContentView]
+        window.titlebarAppearsTransparent = true
+        window.setContentSize(NSSize(width: 560, height: 640))
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        window.center()
+        return window
+    }
+
+    /// Completion handler handed to `OnboardingView`. Flips the gate flag,
+    /// runs the deferred permission/start work, optionally deep-links the
+    /// main window to a section, then closes the wizard. Closing routes
+    /// through `windowWillClose`, which is a no-op for the start work now
+    /// that the flag is already set.
+    private func finishOnboarding(deepLink section: SidebarSection?) {
+        audioState.preferences.hasCompletedOnboarding = true
+        if let section {
+            // Set the intent before opening so the main window's `onAppear`
+            // catches it on first construction.
+            audioState.pendingMainSection = section
+            showMainWindow()
+        }
+        onboardingWindow?.close()
+        requestNotificationsAndStartAudio()
     }
 
     @objc private func openHelpHome(_ sender: Any?) {
@@ -522,13 +602,24 @@ extension AppDelegate: NSWindowDelegate {
         if closing === analogWindow {
             audioState.endAnalogOverride()
         }
+        // Closing the onboarding window via the red button counts as a
+        // skip: honor it like Finish so the wizard doesn't reappear next
+        // launch and the audio pipeline still comes up. The Finish/jump
+        // path sets the flag first, so this is a no-op there.
+        if closing === onboardingWindow {
+            if !audioState.preferences.hasCompletedOnboarding {
+                audioState.preferences.hasCompletedOnboarding = true
+                requestNotificationsAndStartAudio()
+            }
+            onboardingWindow = nil
+        }
         // Mirror the old SwiftUI `.onDisappear` policy flip. With the
         // window-close trigger this fires reliably on every close. Only
         // drop back to accessory when the *last* managed window closes —
         // otherwise closing the Analog Control Unit while the main window
         // is open (or vice versa) would wrongly hide the Dock icon.
         guard audioState.hideFromDockEnabled else { return }
-        let stillOpen = [mainWindow, analogWindow, helpWindow]
+        let stillOpen = [mainWindow, analogWindow, helpWindow, onboardingWindow]
             .compactMap { $0 }
             .contains { $0 !== closing && $0.isVisible }
         if !stillOpen {

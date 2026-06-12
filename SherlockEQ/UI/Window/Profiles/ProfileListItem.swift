@@ -11,18 +11,26 @@ struct ProfileListItem: View {
             Image(systemName: profile.symbol)
                 .frame(width: 18)
                 .foregroundStyle(.tint)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(profile.name)
                         .lineLimit(1)
                     if profile.isBuiltIn {
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .help("Built-in — duplicate to customize")
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(.tint)
+                            .help("Built-in preset")
                     }
                 }
-                if let uid = profile.linkedDeviceUID, !uid.isEmpty {
+                if let description = profile.presetDescription, !description.isEmpty {
+                    Text(description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                if !profile.presetTags.isEmpty {
+                    TagChips(tags: profile.presetTags)
+                } else if let uid = profile.linkedDeviceUID, !uid.isEmpty {
                     Text(uid)
                         .font(.caption)
                         .foregroundStyle(.secondary)

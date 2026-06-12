@@ -11,18 +11,12 @@ struct EqualizerView: View {
 
     var body: some View {
         let activeProfile = audioState.activeProfile(in: profileStore)
-        let locked = activeProfile?.isBuiltIn ?? false
         let mode = activeProfile?.eqMode ?? .simple
 
         VStack(spacing: 0) {
-            if let profile = activeProfile, profile.isBuiltIn {
-                BuiltInProfileBanner(profileName: profile.name) {
-                    duplicateActive(profile)
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-            }
-
+            // Factory presets are editable in place; edits to one can be
+            // reverted from Profile Detail ("Reset to Factory Default") or
+            // globally via "Restore Factory Presets". No lock here.
             Group {
                 switch mode {
                 case .simple:   SimpleEQView()
@@ -31,7 +25,6 @@ struct EqualizerView: View {
                 case .expert:   ExpertEQView()
                 }
             }
-            .disabled(locked)
 
             // Upstream-EQ footnote. Other apps' equalizers (Music's EQ,
             // Sound Check, etc.) run inside those apps before the tap
@@ -51,22 +44,5 @@ struct EqualizerView: View {
             .padding(.vertical, 10)
         }
         .navigationTitle("Equalizer")
-    }
-
-    private func duplicateActive(_ profile: HearingProfile) {
-        var copy = profile.duplicated()
-        copy.name = uniqueName(base: copy.name)
-        do {
-            try profileStore.save(copy)
-            audioState.activeProfileID = copy.id
-        } catch { /* surfaced via ProfileStore.lastError (DebugView) */ }
-    }
-
-    private func uniqueName(base: String) -> String {
-        let existing = Set(profileStore.profiles.map(\.name))
-        if !existing.contains(base) { return base }
-        var i = 2
-        while existing.contains("\(base) \(i)") { i += 1 }
-        return "\(base) \(i)"
     }
 }
