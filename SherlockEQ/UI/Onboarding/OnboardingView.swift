@@ -159,20 +159,6 @@ private struct OnboardingWelcomeStep: View {
                     }
                 }
 
-                OnboardingCard {
-                    Label {
-                        Text("How it works")
-                            .font(.callout.weight(.medium))
-                    } icon: {
-                        Image(systemName: "waveform.and.magnifyingglass")
-                            .foregroundStyle(.tint)
-                    }
-                    Text("SherlockEQ listens to your Mac's audio, runs each ear through its own equalizer tuned to your hearing, and sends the corrected sound on to your speakers or headphones. It also tracks your daily listening dose so you can keep the volume in a safe range.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
                 // Upstream-EQ note — spec §8.4 requires the wizard to include
                 // it. Wording kept in sync with the footnote on the Equalizer
                 // screen so the two surfaces tell the same story.
