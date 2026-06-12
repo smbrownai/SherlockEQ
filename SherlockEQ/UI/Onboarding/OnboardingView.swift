@@ -137,6 +137,11 @@ struct OnboardingView: View {
 private struct OnboardingWelcomeStep: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            // Intro video sits at the very top; the welcome message + cards
+            // below carry the words. Collapses to nothing when no video is
+            // bundled, leaving the original layout untouched.
+            OnboardingIntroVideo()
+
             HStack(spacing: 16) {
                 Image(nsImage: NSApp.applicationIconImage)
                     .resizable()

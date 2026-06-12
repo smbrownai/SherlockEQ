@@ -1,0 +1,4 @@
+# Bundled media
+
+Drop `onboarding-intro.mp4` (or .mov/.m4v) here to enable the onboarding welcome-screen intro video.
+This folder is inside the Xcode synchronized group, so files added here bundle automatically — no project edits needed.
