@@ -55,14 +55,16 @@ struct OnboardingView: View {
     @ViewBuilder
     private var content: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            // Padding is applied per step, not blanket: the welcome step runs
+            // its hero video edge-to-edge and pads only its own text block,
+            // while the other steps keep the standard 28 pt inset.
+            Group {
                 switch step {
                 case .welcome:     OnboardingWelcomeStep()
-                case .permissions: OnboardingPermissionsStep()
-                case .profile:     OnboardingProfileStep(onJump: finish)
+                case .permissions: OnboardingPermissionsStep().padding(28)
+                case .profile:     OnboardingProfileStep(onJump: finish).padding(28)
                 }
             }
-            .padding(28)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -136,55 +138,60 @@ struct OnboardingView: View {
 
 private struct OnboardingWelcomeStep: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            // Intro video sits at the very top; the welcome message + cards
-            // below carry the words. Collapses to nothing when no video is
-            // bundled, leaving the original layout untouched.
+        VStack(spacing: 0) {
+            // Full-bleed hero video, flush to the window's top and side edges
+            // (a hard rectangular bottom edge, no rounding or fade). Collapses
+            // to nothing when no video is bundled — the padded text block below
+            // then becomes the whole screen, as the welcome step was before.
             OnboardingIntroVideo()
 
-            HStack(spacing: 16) {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
-                    .frame(width: 64, height: 64)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Welcome to SherlockEQ")
-                        .font(.title.weight(.semibold))
-                    Text("Real-time hearing correction for everything your Mac plays.")
-                        .font(.title3)
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(spacing: 16) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .frame(width: 64, height: 64)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Welcome to SherlockEQ")
+                            .font(.title.weight(.semibold))
+                        Text("Real-time hearing correction for everything your Mac plays.")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                OnboardingCard {
+                    Label {
+                        Text("How it works")
+                            .font(.callout.weight(.medium))
+                    } icon: {
+                        Image(systemName: "waveform.and.magnifyingglass")
+                            .foregroundStyle(.tint)
+                    }
+                    Text("SherlockEQ listens to your Mac's audio, runs each ear through its own equalizer tuned to your hearing, and sends the corrected sound on to your speakers or headphones. It also tracks your daily listening dose so you can keep the volume in a safe range.")
+                        .font(.callout)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-            }
 
-            OnboardingCard {
-                Label {
-                    Text("How it works")
-                        .font(.callout.weight(.medium))
-                } icon: {
-                    Image(systemName: "waveform.and.magnifyingglass")
-                        .foregroundStyle(.tint)
+                // Upstream-EQ note — spec §8.4 requires the wizard to include
+                // it. Wording kept in sync with the footnote on the Equalizer
+                // screen so the two surfaces tell the same story.
+                OnboardingCard {
+                    Label {
+                        Text("One thing to check")
+                            .font(.callout.weight(.medium))
+                    } icon: {
+                        Image(systemName: "info.circle")
+                            .foregroundStyle(.tint)
+                    }
+                    Text("Equalizers inside other apps — like Music's EQ or Sound Check — shape the audio before it reaches SherlockEQ and stack with its correction. For predictable results, keep other apps' equalizers flat.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Text("SherlockEQ listens to your Mac's audio, runs each ear through its own equalizer tuned to your hearing, and sends the corrected sound on to your speakers or headphones. It also tracks your daily listening dose so you can keep the volume in a safe range.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            // Upstream-EQ note — spec §8.4 requires the wizard to include
-            // it. Wording kept in sync with the footnote on the Equalizer
-            // screen so the two surfaces tell the same story.
-            OnboardingCard {
-                Label {
-                    Text("One thing to check")
-                        .font(.callout.weight(.medium))
-                } icon: {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(.tint)
-                }
-                Text("Equalizers inside other apps — like Music's EQ or Sound Check — shape the audio before it reaches SherlockEQ and stack with its correction. For predictable results, keep other apps' equalizers flat.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            .padding(28)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

@@ -28,7 +28,7 @@ struct OnboardingIntroVideo: View {
 
     /// Beat to hold on the first frame before playback begins, so the welcome
     /// screen settles before the motion starts.
-    private static let startDelay: TimeInterval = 3
+    private static let startDelay: TimeInterval = 1.5
 
     @State private var aspect: CGFloat?
 
@@ -43,14 +43,12 @@ struct OnboardingIntroVideo: View {
 
     var body: some View {
         if let url = Self.resourceURL() {
+            // Full-bleed hero: full window width at the video's own aspect
+            // ratio, no corner rounding or border, clipped to a hard edge.
             IntroPlayerView(url: url, startDelay: Self.startDelay)
                 .aspectRatio(aspect ?? Self.fallbackAspect, contentMode: .fit)
                 .frame(maxWidth: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-                )
+                .clipped()
                 .task { aspect = await Self.loadAspectRatio(url) }
                 // Decorative — the welcome cards below carry the actual message.
                 .accessibilityHidden(true)
@@ -85,7 +83,7 @@ private struct IntroPlayerView: NSViewRepresentable {
     func makeNSView(context: Context) -> AVPlayerView {
         let view = AVPlayerView()
         view.controlsStyle = .none
-        view.videoGravity = .resizeAspect
+        view.videoGravity = .resizeAspectFill   // fill edge-to-edge, never letterbox
         view.allowsPictureInPicturePlayback = false
 
         let player = AVPlayer(url: url)
