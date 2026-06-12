@@ -632,6 +632,26 @@
               <td><span class="mark no" title="Uses a virtual driver">—</span></td>
             </tr>
             <tr>
+              <td class="row-head">Shortcuts (App Intents)
+                <span class="sub">Automate from Apple's Shortcuts app</span>
+              </td>
+              <td class="is-self"><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark no" title="HTTP API only; no Shortcuts actions">—</span></td>
+              <td><span class="mark no" title="AppleScript only; no Shortcuts actions">—</span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+            </tr>
+            <tr>
+              <td class="row-head">Command line interface
+                <span class="sub">Script and automate from the terminal</span>
+              </td>
+              <td class="is-self"><span class="mark yes"><i data-lucide="check"></i></span></td>
+              <td><span class="mark no" title="macOS Shortcuts automation; no command line tool">—</span></td>
+              <td><span class="mark part" title="No CLI binary, but a documented HTTP API scriptable via curl">◐</span></td>
+              <td><span class="mark no" title="AppleScript automation; no command line tool">—</span></td>
+              <td><span class="mark no"><i data-lucide="minus"></i></span></td>
+            </tr>
+            <tr>
               <td class="row-head">Price
                 <span class="sub">As of publication; verify with vendor</span>
               </td>
@@ -645,7 +665,7 @@
         </table>
       </div>
 
-      <p class="matrix-note" style="margin-top: var(--s-6); max-width: 78ch;">
+      <p class="matrix-note" style="margin-top: var(--s-6); max-width: 60ch;">
         <span class="mark yes" style="vertical-align: middle;"><i data-lucide="check"></i></span> full support &nbsp;·&nbsp;
         <span class="mark part" style="vertical-align: middle;">◐</span> partial or tier-gated &nbsp;·&nbsp;
         <span class="mark no" style="vertical-align: middle;"><i data-lucide="minus"></i></span> not offered.
@@ -673,7 +693,7 @@
         </div>
         <div class="body">
           <p><strong>What it nails.</strong> SoundSource is the most complete Mac audio control utility. Per-app volume, per-app EQ, per-output-device control, and a real AU plugin host in one polished package. If your problem is "Zoom is too loud, Spotify is too quiet, and YouTube needs a bass cut," this is the right answer.</p>
-          <p><strong>Where SherlockEQ differs.</strong> SherlockEQ doesn't do per-app routing and doesn't host plugins. It assumes your ears are the variable, not the source. The four EQ modes (Simple / Speech / Advanced / Expert) drive one chain that applies to all system audio, with per-ear curves derived from your audiogram and a tinnitus notch that travels with each profile.</p>
+          <p><strong>Where SherlockEQ differs.</strong> SherlockEQ doesn't do per-app routing and doesn't host plugins. It assumes your ears are the variable, not the source. The four EQ modes (Simple / Speech / Advanced / Expert) drive one chain that applies to all system audio, with per-ear curves derived from your audiogram and a tinnitus notch that travels with each profile. On automation the two overlap: both expose macOS Shortcuts actions via App Intents, and SherlockEQ adds a command line tool for scripting from the terminal — a small edge, not a deciding one.</p>
           <dl class="overlap">
             <dt>Overlap</dt><dd>Both apply EQ system-wide, both ship per-device profiles, both run native (no virtual driver).</dd>
             <dt>SherlockEQ adds</dt><dd>Audiogram-driven curve, per-ear parametric (not just balance), tinnitus tone finder + notch, NIOSH dose tracker.</dd>
@@ -689,7 +709,7 @@
         </div>
         <div class="body">
           <p><strong>What it nails.</strong> eqMac is the most direct "I want a Mac EQ" answer. Free 10-band, paid Pro with unlimited bands, parametric control, Q/bandwidth, spectrum analyzer, separate left/right EQ, app-volume mixing, headphone presets, and device-based preset switching. The asymmetric-EQ feature in Pro overlaps directly with what SherlockEQ does by default.</p>
-          <p><strong>Where SherlockEQ differs.</strong> SherlockEQ leads with the hearing context — you don't start at a 10-band slider, you start at an audiogram or a tinnitus sweep. It is free with no Pro tier, and uses the native Core Audio Tap API instead of a virtual driver, which means no extra device install. eqMac's Pro tier matches several SherlockEQ features behind a subscription.</p>
+          <p><strong>Where SherlockEQ differs.</strong> SherlockEQ leads with the hearing context — you don't start at a 10-band slider, you start at an audiogram or a tinnitus sweep. It is free with no Pro tier, and uses the native Core Audio Tap API instead of a virtual driver, which means no extra device install. eqMac's Pro tier matches several SherlockEQ features behind a subscription. For automation, eqMac is genuinely scriptable too — it exposes an HTTP API you can drive with <code>curl</code> — where SherlockEQ ships a dedicated command line tool; both get you to terminal control by a different route.</p>
           <dl class="overlap">
             <dt>Overlap</dt><dd>System-wide EQ, parametric / per-ear capability (Pro), device presets, spectrum analyzer.</dd>
             <dt>SherlockEQ adds</dt><dd>Audiogram-driven curve, tinnitus tone finder + notch, NIOSH dose tracker, native CATap (no driver), free.</dd>
