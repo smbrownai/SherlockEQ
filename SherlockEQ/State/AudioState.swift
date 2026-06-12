@@ -195,6 +195,13 @@ final class AudioState: ObservableObject {
         return UUID(uuidString: raw)
     }
 
+    /// Cross-window deep-link request. A surface that lives outside the main
+    /// window (the onboarding wizard's "next steps" cards, say) sets this to
+    /// ask `MainWindowView` to switch its sidebar selection. `MainWindowView`
+    /// observes it, applies the value to its local selection state, and clears
+    /// it back to nil. Not persisted — it's a one-shot navigation intent.
+    @Published var pendingMainSection: SidebarSection?
+
     /// Throttled mirrors of `safeListening.sessionDose` / `.remainingMinutes`
     /// for views that re-render on every `AudioState` tick. Populated at 1 Hz
     /// from `mirrorTrackerState()` — see the throttle wiring in init.
@@ -250,15 +257,21 @@ final class AudioState: ObservableObject {
         return store.profiles.first { $0.id == id }
     }
 
-    /// On first launch, pick the first available profile so the popover and
-    /// the audio engine have something to point at. If a persisted active
-    /// profile no longer exists (user deleted it in a prior session) fall
-    /// back to the first available profile the same way.
+    /// On first launch, point the popover and audio engine at a sensible
+    /// default. If the persisted active profile still exists, keep it. Else
+    /// prefer the Music Balanced factory preset (the neutral default), and
+    /// only fall back to the first available profile if it's somehow absent.
+    /// This also covers the existing-install migration case where the old
+    /// active built-in was deleted during factory-preset reconciliation.
     func adoptDefaultProfileIfNeeded(from store: ProfileStore) {
         if let id = activeProfileID, store.profiles.contains(where: { $0.id == id }) {
             return
         }
-        activeProfileID = store.profiles.first?.id
+        if store.profiles.contains(where: { $0.id == HearingProfile.defaultActiveFactoryID }) {
+            activeProfileID = HearingProfile.defaultActiveFactoryID
+        } else {
+            activeProfileID = store.profiles.first?.id
+        }
     }
 
     /// Bridge profile state into the audio engine. Subscribes to the active

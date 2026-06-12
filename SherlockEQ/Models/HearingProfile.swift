@@ -51,7 +51,18 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     /// full parametric with Expert). Switching is non-destructive:
     /// bands the other modes wrote stay in storage and only hide.
     var eqMode: EQMode                          // new profiles default .simple; legacy decode .expert
-    var isBuiltIn: Bool                         // true for curated presets (Default, Voice Clarity) — UI blocks edits and offers Duplicate
+    /// Marks one of the shipped factory listening presets. No longer a
+    /// read-only lock — factory presets are editable in place. The flag
+    /// only enables the per-profile "Reset to Factory Default" affordance
+    /// and inclusion in "Restore Factory Presets". User-created profiles
+    /// (and copies) have this false and get neither.
+    var isBuiltIn: Bool
+    /// One-sentence, user-facing blurb shown on profile cards. Populated
+    /// for factory presets; nil for user profiles. decodeIfPresent.
+    var presetDescription: String?
+    /// Best-use tags ("Voice", "Music", "Comfort", …) shown as chips on
+    /// profile cards. Empty for user profiles. decodeIfPresent.
+    var presetTags: [String]
 
     var createdAt: Date
     var modifiedAt: Date
@@ -104,6 +115,8 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         // default to .simple — see the designated initializer.
         self.eqMode                 = try c.decodeIfPresent(EQMode.self, forKey: .eqMode) ?? .expert
         self.isBuiltIn              = try c.decodeIfPresent(Bool.self, forKey: .isBuiltIn) ?? false
+        self.presetDescription      = try c.decodeIfPresent(String.self, forKey: .presetDescription)
+        self.presetTags             = try c.decodeIfPresent([String].self, forKey: .presetTags) ?? []
         self.createdAt              = try c.decode(Date.self, forKey: .createdAt)
         self.modifiedAt             = try c.decode(Date.self, forKey: .modifiedAt)
     }
@@ -119,6 +132,8 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         separateChannels: Bool = false,
         eqMode: EQMode = .simple,
         isBuiltIn: Bool = false,
+        presetDescription: String? = nil,
+        presetTags: [String] = [],
         createdAt: Date, modifiedAt: Date
     ) {
         self.id = id; self.name = name; self.symbol = symbol
@@ -137,6 +152,8 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.separateChannels = separateChannels
         self.eqMode = eqMode
         self.isBuiltIn = isBuiltIn
+        self.presetDescription = presetDescription
+        self.presetTags = presetTags
         self.createdAt = createdAt; self.modifiedAt = modifiedAt
     }
 }
@@ -149,7 +166,12 @@ extension HearingProfile {
         var copy = self
         copy.id = UUID()
         copy.name = "\(self.name) Copy"
+        // A copy is a user profile, not a factory preset: clear the factory
+        // marker and its card metadata so it doesn't show a star badge or a
+        // (dead-end) "Reset to Factory Default".
         copy.isBuiltIn = false
+        copy.presetDescription = nil
+        copy.presetTags = []
         let now = Date()
         copy.createdAt = now
         copy.modifiedAt = now
@@ -179,36 +201,119 @@ extension HearingProfile {
         )
     }
 
-    /// Voice Clarity preset from spec §5.8 — boosts the speech-intelligibility
-    /// band cluster (1–6 kHz) for podcast monitoring. Same curve both ears.
-    static func makeVoiceClarityPreset() -> HearingProfile {
-        let now = Date()
-        let curve: [EQBand] = [
-            EQBand(frequencyHz: 500,  gaindB: 1, bandwidth: 1.0, filterType: .parametric, enabled: true),
-            EQBand(frequencyHz: 1000, gaindB: 2, bandwidth: 1.0, filterType: .parametric, enabled: true),
-            EQBand(frequencyHz: 2000, gaindB: 3, bandwidth: 1.0, filterType: .parametric, enabled: true),
-            EQBand(frequencyHz: 3000, gaindB: 4, bandwidth: 1.0, filterType: .parametric, enabled: true),
-            EQBand(frequencyHz: 4000, gaindB: 3, bandwidth: 1.0, filterType: .parametric, enabled: true),
-            EQBand(frequencyHz: 6000, gaindB: 1, bandwidth: 1.0, filterType: .parametric, enabled: true),
-        ]
+}
+
+// MARK: - Factory listening presets
+
+extension HearingProfile {
+
+    /// The four shipped listening-comfort presets, in their canonical UI
+    /// order. These are tone/comfort presets built on the existing 10-band
+    /// Advanced EQ — explicitly **not** medical hearing correction. Each has
+    /// a stable id so "Reset to Factory Default" and "Restore Factory
+    /// Presets" can find and rebuild it, and a fixed historical `createdAt`
+    /// so the store's createdAt sort places them first, in this order.
+    enum Factory: Int, CaseIterable {
+        case voiceClarity, musicBalanced, gentleListening, presenceBoost
+
+        var id: UUID {
+            switch self {
+            case .voiceClarity:    return UUID(uuidString: "F0000001-0000-4000-A000-000000000001")!
+            case .musicBalanced:   return UUID(uuidString: "F0000002-0000-4000-A000-000000000002")!
+            case .gentleListening: return UUID(uuidString: "F0000003-0000-4000-A000-000000000003")!
+            case .presenceBoost:   return UUID(uuidString: "F0000004-0000-4000-A000-000000000004")!
+            }
+        }
+
+        /// Stable, distant-past timestamp so factory presets sort ahead of
+        /// any user profile (created "now") and stay in enum order.
+        var createdAt: Date { Date(timeIntervalSince1970: 1_600_000_000 + Double(rawValue)) }
+    }
+
+    /// The ten Advanced-EQ center frequencies, in slider order. Mirrors
+    /// `AdvancedEQView.frequencies` / `EQMode.advanced` owned slots.
+    static let advancedCenters: [Double] = [31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+
+    /// Build the ten Advanced parametric bands from a gain-per-center list.
+    /// Bandwidth 1.0 (one octave) matches the Advanced graphic-EQ slots so
+    /// `AdvancedEQView` finds and shows them via `EQBandLookup`.
+    private static func advancedBands(_ gains: [Double]) -> [EQBand] {
+        zip(advancedCenters, gains).map { freq, gain in
+            EQBand(frequencyHz: freq, gaindB: gain, bandwidth: 1.0, filterType: .parametric, enabled: true)
+        }
+    }
+
+    private static func makeFactory(
+        _ which: Factory, name: String, symbol: String,
+        gains: [Double], outputGainDB: Double,
+        description: String, tags: [String]
+    ) -> HearingProfile {
+        let bands = advancedBands(gains)
+        let stamp = which.createdAt
         return HearingProfile(
-            id: UUID(),
-            name: "Voice Clarity",
-            symbol: "waveform.badge.mic",
+            id: which.id,
+            name: name,
+            symbol: symbol,
             linkedDeviceUID: nil,
-            leftEar: EarProfile(thresholds: AudiogramPoint.flat, bands: curve),
-            rightEar: EarProfile(thresholds: AudiogramPoint.flat, bands: curve),
+            leftEar: EarProfile(thresholds: AudiogramPoint.flat, bands: bands),
+            rightEar: EarProfile(thresholds: AudiogramPoint.flat, bands: bands),
             leftNotch: .disabled,
             rightNotch: .disabled,
-            globalTrimDB: 0,
+            globalTrimDB: outputGainDB,
             autoEQCurveURL: nil,
             safeListeningCeilingDB: 85.0,
             compensationFactor: 0.5,
+            eqMode: .advanced,
             isBuiltIn: true,
-            createdAt: now,
-            modifiedAt: now
+            presetDescription: description,
+            presetTags: tags,
+            createdAt: stamp,
+            modifiedAt: stamp
         )
     }
+
+    static func factoryVoiceClarity() -> HearingProfile {
+        makeFactory(.voiceClarity, name: "Voice Clarity", symbol: "waveform.badge.mic",
+            gains: [-4, -3, -2, -1, 0, 1, 2, 2.5, 0.5, -1], outputGainDB: -2,
+            description: "Improves spoken-word clarity by reducing low-frequency boom and gently increasing speech presence. Best for podcasts, calls, meetings, lectures, and audiobooks.",
+            tags: ["Voice", "Speech", "Clarity"])
+    }
+
+    static func factoryMusicBalanced() -> HearingProfile {
+        makeFactory(.musicBalanced, name: "Music Balanced", symbol: "music.note",
+            gains: [0.5, 1, 0.5, -0.5, 0, 0, 0.5, 1, 0, -0.5], outputGainDB: -1,
+            description: "A natural, lightly refined music profile with modest bass support and gentle clarity. Designed to preserve the character of music without making it overly bright.",
+            tags: ["Music", "Balanced", "Natural"])
+    }
+
+    static func factoryGentleListening() -> HearingProfile {
+        makeFactory(.gentleListening, name: "Gentle Listening", symbol: "moon.stars",
+            gains: [0, 0, 0.5, 0.5, 0, 0, -0.5, -1.5, -2.5, -3], outputGainDB: 0,
+            description: "Softens bright or fatiguing audio for longer, more comfortable listening. Useful for sharp headphones, late-night sessions, or content that feels harsh.",
+            tags: ["Comfort", "Soft", "Long Sessions"])
+    }
+
+    static func factoryPresenceBoost() -> HearingProfile {
+        makeFactory(.presenceBoost, name: "Presence Boost", symbol: "sparkles",
+            gains: [-1, -1, -1, -0.5, 0, 0.5, 1.5, 2, 0.5, 0], outputGainDB: -2,
+            description: "Adds mild definition and presence for audio that sounds dull or veiled. Conservative by design and not a substitute for an audiogram-based profile.",
+            tags: ["Clarity", "Presence", "Mild Lift"])
+    }
+
+    /// All four factory presets, in canonical UI order.
+    static var factoryProfiles: [HearingProfile] {
+        [factoryVoiceClarity(), factoryMusicBalanced(), factoryGentleListening(), factoryPresenceBoost()]
+    }
+
+    /// The canonical (pristine) factory preset for a given id, or nil if the
+    /// id isn't one of the four factory ids. Used to reset an edited factory
+    /// profile back to its shipped values.
+    static func factoryCanonical(forID id: UUID) -> HearingProfile? {
+        factoryProfiles.first { $0.id == id }
+    }
+
+    /// The default active profile on a fresh install / after migration.
+    static var defaultActiveFactoryID: UUID { Factory.musicBalanced.id }
 }
 
 /// Which EQ lens this profile uses. The four modes are storage views

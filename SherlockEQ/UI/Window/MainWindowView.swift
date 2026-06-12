@@ -116,6 +116,19 @@ struct MainWindowView: View {
         // 240pt monitor sidebar at right.
         .frame(minWidth: 1366, idealWidth: 1400, minHeight: 716, idealHeight: 800)
         .linkUndoManagerToProfileStore()
+        // Honor cross-window deep-link requests (e.g. the onboarding wizard's
+        // "next steps" cards). `onAppear` catches an intent set before this
+        // window existed (the wizard opens the window then asks for a section);
+        // `onChange` catches one set while it's already open. Clear after
+        // applying so re-selecting the same section later still works.
+        .onAppear { applyPendingSection() }
+        .onChange(of: audioState.pendingMainSection) { applyPendingSection() }
+    }
+
+    private func applyPendingSection() {
+        guard let target = audioState.pendingMainSection else { return }
+        selection = target
+        audioState.pendingMainSection = nil
     }
 
     @ViewBuilder private var detail: some View {

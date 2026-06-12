@@ -39,6 +39,8 @@ struct DebugView: View {
                 signalChainSection
                 Divider()
                 notificationsSection
+                Divider()
+                onboardingSection
 
                 if let message = errorMessage {
                     Text(message)
@@ -208,6 +210,24 @@ struct DebugView: View {
                 if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
                     NSWorkspace.shared.open(url)
                 }
+            }
+        }
+    }
+
+    @ViewBuilder private var onboardingSection: some View {
+        Text("Onboarding").font(.subheadline).foregroundStyle(.secondary)
+        labeled("Completed flag", value: state.preferences.hasCompletedOnboarding ? "true" : "false")
+        HStack(spacing: 12) {
+            Button("Reset (run wizard next launch)") {
+                // Clearing the gate makes AppDelegate.bootstrap() show the
+                // wizard on the next cold start — the most faithful way to
+                // validate the real first-launch path (deferred prompts and
+                // all), short of deleting the UserDefaults key by hand.
+                state.preferences.hasCompletedOnboarding = false
+            }
+            .disabled(!state.preferences.hasCompletedOnboarding)
+            Button("Replay now") {
+                AppDelegate.shared?.showOnboardingWindow()
             }
         }
     }

@@ -6,7 +6,7 @@ import OSLog
 /// by UUID, under `~/Library/Application Support/SherlockEQ/profiles/`.
 ///
 /// API is intentionally narrow: `loadAll()`, `save(_:)`, `delete(_:)`,
-/// `seedDefaultsIfEmpty()`. The store maintains a published `profiles` array
+/// `reconcileFactoryPresets()`. The store maintains a published `profiles` array
 /// so SwiftUI can observe changes; writes go through `save(_:)` rather than
 /// direct mutation of the array.
 @MainActor
@@ -200,18 +200,93 @@ final class ProfileStore: ObservableObject {
         }
     }
 
-    /// On first launch, seed a "Default" profile and the Voice Clarity preset
-    /// so the user always has something selected when they open the app.
-    func seedDefaultsIfEmpty() {
-        guard profiles.isEmpty else { return }
+    // MARK: - Factory listening presets
+
+    /// Bumped whenever the shipped factory-preset set changes. A launch that
+    /// sees a lower stored version runs the one-time reconcile below.
+    private static let factoryPresetsVersion = 1
+    private static let factoryPresetsVersionKey = "sherlockeq.factoryPresetsVersion"
+
+    private var storedFactoryVersion: Int {
+        get { UserDefaults.standard.integer(forKey: Self.factoryPresetsVersionKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.factoryPresetsVersionKey) }
+    }
+
+    private var factoryIDs: Set<UUID> { Set(HearingProfile.factoryProfiles.map(\.id)) }
+
+    /// One-time-per-version migration. Removes legacy built-ins that aren't
+    /// one of the current factory presets (e.g. the old "Default" / "Voice
+    /// Clarity" with random ids), then installs any of the four canonical
+    /// presets that are missing by id. Gated on `factoryPresetsVersion` so a
+    /// preset the user deliberately deleted is NOT silently re-added on every
+    /// launch — only on a genuine version bump. Existing-by-id presets are
+    /// left untouched so in-place edits survive.
+    func reconcileFactoryPresets() {
+        guard storedFactoryVersion < Self.factoryPresetsVersion else { return }
         do {
-            try save(.makeDefault(isBuiltIn: true))
-            try save(.makeVoiceClarityPreset())
-            log.info("Seeded initial profiles")
+            let canonicalIDs = factoryIDs
+            // Drop legacy built-ins (random-id Default / Voice Clarity, or
+            // factory presets retired in a past version). User profiles
+            // (isBuiltIn == false) are never touched.
+            for legacy in profiles where legacy.isBuiltIn && !canonicalIDs.contains(legacy.id) {
+                try delete(legacy)
+            }
+            // Install any canonical preset that isn't present by id.
+            for preset in HearingProfile.factoryProfiles where !profiles.contains(where: { $0.id == preset.id }) {
+                try save(preset)
+            }
+            storedFactoryVersion = Self.factoryPresetsVersion
+            log.info("Reconciled factory presets to version \(Self.factoryPresetsVersion)")
         } catch {
-            lastError = "Could not seed defaults: \(error.localizedDescription)"
-            log.error("Seed failed: \(error.localizedDescription, privacy: .public)")
+            lastError = "Could not install factory presets: \(error.localizedDescription)"
+            log.error("Factory reconcile failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// "Restore Factory Presets" — force every canonical preset back to its
+    /// shipped values (recreating any the user deleted, overwriting any they
+    /// edited), and drop retired legacy built-ins. User profiles untouched.
+    func restoreFactoryPresets() {
+        do {
+            let canonicalIDs = factoryIDs
+            for legacy in profiles where legacy.isBuiltIn && !canonicalIDs.contains(legacy.id) {
+                try delete(legacy)
+            }
+            for preset in HearingProfile.factoryProfiles {
+                try save(preset)
+            }
+            storedFactoryVersion = Self.factoryPresetsVersion
+            log.info("Restored all factory presets")
+        } catch {
+            lastError = "Could not restore factory presets: \(error.localizedDescription)"
+            log.error("Factory restore failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// "Reset to Factory Default" for a single profile. Overwrites the profile
+    /// at `id` with its canonical factory values. No-op for user profiles
+    /// (ids that aren't one of the four factory presets).
+    func resetProfileToFactory(_ id: UUID) {
+        guard let canonical = HearingProfile.factoryCanonical(forID: id) else { return }
+        do {
+            try save(canonical)
+            log.info("Reset \(canonical.name, privacy: .public) to factory default")
+        } catch {
+            lastError = "Could not reset profile: \(error.localizedDescription)"
+            log.error("Factory reset failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// True when `profile` is a factory preset whose current values differ
+    /// from its shipped canonical version — drives the "Reset to Factory
+    /// Default" button's enabled state.
+    func differsFromFactory(_ profile: HearingProfile) -> Bool {
+        guard let canonical = HearingProfile.factoryCanonical(forID: profile.id) else { return false }
+        return !profile.leftEar.bands.audiblyEquivalent(to: canonical.leftEar.bands)
+            || !profile.rightEar.bands.audiblyEquivalent(to: canonical.rightEar.bands)
+            || abs(profile.globalTrimDB - canonical.globalTrimDB) > 0.001
+            || profile.name != canonical.name
+            || profile.balance != canonical.balance
     }
 
     // MARK: - Helpers

@@ -177,8 +177,13 @@ Each profile contains (see `HearingProfile.swift`):
   are storage views onto the same band array, not stackable layers — the profile
   commits to one mental model. Switching is non-destructive. New profiles default
   to `.simple`; legacy decode defaults to `.expert`.
-- `isBuiltIn: Bool` — true for curated presets (Default, Voice Clarity). The UI
-  blocks edits on built-in profiles and offers Duplicate.
+- `isBuiltIn: Bool` — marks one of the four shipped factory listening presets
+  (Voice Clarity, Music Balanced, Gentle Listening, Presence Boost). No longer a
+  lock: factory presets are editable in place. The flag only enables a per-profile
+  "Reset to Factory Default" and inclusion in "Restore Factory Presets". Editing a
+  factory preset can also be branched into a separate user copy via Duplicate.
+- `presetDescription: String?`, `presetTags: [String]` — user-facing card copy for
+  factory presets (nil/empty for user profiles). `decodeIfPresent` for back-compat.
 - `createdAt: Date`, `modifiedAt: Date`
 
 Custom `Codable` decoder preserves backwards compatibility: pre-balance, pre-isBuiltIn
@@ -369,23 +374,34 @@ needed).
 
 ---
 
-### 5.8 Voice Clarity Preset
+### 5.8 Factory Listening Presets
 
-A built-in profile preset (`HearingProfile.makeVoiceClarityPreset`) targeting speech
-intelligibility for podcast monitoring. Marked `isBuiltIn: true` so the UI blocks
-edits and offers Duplicate.
+Four shipped **listening-comfort presets** built on the existing 10-band Advanced EQ
+(`HearingProfile.factoryProfiles`). These are tone/comfort presets — **not** medical
+hearing correction; copy never implies treating hearing loss, tinnitus, or any
+condition. Each has a stable id, `eqMode: .advanced`, identical L/R bands, an output
+trim folded into `globalTrimDB`, `isBuiltIn: true`, and a `presetDescription` +
+`presetTags` for its card. Canonical UI order: Voice Clarity, Music Balanced, Gentle
+Listening, Presence Boost. The cold default (and onboarding default) is **Music
+Balanced**.
 
-| Frequency | Gain  | Rationale                              |
-|-----------|-------|----------------------------------------|
-| 500 Hz    | +1 dB | Vowel body warmth                      |
-| 1000 Hz   | +2 dB | Fundamental speech intelligibility     |
-| 2000 Hz   | +3 dB | Consonant clarity (primary zone)       |
-| 3000 Hz   | +4 dB | Sibilance and plosive articulation     |
-| 4000 Hz   | +3 dB | Presence and definition                |
-| 6000 Hz   | +1 dB | Air and brightness                     |
+Gains per Advanced center (31.5 / 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz):
 
-The preset appears as a named profile in the Profiles list (not buried in a menu)
-and is seeded on first launch alongside a flat "Default" profile.
+| Preset | Bands (dB) | Output trim |
+|---|---|---|
+| Voice Clarity | −4, −3, −2, −1, 0, +1, +2, +2.5, +0.5, −1 | −2 dB |
+| Music Balanced | +0.5, +1, +0.5, −0.5, 0, 0, +0.5, +1, 0, −0.5 | −1 dB |
+| Gentle Listening | 0, 0, +0.5, +0.5, 0, 0, −0.5, −1.5, −2.5, −3 | 0 dB |
+| Presence Boost | −1, −1, −1, −0.5, 0, +0.5, +1.5, +2, +0.5, 0 | −2 dB |
+
+**Factory lifecycle.** `ProfileStore.reconcileFactoryPresets()` (version-gated on
+`sherlockeq.factoryPresetsVersion`) installs the four on first launch and, on upgrade,
+removes the legacy `Default` / `Voice Clarity` built-ins and installs the four. A
+deleted preset is **not** silently re-added on later launches. `restoreFactoryPresets()`
+(Profiles toolbar) recreates/resets all four; `resetProfileToFactory(_:)` reverts one.
+The limiter stays the existing global setting — no per-profile limiter state. Transitions
+remain instant hard-swaps (click-free by the cascade's state-zeroing + denormal flush);
+no ramping was added.
 
 Separately, the **Speech EQ mode** (`EQMode.speech`) is a 6-band slider surface
 (60 Hz low-shelf, 200 / 800 / 2500 / 6000 Hz parametric, 12 kHz high-shelf) so users
@@ -646,7 +662,9 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     var compensationFactor: Double                  // 0.25…1.0
     var separateChannels: Bool
     var eqMode: EQMode                              // .simple / .speech / .advanced / .expert
-    var isBuiltIn: Bool
+    var isBuiltIn: Bool                             // factory preset marker (editable, not locked)
+    var presetDescription: String?                 // factory-preset card copy
+    var presetTags: [String]                       // factory-preset best-use tags
     var createdAt: Date
     var modifiedAt: Date
 }
@@ -778,12 +796,13 @@ sidebar (220pt) toggleable from the toolbar.
   Profiles" button (selects the Profiles section). Profiles is reachable via this
   shortcut, not from the section list, to avoid a duplicated top+bottom entry.
 
-**Profiles** — list of profiles with create / duplicate / delete / import / export
-in the toolbar. Detail panel shows name, symbol, linked device UID, EQ mode picker,
+**Profiles** — list of profiles with create / duplicate / delete / import / export /
+restore-factory in the toolbar; rows show name, factory star badge, description, and
+tag chips. Detail panel shows name, symbol, linked device UID, EQ mode picker,
 balance, global trim, safe-listening ceiling, AutoEQ correction (file picker plus
-the library-folder menu plus the AutoEQ remote search view). Built-in profiles
-(Default, Voice Clarity) show a banner offering Duplicate; their controls are
-disabled.
+the library-folder menu plus the AutoEQ remote search view). The four factory presets
+(§5.8) are fully editable; they show a banner with "Reset to Factory Default" (enabled
+once edited) and Duplicate. "Restore Factory Presets" in the toolbar rebuilds all four.
 
 **Audiogram** — interactive audiogram chart for the active profile (Left ear / Right
 ear tabs). Draggable threshold points at standard frequencies plus numeric entry
@@ -834,24 +853,48 @@ intentionally exposed for self-support and bug reports.
 
 ### 8.4 Onboarding
 
-Not currently implemented. A first-launch wizard (welcome → permission → profile
-wizard → audiogram entry → tinnitus pitch → safe-listening ceiling) is out of scope
-for the present version. On first launch the app seeds a flat **Default** profile
-plus the **Voice Clarity** preset and asks for system-audio permission inline the
-first time the popover opens. Onboarding-style polish (welcome screen, guided
-audiogram, calibration walkthrough) is future work.
+Implemented as a **lean three-step first-launch wizard** (`UI/Onboarding/OnboardingView.swift`),
+shown once and gated by `AppPreferences.hasCompletedOnboarding`
+(UserDefaults `sherlockeq.hasCompletedOnboarding`). `AppDelegate` owns the
+hosting window (`showOnboardingWindow()`, same `.accessory → .regular`
+activation dance as the Help / Analog windows) and branches `bootstrap()`:
+returning launches keep the prior behavior, while a fresh install **defers the
+notification + system-audio permission prompts** and shows the wizard instead,
+so those prompts arrive *after* an explanation rather than cold. The three steps:
 
-When the wizard is built, it must include a brief upstream-EQ note: equalizers
+1. **Welcome** — what SherlockEQ does, plus the mandatory upstream-EQ note (below).
+2. **Permissions** — primes the non-obvious **System Audio Recording** TCC grant
+   (`kTCCServiceAudioCapture`) with plain language before macOS asks, then a
+   "Grant access" button that calls `AudioCapturePermission.request()`. Because
+   `preflight()` can't distinguish "never asked" from "denied", the UI always
+   offers Grant access first and only falls back to an "Open System Settings"
+   deep link *after* a failed request. Notifications are offered as an optional,
+   skippable grant. Denials route through `NoticeCenter`.
+3. **Profile** — pick one of the four factory listening presets (§5.8), shown as
+   cards with description + tag chips in canonical order, default **Music Balanced**,
+   plus a "listening-comfort presets, not medical hearing correction" line. Optional
+   "Where to next?" rows deep-link to the Audiogram / Tinnitus Notch / Safe Listening
+   screens via `AudioState.pendingMainSection` (observed by `MainWindowView`).
+
+On finish or skip, `AppDelegate.finishOnboarding` sets the gate flag, runs the
+deferred permission/start work, and optionally opens the main window on the
+chosen section. Re-runnable any time from **Settings → About → "Replay intro"**.
+
+Deliberately **not** a deep guided audiogram / tinnitus / calibration wizard:
+those are first-class screens now, so onboarding points at them rather than
+duplicating them inline.
+
+The wizard includes a brief upstream-EQ note: equalizers
 inside other apps (e.g. Music's EQ, Sound Check) are applied within those apps
 before SherlockEQ's tap captures the mix, so they stack underneath the hearing
 correction and cannot be detected or compensated from the tap side. Recommend
-setting other apps' equalizers flat. (A matching footnote already ships on the
-Equalizer screen.) Optional enhancement: Music's EQ state is queryable via
-Apple Events (`EQ enabled` / `current EQ preset` in Music's scripting
-dictionary) — requires an `NSAppleEventsUsageDescription` string, a TCC
-Automation prompt, and a running-Music guard (querying a non-running app
-launches it); covers Music only, so it supplements the note rather than
-replacing it.
+setting other apps' equalizers flat. (A matching footnote also ships on the
+Equalizer screen; the wizard reuses the wording.) Optional future enhancement:
+Music's EQ state is queryable via Apple Events (`EQ enabled` / `current EQ
+preset` in Music's scripting dictionary) — requires an
+`NSAppleEventsUsageDescription` string, a TCC Automation prompt, and a
+running-Music guard (querying a non-running app launches it); covers Music only,
+so it would supplement the note rather than replace it. Not built.
 
 ---
 
@@ -981,7 +1024,8 @@ SherlockEQ/
     └── SherlockEQ.entitlements
 ```
 
-(No `UI/Onboarding/` directory — onboarding is out of scope for the present version.)
+`UI/Onboarding/OnboardingView.swift` — the lean three-step first-launch wizard
+(welcome + upstream-EQ note → permission priming → starter-profile pick). See §8.4.
 
 ---
 
@@ -1034,6 +1078,6 @@ distributed (Core Audio Taps requires `audio-input` outside the sandbox).
 | dBHL → EQ accuracy | The default 0.5× compensation factor is a pragmatic heuristic. A more rigorous approach would apply ISO 226 equal-loudness correction to convert dBHL thresholds to dBSPL before deriving EQ gains; not currently planned. |
 | Cubic-spline interpolation | Spec §5.2 originally called for cubic-spline-derived intermediate bands. Not implemented — `AudiogramConversion.bands(for:compensationFactor:)` emits one band per audiogram point. Adding interpolation later would not change the function signature. |
 | Spectrogram visualisation | `.spectrogram` mode is implemented in `ParametricCanvasView` but hidden from the user-visible picker (`CanvasVizMode.userVisibleCases`) pending a performance pass (~120% CPU during testing) and a UX review. |
-| Onboarding wizard | Not implemented (§8.4). First-launch UX seeds a Default profile + Voice Clarity preset and asks for permission inline; a guided wizard is future work. |
+| Onboarding wizard | Implemented as a lean three-step first-launch wizard (§8.4): welcome + upstream-EQ note → permission priming (defers the system-audio + notification prompts so they arrive with context) → starter-profile pick with optional deep-links. Replayable from Settings → About. The deeper guided audiogram / tinnitus / calibration steps the original spec imagined were deliberately left as deep-link pointers to the now-first-class screens. |
 | AutoEQ license | AutoEQ data is MIT licensed. Credit lives in Settings → About → Acknowledgments with a link to the upstream repo. |
 | Window sizing | Current minimum 1400 × 740pt is set so the Expert layer-chip strip and the dual sidebars fit on one row without compression. Lowering the floor would require collapsing the right monitor sidebar by default. |

@@ -29,40 +29,15 @@ struct AudiogramView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header(profile)
-                if profile.isBuiltIn {
-                    BuiltInProfileBanner(profileName: profile.name) {
-                        duplicateActive(profile)
-                    }
-                }
-                Group {
-                    earPicker
-                    chartCard(profile)
-                    editorCard(profile)
-                }
-                .disabled(profile.isBuiltIn)
+                earPicker
+                chartCard(profile)
+                editorCard(profile)
                 previewCard(profile)
             }
             .padding(28)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Audiogram — \(profile.name)")
-    }
-
-    private func duplicateActive(_ profile: HearingProfile) {
-        var copy = profile.duplicated()
-        copy.name = uniqueName(base: copy.name)
-        do {
-            try profileStore.save(copy)
-            audioState.activeProfileID = copy.id
-        } catch { /* surfaced via ProfileStore.lastError (DebugView) */ }
-    }
-
-    private func uniqueName(base: String) -> String {
-        let existing = Set(profileStore.profiles.map(\.name))
-        if !existing.contains(base) { return base }
-        var i = 2
-        while existing.contains("\(base) \(i)") { i += 1 }
-        return "\(base) \(i)"
     }
 
     // MARK: - Sections

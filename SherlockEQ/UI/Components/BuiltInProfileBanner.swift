@@ -1,27 +1,36 @@
 import SwiftUI
 
-/// Banner shown above any editor when the profile being edited is a
-/// curated built-in (`isBuiltIn == true`). Explains why the controls are
-/// disabled and offers a Duplicate button; the parent decides what
-/// "duplicate" means in its context (save + select + activate vs just
-/// save + activate).
-struct BuiltInProfileBanner: View {
+/// Banner shown above the editor when the active profile is one of the
+/// shipped factory listening presets. Factory presets are editable in
+/// place — this isn't a lock — so it offers two recovery paths: revert this
+/// preset to its shipped values ("Reset to Factory Default"), or branch a
+/// separate editable copy ("Duplicate"). Reset is disabled when the preset
+/// already matches its factory definition.
+struct FactoryPresetBanner: View {
     let profileName: String
+    let canReset: Bool
+    let onReset: () -> Void
     let onDuplicate: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "lock.fill")
+            Image(systemName: "star.fill")
                 .foregroundStyle(.tint)
                 .font(.system(size: 16, weight: .semibold))
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(profileName) is a built-in profile")
+                Text("\(profileName) is a built-in preset")
                     .font(.callout.weight(.medium))
-                Text("Duplicate it to make your own version you can edit.")
+                Text("Your changes are saved to it. Reset it to the original anytime, or duplicate it to keep a separate copy.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            Button(action: onReset) {
+                Label("Reset to Default", systemImage: "arrow.counterclockwise")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(!canReset)
             Button(action: onDuplicate) {
                 Label("Duplicate", systemImage: "plus.square.on.square")
             }

@@ -16,6 +16,7 @@ struct ProfilesView: View {
 
     @State private var selection: UUID?
     @State private var profileToDelete: HearingProfile?
+    @State private var showRestoreConfirm = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -45,6 +46,16 @@ struct ProfilesView: View {
         } message: { _ in
             Text("This removes the profile's JSON file. This cannot be undone.")
         }
+        .confirmationDialog(
+            "Restore built-in presets?",
+            isPresented: $showRestoreConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Restore", role: .destructive) { profileStore.restoreFactoryPresets() }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Recreates Voice Clarity, Music Balanced, Gentle Listening, and Presence Boost and resets any edits to them. Your own profiles are untouched.")
+        }
     }
 
     // MARK: - List column
@@ -62,10 +73,16 @@ struct ProfilesView: View {
                         Button("Make Active") { audioState.activeProfileID = profile.id }
                             .disabled(audioState.activeProfileID == profile.id)
                         Button("Duplicate") { duplicate(profile) }
+                        if profile.isBuiltIn {
+                            Button("Reset to Default") {
+                                profileStore.resetProfileToFactory(profile.id)
+                            }
+                            .disabled(!profileStore.differsFromFactory(profile))
+                        }
                         Button("Export…") { exportProfile(profile) }
                         Divider()
                         Button("Delete", role: .destructive) { profileToDelete = profile }
-                            .disabled(profile.isBuiltIn || profileStore.profiles.count <= 1)
+                            .disabled(profileStore.profiles.count <= 1)
                     }
                 }
             }
@@ -89,7 +106,7 @@ struct ProfilesView: View {
             toolbarButton(
                 systemName: "minus",
                 help: "Delete selected profile",
-                isEnabled: (selectedProfile.map { !$0.isBuiltIn } ?? false) && profileStore.profiles.count > 1,
+                isEnabled: selectedProfile != nil && profileStore.profiles.count > 1,
                 action: deleteSelected
             )
             Divider().frame(height: 16)
@@ -103,6 +120,12 @@ struct ProfilesView: View {
                 help: "Export selected profile to JSON file…",
                 isEnabled: selectedProfile != nil,
                 action: exportSelected
+            )
+            Divider().frame(height: 16)
+            toolbarButton(
+                systemName: "arrow.clockwise",
+                help: "Restore the four built-in listening presets to their original settings",
+                action: { showRestoreConfirm = true }
             )
             Spacer()
         }
@@ -179,12 +202,8 @@ struct ProfilesView: View {
     }
 
     private func duplicate(_ source: HearingProfile) {
-        var copy = source
-        copy.id = UUID()
+        var copy = source.duplicated()
         copy.name = uniqueName(base: "\(source.name) Copy")
-        let now = Date()
-        copy.createdAt = now
-        copy.modifiedAt = now
         do {
             try profileStore.save(copy)
             selection = copy.id
@@ -192,7 +211,7 @@ struct ProfilesView: View {
     }
 
     private func deleteSelected() {
-        guard let p = selectedProfile, !p.isBuiltIn, profileStore.profiles.count > 1 else { return }
+        guard let p = selectedProfile, profileStore.profiles.count > 1 else { return }
         profileToDelete = p
     }
 

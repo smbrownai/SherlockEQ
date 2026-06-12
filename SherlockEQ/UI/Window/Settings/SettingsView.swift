@@ -281,6 +281,19 @@ struct SettingsView: View {
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                 }
+                Divider()
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Welcome tour").font(.callout.weight(.medium))
+                        Text("Replay the first-launch introduction and permission walkthrough.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Replay intro") { AppDelegate.shared?.showOnboardingWindow() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
             }
         }
     }
