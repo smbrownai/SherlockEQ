@@ -39,8 +39,9 @@ So a post-merge re-run of the identical command picks up PUBLISH automatically.
 3. **`gh` is authenticated** (`gh auth status`) — PREP opens a PR, PUBLISH
    creates the GitHub release.
 
-> **Note:** As of the fast-forward guard added after 0.4.0, PREP now fetches and
-> checks `main` against `origin/main` itself and offers to fast-forward. Before
+> **Note:** As of the fast-forward guard added after 0.4.0, PREP fetches and
+> checks `main` against `origin/main` itself, fast-forwarding automatically when
+> behind (and aborting if local `main` has unpushed commits). Before
 > that, a stale local `main` (feature PRs merged on GitHub but never pulled)
 > would silently cut a release with none of the new work in it. If you're on an
 > older `ship.sh`, run `git checkout main && git pull --ff-only` first.

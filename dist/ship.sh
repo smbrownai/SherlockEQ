@@ -252,8 +252,7 @@ if [[ "$PHASE" == "prep" ]]; then
       if (( AHEAD > 0 )); then
         die "local main has $AHEAD commit(s) not on origin/main (behind $BEHIND) — push or reconcile before releasing"
       fi
-      warn "local main is $BEHIND commit(s) behind origin/main"
-      confirm "fast-forward main to origin/main?"
+      info "local main is $BEHIND commit(s) behind origin/main — fast-forwarding"
       git pull --ff-only origin main
       ok "main fast-forwarded to origin/main"
     else
