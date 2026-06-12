@@ -279,10 +279,20 @@ if [[ "$PHASE" == "prep" ]]; then
   else
     case "$NOTES_INPUT" in
       "")
-        # No --notes flag → open editor with template.
+        # No --notes flag → seed an editor draft from the changes since the
+        # last tag (dist/draft-release-notes.sh: LLM-drafted via `claude`, with
+        # a mechanical PR/commit scaffold as fallback), then open $EDITOR to
+        # review and polish before saving. The comment-strip below is a no-op
+        # on a clean draft; it still cleans the blank-template fallback.
         TEMPLATE=$(mktemp -t sherlockeq-notes.XXXXXX.md)
-        {
-          cat <<EOF
+        info "drafting release notes from changes since $PREV_VERSION..."
+        if "$REPO_ROOT/dist/draft-release-notes.sh" "$VERSION" > "$TEMPLATE" \
+             && grep -q '<h2' "$TEMPLATE"; then
+          ok "draft ready — review and polish it in \$EDITOR"
+        else
+          warn "draft generation unavailable — opening a blank template"
+          {
+            cat <<EOF
 <!--
   Release notes for SherlockEQ $VERSION.
   Lines starting with "<!--" are stripped before commit.
@@ -299,14 +309,15 @@ if [[ "$PHASE" == "prep" ]]; then
   <li><!-- one bullet per user-visible change --></li>
 </ul>
 EOF
-          if [[ "$PREV_VERSION" != "(none)" ]] \
-             && [[ -f "$REPO_ROOT/dist/release-notes/$PREV_VERSION.md" ]]; then
-            echo
-            echo "<!-- ===== Previous version ($PREV_VERSION) for reference (will be stripped) ====="
-            cat "$REPO_ROOT/dist/release-notes/$PREV_VERSION.md"
-            echo "===== end previous version ===== -->"
-          fi
-        } > "$TEMPLATE"
+            if [[ "$PREV_VERSION" != "(none)" ]] \
+               && [[ -f "$REPO_ROOT/dist/release-notes/$PREV_VERSION.md" ]]; then
+              echo
+              echo "<!-- ===== Previous version ($PREV_VERSION) for reference (will be stripped) ====="
+              cat "$REPO_ROOT/dist/release-notes/$PREV_VERSION.md"
+              echo "===== end previous version ===== -->"
+            fi
+          } > "$TEMPLATE"
+        fi
 
         EDITOR_CMD="${EDITOR:-vi}"
         info "opening \$EDITOR ($EDITOR_CMD)..."

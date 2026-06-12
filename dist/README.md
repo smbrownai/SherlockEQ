@@ -37,7 +37,10 @@ So a post-merge re-run of the identical command picks up PUBLISH automatically.
    `~/.zshrc`, which non-interactive zsh does **not** source — PUBLISH will die
    at the signing step with a missing-variable error if they aren't set.
 3. **`gh` is authenticated** (`gh auth status`) — PREP opens a PR, PUBLISH
-   creates the GitHub release.
+   creates the GitHub release, and the notes drafter reads merged-PR bodies.
+4. **`claude` CLI on PATH** (optional) — used to auto-draft release notes. If
+   absent, PREP falls back to a mechanical PR/commit scaffold; the release
+   still proceeds.
 
 > **Note:** As of the fast-forward guard added after 0.4.0, PREP fetches and
 > checks `main` against `origin/main` itself, fast-forwarding automatically when
@@ -64,8 +67,11 @@ prints the manual push commands instead of pushing.
 ### PREP (first run)
 
 1. **Sanity** — on `main`, and `main` is fast-forwarded to `origin/main`.
-2. **Release notes** — uses `dist/release-notes/<version>.md` if it exists,
-   else opens `$EDITOR` / reads `--notes`.
+2. **Release notes** — uses `dist/release-notes/<version>.md` if it exists, or
+   `--notes <file>`. Otherwise **auto-drafts** notes from the changes since the
+   last tag (`draft-release-notes.sh`, below) and opens `$EDITOR` so you review
+   and polish before they ship — the draft is a starting point, not the final
+   word.
 3. **Help + web changelogs** — regenerates the in-app Help article and the
    website changelog (see scripts below). These ride along in the release PR.
 4. **Version bumps** — `project.pbxproj` (`MARKETING_VERSION`),
@@ -97,6 +103,7 @@ Review the PR and merge it before continuing.
 | Script | Role |
 |---|---|
 | `ship.sh` | The driver. Run this. |
+| `draft-release-notes.sh` | Draft user-facing HTML notes from the PRs/commits in `<prev-tag>..HEAD` via the `claude` CLI (mechanical scaffold fallback if absent). Seeds PREP's editor; runnable standalone: `dist/draft-release-notes.sh 0.5.0 > dist/release-notes/0.5.0.md`. Supports `--since <tag>` / `--head <ref>` to scope a range. |
 | `release.sh` | Build → codesign → notarize → staple → DMG → sha256. Standalone-runnable. |
 | `appcast-publish.sh` | Insert the new version into `appcast.xml` (Sparkle feed). |
 | `help-release-notes.py` | Convert HTML notes → Markdown, insert into the in-app Help article newest-first. Idempotent. |
