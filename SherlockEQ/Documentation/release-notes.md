@@ -20,6 +20,20 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.4.0
+
+The biggest update since launch. A first-launch guide walks you through setup, four ready-to-use listening presets replace the old starter profiles, and SherlockEQ now plugs into Shortcuts, Siri, and Spotlight so you can drive it hands-free or from your own automations.
+
+**Added**
+
+- **A first-launch walkthrough.** New installs now open a short three-step guide: a welcome that explains how SherlockEQ sits in your audio chain, a plain-language primer on the permissions it needs before the system asks for them, and a pick from the new built-in presets to get you listening right away. You can replay it any time from Settings → About.
+- **Four built-in listening presets.** **Voice Clarity**, **Music Balanced**, **Gentle Listening**, and **Presence Boost** replace the old Default and Voice Clarity profiles. Each is a comfort and clarity shape on the 10-band equalizer — not a medical correction — and Music Balanced is the starting point for new installs. Existing presets are brought up to date automatically when you upgrade.
+- **Shortcuts, Siri, and Spotlight support.** SherlockEQ now offers a full set of actions you can use in the Shortcuts app, ask Siri to run, or trigger from Spotlight: toggle Reference Mode, set or nudge the master volume, set balance, switch the active profile, read the current profile and status, and adjust the Simple equalizer. If the app is closed, the action launches it quietly in the background so your EQ actually takes effect.
+
+**Changed**
+
+- **Built-in presets are now yours to edit.** The built-in presets are no longer locked — tweak any of them in place to taste. A new **Reset to Default** button restores a single preset to its factory shape, and you can bring back any you've removed from the Profiles toolbar. Edited built-ins are marked with a star so you can tell them apart at a glance.
+
 ## 0.3.3
 
 A maintenance release that polishes the Analog Control Unit. The OUTPUT row now lists only real speakers instead of macOS's internal audio plumbing, the menu-bar popover is easier to read, and there's a new in-app guide for the `sherlockeq` command-line tool added in 0.3.2.
