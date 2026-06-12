@@ -430,6 +430,34 @@
       margin: 0;
       max-width: 56ch;
     }
+    .resources-label {
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      font-weight: var(--w-medium);
+      color: var(--fg-3);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+      margin: var(--s-7) 0 var(--s-4);
+    }
+    .resources {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      max-width: 56ch;
+    }
+    .resources li { margin-bottom: var(--s-3); }
+    .resources li:last-child { margin-bottom: 0; }
+    .resources a {
+      font-size: var(--fs-13);
+      color: var(--fg-2);
+      line-height: var(--lh-body);
+      text-decoration: none;
+    }
+    .resources a:hover {
+      color: var(--fg-1);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
 
     /* ---- Footer ------------------------------------------------------- */
     footer.site-footer {
@@ -647,7 +675,7 @@
         </figure>
 
         <figure class="shot">
-          <img src="assets/shot-popover.png" alt="Menu-bar popover — today's dose, left/right level meters, master gain and balance sliders, profile picker, compensation slider, tinnitus notch toggle, and a reference-mode bypass." loading="lazy" />
+          <img src="assets/shot-popover.png" alt="Menu-bar popover — today's dose, left/right level meters, master gain and balance sliders, profile picker, compensation slider, tinnitus notch toggle, a reference-mode bypass, and a quit button." loading="lazy" />
           <figcaption class="cap">
             <span class="key">06 · MENU BAR</span>
             <span class="label">Live levels, dose, gain, balance, and the notch toggle — without opening the app.</span>
@@ -825,6 +853,15 @@ brew install --cask sherlockeq</code></pre>
           <p>
             SherlockEQ is not a health or medical application. It does not diagnose, treat, measure, or monitor any hearing condition, tinnitus, or disability. It is an audio equalizer for personal listening preferences. If you have concerns about your hearing, consult a doctor, audiologist, or licensed healthcare professional.
           </p>
+
+          <div class="resources-label">Helpful resources</div>
+          <ul class="resources">
+            <li><a href="https://www.nidcd.nih.gov/health/hearing-ear-infections-deafness">NIDCD — Hearing, Ear Infections, and Deafness</a></li>
+            <li><a href="https://www.cdc.gov/hearing-loss/">CDC — Hearing Loss</a></li>
+            <li><a href="https://www.cdc.gov/niosh/noise/">CDC/NIOSH — Noise and Occupational Hearing Loss</a></li>
+            <li><a href="https://www.who.int/news-room/questions-and-answers/item/deafness-and-hearing-loss-safe-listening">WHO — Deafness and Hearing Loss: Safe Listening</a></li>
+            <li><a href="https://www.asha.org/practice-portal/clinical-topics/tinnitus-and-hyperacusis/">ASHA — Tinnitus and Hyperacusis</a></li>
+          </ul>
         </aside>
       </div>
     </div>
