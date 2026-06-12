@@ -20,6 +20,25 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.3.3
+
+A maintenance release that polishes the Analog Control Unit. The OUTPUT row now lists only real speakers instead of macOS's internal audio plumbing, the menu-bar popover is easier to read, and there's a new in-app guide for the `sherlockeq` command-line tool added in 0.3.2.
+
+**Added**
+
+- **A Command-Line Tool help article.** The in-app Help (and the website) now has a full guide to `sherlockeq` — how to install it, every command at a glance, and a few ready-to-use scripting workflows.
+
+**Changed**
+
+- **The menu-bar popover is easier to read.** The output-device label and the Quit button are larger and clearer.
+- **Debug is now opt-in.** The Debug screen is hidden from the main window's sidebar by default; turn it on under Settings → Diagnostics if you want it. When enabled, it now shows a live dynamics readout, per-stage signal-chain bypass switches, and a tidier layout.
+
+**Fixed**
+
+- **The OUTPUT row only shows real speakers now.** macOS quietly creates temporary internal devices to route the default output; these were leaking into the panel as a stray button with a question mark. They're now filtered out, so you only see devices you can actually pick. Any device that isn't recognised shows a generic speaker icon instead of a question mark, and the row is capped at six buttons so it can't overrun the panel.
+- **The spectrum analyzer panel opens and closes cleanly.** Toggling it quickly could leave the window and the arrow out of sync — the panel showing while the window stayed short, or vice versa. It now stays in step no matter how fast you click.
+- **Tables render properly in Help.** Markdown tables (including the ones on the Keyboard Shortcuts page) were showing as raw `| a | b |` text; they're now laid out as real tables.
+
 ## 0.3.2
 
 This release adds a command-line interface. `sherlockeq` is a power-user and automation surface for the app — check status, switch profiles, toggle Reference Mode, nudge gain, balance, and the simple EQ, list output devices, import or export profiles, and dump diagnostics for a bug report. The running app stays in charge: the CLI just asks it to report or change state, so anything you do on the command line shows up in the window and the menu bar right away.
