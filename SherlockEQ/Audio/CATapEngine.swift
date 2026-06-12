@@ -981,8 +981,28 @@ extension CATapEngine {
             guard hasOutputStream(id) else { return nil }
             guard let uid = try? Self.deviceUID(id), !uid.isEmpty else { return nil }
             let name = (try? Self.deviceName(id)) ?? "Device \(id)"
+            guard isSelectableOutput(uid: uid, name: name) else { return nil }
             return OutputDevice(id: id, uid: uid, name: name)
         }
+    }
+
+    /// True for devices a user could meaningfully pick as their speakers —
+    /// false for the transient plumbing CoreAudio exposes alongside real
+    /// hardware. Those have output streams and valid UIDs, so they'd otherwise
+    /// surface as bogus picker buttons (e.g. the amber `?` in the screenshot).
+    nonisolated private static func isSelectableOutput(uid: String, name: String) -> Bool {
+        // macOS spins up "CADefaultDeviceAggregate-<pid>-<n>" devices to wrap
+        // the current default output; they come and go with audio sessions and
+        // are never a real speaker the user chose.
+        if uid.hasPrefix("CADefaultDeviceAggregate") || name.hasPrefix("CADefaultDeviceAggregate") {
+            return false
+        }
+        // SherlockEQ's own tap aggregate is created private (so it shouldn't
+        // enumerate), but filter by UID prefix as belt-and-suspenders.
+        if uid.hasPrefix("com.shawnbrown.SherlockEQ.aggregate") {
+            return false
+        }
+        return true
     }
 
     /// True when a device exposes at least one output stream — filters

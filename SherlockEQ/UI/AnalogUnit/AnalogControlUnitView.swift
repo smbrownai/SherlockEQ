@@ -189,6 +189,11 @@ struct AnalogControlUnitView: View {
             // to close the gap it leaves.
             withAnimation(.easeInOut(duration: 0.18)) { spectrumExpanded = false }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                // Guard against a rapid re-expand during the fade: only shrink
+                // if we're *still* collapsed when this fires. Otherwise this
+                // stale shrink would fight the expand path that already grew
+                // the window, leaving height and chevron out of sync.
+                guard !spectrumExpanded else { return }
                 AppDelegate.shared?.setAnalogControlUnitExpanded(false)
             }
         } else {
@@ -429,7 +434,7 @@ enum OutputCategory {
         case .external:   return "hifispeaker.fill"
         case .headphones: return "headphones"
         case .bluetooth:  return "wave.3.right"
-        case .other:      return "questionmark"
+        case .other:      return "speaker.wave.2.fill"
         }
     }
 

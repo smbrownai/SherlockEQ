@@ -19,7 +19,11 @@ import CoreAudio
 /// that can hang `AudioObjectGetPropertyData` (see
 /// `coreaudio-sync-main-thread-hang`).
 final class SystemOutputDeviceController: ObservableObject {
-    /// Every device that can act as an output, refreshed on hardware changes.
+    /// The OUTPUT strip has a fixed bank of push buttons; show at most this
+    /// many devices so the row never overflows the faceplate.
+    static let maxDevices = 6
+
+    /// Up to `maxDevices` output devices, refreshed on hardware changes.
     @Published private(set) var devices: [CATapEngine.OutputDevice] = []
     /// The current system default output device (the lit button).
     @Published private(set) var currentDeviceID: AudioDeviceID = AudioDeviceID(kAudioObjectUnknown)
@@ -49,12 +53,27 @@ final class SystemOutputDeviceController: ObservableObject {
     private func _stop() { _removeListeners() }
 
     private func _refresh() {
-        let devs = CATapEngine.allOutputDevices()
+        let all = CATapEngine.allOutputDevices()
         let current = (try? CATapEngine.defaultOutputDeviceID()) ?? AudioDeviceID(kAudioObjectUnknown)
+        let devs = Self.capped(all, max: Self.maxDevices, keeping: current)
         DispatchQueue.main.async {
             self.devices = devs
             self.currentDeviceID = current
         }
+    }
+
+    /// Trim the device list to `max` buttons without ever dropping the current
+    /// default — if it would fall outside the cap, it takes the last slot so
+    /// its lamp and name still read correctly.
+    private static func capped(_ devices: [CATapEngine.OutputDevice], max: Int, keeping current: AudioDeviceID) -> [CATapEngine.OutputDevice] {
+        guard devices.count > max else { return devices }
+        var head = Array(devices.prefix(max))
+        if current != AudioDeviceID(kAudioObjectUnknown),
+           !head.contains(where: { $0.id == current }),
+           let cur = devices.first(where: { $0.id == current }) {
+            head[max - 1] = cur
+        }
+        return head
     }
 
     private func _setDefault(_ id: AudioDeviceID) {
