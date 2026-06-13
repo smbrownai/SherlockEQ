@@ -28,9 +28,10 @@ struct ProfileListItem: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
-                if !profile.presetTags.isEmpty {
-                    TagChips(tags: profile.presetTags)
-                } else if let uid = profile.linkedDeviceUID, !uid.isEmpty {
+                // Tag pills are intentionally omitted here — they ate too much
+                // vertical room in the narrow sidebar. They still appear under
+                // the description on the profile detail screen.
+                if let uid = profile.linkedDeviceUID, !uid.isEmpty {
                     Text(uid)
                         .font(.caption)
                         .foregroundStyle(.secondary)
