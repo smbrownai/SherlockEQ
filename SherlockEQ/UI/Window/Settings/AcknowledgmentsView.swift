@@ -25,11 +25,19 @@ struct AcknowledgmentsView: View {
                     )
                     section(
                         title: "Apple frameworks",
-                        body: "Built on AVFoundation, Core Audio Taps (introduced in macOS 14.4), AudioUnit's AUPeakLimiter, Accelerate's vDSP DFT, SwiftUI, ServiceManagement, and Combine."
+                        body: "Built on AVFoundation, Core Audio Taps (introduced in macOS 14.4), AudioUnit's AUPeakLimiter, Accelerate's vDSP DFT, App Intents (Shortcuts & Siri), SwiftUI, ServiceManagement, and Combine."
+                    )
+                    section(
+                        title: "Software updates",
+                        body: "In-app updates are powered by Sparkle, the open-source update framework by Andy Matuschak and the Sparkle Project (github.com/sparkle-project/Sparkle), used under the MIT license."
+                    )
+                    section(
+                        title: "Command-line tool",
+                        body: "The sherlockeq command-line tool is built with Swift Argument Parser by Apple (github.com/apple/swift-argument-parser), used under the Apache License 2.0."
                     )
                     section(
                         title: "Author",
-                        body: "SherlockEQ is © Shawn Brown."
+                        body: "Copyright 2026 Shawn M. Brown."
                     )
                 }
                 .padding(28)
