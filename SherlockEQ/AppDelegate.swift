@@ -470,14 +470,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return item
     }
 
+    /// Standard About panel with custom credit lines under the version: the
+    /// tagline, copyright, and license. Plain text, no links.
+    @objc private func showAboutPanel(_ sender: Any?) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        let credits = NSAttributedString(
+            string: """
+            Find your sound.
+            Copyright 2016 Shawn M. Brown
+            Distributed under the Open Source Initiative MIT License.
+            """,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .paragraphStyle: paragraph,
+            ]
+        )
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+    }
+
     private func makeAppMenuItem() -> NSMenuItem {
         let item = NSMenuItem()
         let menu = NSMenu()
         let appName = ProcessInfo.processInfo.processName
 
-        menu.addItem(withTitle: "About \(appName)",
-                     action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
-                     keyEquivalent: "")
+        let about = NSMenuItem(title: "About \(appName)",
+                               action: #selector(showAboutPanel(_:)),
+                               keyEquivalent: "")
+        about.target = self
+        menu.addItem(about)
 
         if UpdaterController.shared.hasUpdater {
             let check = NSMenuItem(title: "Check for Updates…",
