@@ -20,6 +20,25 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.5.0
+
+This release reworks the first-launch experience and the menu-bar popover. Onboarding now opens with a short intro video and ends with a clear "here's where SherlockEQ lives" wayfinding step, and the popover gains an obvious button for opening the main window.
+
+**Added**
+
+- **Intro video on the welcome screen.** Onboarding now opens with a short branded clip that plays once and holds on its final frame, giving new installs a proper first impression before the setup cards.
+- **"You're all set" wayfinding step.** Onboarding now ends with a step that points at the menu-bar icon and the main window, so it's obvious where SherlockEQ went after the setup window closes — no more wondering whether it quit.
+- **Explicit "Open Main Window" button in the popover.** The menu-bar popover now has a clearly labeled button at the bottom for opening the full main window, paired with Quit. The hard-to-spot arrow glyph in the header is gone.
+- **Tagline, copyright, and license in the About panel.** Choosing "About SherlockEQ" from the app menu now shows "Find your sound.", a copyright line, and the MIT license notice under the version number.
+
+**Changed**
+
+- **Personalization step is now informational.** The audiogram, tinnitus, and calibration rows in onboarding used to deep-link out, which cut the walkthrough short. They now describe where each adjustment lives in the main window so you actually reach the final step.
+- **Cleaner profile sidebar.** The tag pills (voice, music, clarity…) have been removed from the profile list rows so more profiles fit at a glance. The same tags still appear on the profile detail view.
+- **Tidier popover footer.** "Open Main Window" and "Quit SherlockEQ" now share a single aligned layout and consistent text color, so the two actions read as a matched pair.
+- **Updated acknowledgments.** Settings → Acknowledgments now credits Sparkle (the in-app updater), Swift Argument Parser (the bundled `sherlockeq` command-line tool), and App Intents (Shortcuts and Siri actions), and refreshes the copyright line.
+- **Welcome tour replay moved out of Settings.** The "Replay intro" row in Settings → About has been removed; replay is still available from the Debug screen.
+
 ## 0.4.0
 
 The biggest update since launch. A first-launch guide walks you through setup, four ready-to-use listening presets replace the old starter profiles, and SherlockEQ now plugs into Shortcuts, Siri, and Spotlight so you can drive it hands-free or from your own automations.
