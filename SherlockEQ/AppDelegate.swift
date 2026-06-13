@@ -340,7 +340,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Onboarding window
 
     /// Open (or focus) the first-launch onboarding wizard. Public so the
-    /// Settings → "Replay intro" button can re-run it on demand. Same
+    /// Debug screen's "Replay now" button can re-run it on demand. Same
     /// `.accessory → .regular` activation dance as the other windows.
     func showOnboardingWindow() {
         if onboardingWindow == nil {
