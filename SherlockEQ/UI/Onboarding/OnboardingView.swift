@@ -1,7 +1,7 @@
 import SwiftUI
 import UserNotifications
 
-/// First-launch onboarding wizard (spec §8.4). A lean four-step flow:
+/// First-launch onboarding wizard (spec §8.4). A lean five-step flow:
 ///
 ///   1. Welcome — a full-bleed hero video + what SherlockEQ does + the
 ///      mandatory upstream-EQ note.
@@ -13,13 +13,17 @@ import UserNotifications
 ///      hearing-correction app, and silently captures zero buffers if
 ///      dismissed. See `catap-screen-recording-permission.md`.
 ///   3. Pick a starting point — choose a starter preset (all already seeded).
-///   4. Personalization — optional deep-link rows to the audiogram, tinnitus,
-///      and calibration screens, plus a note that they're all optional and
-///      saved per profile.
+///   4. Personalization — *describes* the audiogram, tinnitus, and calibration
+///      screens so the user knows where to tune later. Informational only: it
+///      used to deep-link out, but jumping ended onboarding early and could
+///      only reach one of the three, so the rows no longer navigate.
+///   5. You're all set — wayfinding. A menu-bar app disappears once this
+///      window closes (no Dock icon by default), so the final step points the
+///      user at the status-bar icon and the "Open Main Window" route.
 ///
 /// Deliberately *not* a deep guided audiogram / tinnitus / calibration
 /// wizard: those are first-class screens now, so the Personalization step
-/// points at them rather than duplicating them inline.
+/// names them rather than duplicating them inline.
 ///
 /// Visual language matches the rest of the app (system colors + a
 /// `sectionBox`-style card), per the SettingsView pattern — no separate
@@ -40,7 +44,7 @@ struct OnboardingView: View {
     let onFinish: (SidebarSection?) -> Void
 
     private enum Step: Int, CaseIterable {
-        case welcome, permissions, profile, personalization
+        case welcome, permissions, profile, personalization, allSet
     }
     @State private var step: Step = .welcome
 
@@ -66,7 +70,8 @@ struct OnboardingView: View {
                 case .welcome:         OnboardingWelcomeStep()
                 case .permissions:     OnboardingPermissionsStep().padding(28)
                 case .profile:         OnboardingProfileStep().padding(28)
-                case .personalization: OnboardingPersonalizationStep(onJump: finish).padding(28)
+                case .personalization: OnboardingPersonalizationStep().padding(28)
+                case .allSet:          OnboardingAllSetStep().padding(28)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -99,7 +104,7 @@ struct OnboardingView: View {
         .overlay(alignment: .topTrailing) {
             // A persistent escape hatch — first launch shouldn't trap anyone.
             // Hidden on the final step, where "Finish" already completes things.
-            if step != .personalization {
+            if step != .allSet {
                 Button("Skip") { finish(nil) }
                     .buttonStyle(.borderless)
                     .controlSize(.small)
@@ -122,7 +127,7 @@ struct OnboardingView: View {
     }
 
     private var primaryTitle: String {
-        step == .personalization ? "Finish" : "Continue"
+        step == .allSet ? "Finish" : "Continue"
     }
 
     private func goForward() {
@@ -130,7 +135,8 @@ struct OnboardingView: View {
         case .welcome:         step = .permissions
         case .permissions:     step = .profile
         case .profile:         step = .personalization
-        case .personalization: finish(nil)
+        case .personalization: step = .allSet
+        case .allSet:          finish(nil)
         }
     }
 
@@ -462,30 +468,24 @@ private struct OnboardingProfileStep: View {
 // MARK: - Step 4: Personalization
 
 private struct OnboardingPersonalizationStep: View {
-    /// Finish onboarding and deep-link to a screen.
-    let onJump: (SidebarSection?) -> Void
-
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Personalization")
                 .font(.title.weight(.semibold))
-            Text("Tune SherlockEQ to your own hearing. Each opens a dedicated screen — do any of them now, or come back later.")
+            Text("When you're ready, you can tailor SherlockEQ to your own hearing. Each of these lives on its own screen in the main window — there's nothing you have to set up right now.")
                 .font(.title3)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            nextStepRow(.audiogram,
-                        title: "Enter your audiogram",
-                        subtitle: "Have a hearing test? Plot it for a tailored correction.",
-                        symbol: "ear")
-            nextStepRow(.toneFinder,
-                        title: "Find your tinnitus pitch",
-                        subtitle: "Match a tone to your ringing and notch it out.",
-                        symbol: "bandage")
-            nextStepRow(.safeListening,
-                        title: "Calibrate safe listening",
-                        subtitle: "Match levels to an SPL meter for accurate dose tracking.",
-                        symbol: "shield.lefthalf.filled")
+            infoRow(symbol: "ear",
+                    title: "Audiogram",
+                    subtitle: "Plot a hearing test for a tailored correction.")
+            infoRow(symbol: "bandage",
+                    title: "Tinnitus pitch",
+                    subtitle: "Match a tone to your ringing and notch it out.")
+            infoRow(symbol: "shield.lefthalf.filled",
+                    title: "Safe-listening calibration",
+                    subtitle: "Match levels to an SPL meter for accurate dose tracking.")
 
             OnboardingCard {
                 Label {
@@ -495,7 +495,7 @@ private struct OnboardingPersonalizationStep: View {
                     Image(systemName: "slider.horizontal.3")
                         .foregroundStyle(.tint)
                 }
-                Text("None of these are required to start listening. Set them up now or anytime later — each is saved per profile, so every profile can be personalized differently.")
+                Text("None of these are required to start listening — set them up anytime from the main window. Each is saved per profile, so every profile can be personalized differently.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -503,31 +503,74 @@ private struct OnboardingPersonalizationStep: View {
         }
     }
 
-    // MARK: Optional deep-link rows
-
-    private func nextStepRow(_ section: SidebarSection, title: String, subtitle: String, symbol: String) -> some View {
-        Button {
-            onJump(section)
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: symbol)
-                    .font(.system(size: 16))
-                    .foregroundStyle(.tint)
-                    .frame(width: 26)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.callout)
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
+    /// Informational row — names where each adjustment lives in the main
+    /// window. Deliberately NOT a navigation link: jumping out here would end
+    /// onboarding before the final step, and you could only ever reach one of
+    /// the three before the wizard closed.
+    private func infoRow(symbol: String, title: String, subtitle: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 16))
+                .foregroundStyle(.tint)
+                .frame(width: 26)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.callout)
+                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .contentShape(Rectangle())
-            .padding(.vertical, 4)
+            Spacer()
         }
-        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Step 5: You're all set
+
+/// Closing wayfinding step. A menu-bar app vanishes from view once the
+/// onboarding window closes (no Dock icon by default), so the last thing the
+/// user sees points them at the status-bar icon and the "Open Main Window"
+/// route — otherwise a fresh install looks like it quit.
+private struct OnboardingAllSetStep: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("You're all set")
+                .font(.title.weight(.semibold))
+            Text("SherlockEQ runs quietly in your menu bar — it doesn't keep a window open or a Dock icon, so it stays out of your way.")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            OnboardingCard {
+                HStack(alignment: .top, spacing: 12) {
+                    // Same glyph the status item shows, so it's recognizable.
+                    Image(systemName: "waveform.and.magnifyingglass")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.tint)
+                        .frame(width: 30)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Look for this icon in your menu bar")
+                            .font(.callout.weight(.medium))
+                        Text("It sits at the top-right of your screen. Click it anytime to open SherlockEQ's controls.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+
+            OnboardingCard {
+                Label {
+                    Text("Need the full app?")
+                        .font(.callout.weight(.medium))
+                } icon: {
+                    Image(systemName: "macwindow")
+                        .foregroundStyle(.tint)
+                }
+                Text("Click the menu-bar icon, then “Open Main Window” for the audiogram, equalizer, profiles, and every setting. Prefer a Dock icon? Turn it on in Settings.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }
 
