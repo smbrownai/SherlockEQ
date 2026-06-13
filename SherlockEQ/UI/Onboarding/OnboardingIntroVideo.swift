@@ -28,7 +28,7 @@ struct OnboardingIntroVideo: View {
 
     /// Beat to hold on the first frame before playback begins, so the welcome
     /// screen settles before the motion starts.
-    private static let startDelay: TimeInterval = 1.5
+    private static let startDelay: TimeInterval = 0.5
 
     @State private var aspect: CGFloat?
 
