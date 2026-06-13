@@ -237,6 +237,29 @@ if [[ "$PHASE" == "prep" ]]; then
     confirm "continue anyway?"
   fi
 
+  # Local main must match origin/main before we branch off it. A stale main
+  # (feature PRs merged on GitHub but never pulled locally) would cut the
+  # release from an old tree and silently drop the very work being shipped —
+  # PREP would "succeed" yet release nothing new. PUBLISH already fetches +
+  # fast-forwards; PREP must too, since this is where the release branch is
+  # created. Only enforced when actually on main; a deliberate off-main
+  # release (confirmed above) skips this.
+  if [[ "$CURRENT_BRANCH" == "main" ]]; then
+    git fetch --quiet origin main
+    if [[ "$(git rev-parse main)" != "$(git rev-parse origin/main)" ]]; then
+      AHEAD=$(git rev-list --count origin/main..main)
+      BEHIND=$(git rev-list --count main..origin/main)
+      if (( AHEAD > 0 )); then
+        die "local main has $AHEAD commit(s) not on origin/main (behind $BEHIND) — push or reconcile before releasing"
+      fi
+      info "local main is $BEHIND commit(s) behind origin/main — fast-forwarding"
+      git pull --ff-only origin main
+      ok "main fast-forwarded to origin/main"
+    else
+      ok "main is up to date with origin/main"
+    fi
+  fi
+
   PREV_VERSION=$(git tag --list 'v*' --sort=-v:refname | head -n1 | sed 's/^v//')
   [[ -n "$PREV_VERSION" ]] || PREV_VERSION="(none)"
   info "previous shipped version: $PREV_VERSION"
@@ -256,10 +279,20 @@ if [[ "$PHASE" == "prep" ]]; then
   else
     case "$NOTES_INPUT" in
       "")
-        # No --notes flag → open editor with template.
+        # No --notes flag → seed an editor draft from the changes since the
+        # last tag (dist/draft-release-notes.sh: LLM-drafted via `claude`, with
+        # a mechanical PR/commit scaffold as fallback), then open $EDITOR to
+        # review and polish before saving. The comment-strip below is a no-op
+        # on a clean draft; it still cleans the blank-template fallback.
         TEMPLATE=$(mktemp -t sherlockeq-notes.XXXXXX.md)
-        {
-          cat <<EOF
+        info "drafting release notes from changes since $PREV_VERSION..."
+        if "$REPO_ROOT/dist/draft-release-notes.sh" "$VERSION" > "$TEMPLATE" \
+             && grep -q '<h2' "$TEMPLATE"; then
+          ok "draft ready — review and polish it in \$EDITOR"
+        else
+          warn "draft generation unavailable — opening a blank template"
+          {
+            cat <<EOF
 <!--
   Release notes for SherlockEQ $VERSION.
   Lines starting with "<!--" are stripped before commit.
@@ -276,14 +309,15 @@ if [[ "$PHASE" == "prep" ]]; then
   <li><!-- one bullet per user-visible change --></li>
 </ul>
 EOF
-          if [[ "$PREV_VERSION" != "(none)" ]] \
-             && [[ -f "$REPO_ROOT/dist/release-notes/$PREV_VERSION.md" ]]; then
-            echo
-            echo "<!-- ===== Previous version ($PREV_VERSION) for reference (will be stripped) ====="
-            cat "$REPO_ROOT/dist/release-notes/$PREV_VERSION.md"
-            echo "===== end previous version ===== -->"
-          fi
-        } > "$TEMPLATE"
+            if [[ "$PREV_VERSION" != "(none)" ]] \
+               && [[ -f "$REPO_ROOT/dist/release-notes/$PREV_VERSION.md" ]]; then
+              echo
+              echo "<!-- ===== Previous version ($PREV_VERSION) for reference (will be stripped) ====="
+              cat "$REPO_ROOT/dist/release-notes/$PREV_VERSION.md"
+              echo "===== end previous version ===== -->"
+            fi
+          } > "$TEMPLATE"
+        fi
 
         EDITOR_CMD="${EDITOR:-vi}"
         info "opening \$EDITOR ($EDITOR_CMD)..."
