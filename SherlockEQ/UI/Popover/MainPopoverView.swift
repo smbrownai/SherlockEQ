@@ -77,19 +77,11 @@ struct MainPopoverView: View {
 
     /// Explicit, labeled way into the main window. The header used to carry
     /// only a small arrow-icon button, which wasn't discoverable — this spells
-    /// the action out (accent-tinted, so it reads as the primary action) right
-    /// above Quit.
+    /// the action out right above Quit.
     @ViewBuilder private var openWindowRow: some View {
-        HStack(spacing: 8) {
-            Button(action: openMainWindow) {
-                Label("Open Main Window", systemImage: "macwindow")
-                    .font(.callout.weight(.medium))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.tint)
-            .help("Open the main SherlockEQ window")
-            Spacer()
-        }
+        footerRow("Open Main Window", systemImage: "macwindow",
+                  help: "Open the main SherlockEQ window",
+                  action: openMainWindow)
     }
 
     /// Quit the whole app from the popover. A menu-bar app has no window
@@ -99,18 +91,31 @@ struct MainPopoverView: View {
     /// isn't discoverable from the popover. `NSApp.terminate` runs the normal
     /// termination path (same as the App menu's Quit item).
     @ViewBuilder private var quitRow: some View {
-        HStack(spacing: 8) {
-            Button {
-                NSApp.terminate(nil)
-            } label: {
-                Label("Quit SherlockEQ", systemImage: "power")
-                    .font(.callout)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("Quit SherlockEQ (⌘Q)")
-            Spacer()
+        footerRow("Quit SherlockEQ", systemImage: "power",
+                  help: "Quit SherlockEQ (⌘Q)") {
+            NSApp.terminate(nil)
         }
+    }
+
+    /// Shared style for the two bottom action rows: a fixed-width icon gutter
+    /// so the icons and labels line up between rows, left-justified, both in
+    /// the primary text color (no accent / secondary tinting).
+    @ViewBuilder private func footerRow(_ title: String, systemImage: String,
+                                        help: String,
+                                        action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .frame(width: 18, alignment: .leading)
+                Text(title)
+                Spacer()
+            }
+            .font(.callout)
+            .foregroundStyle(.primary)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 
     // MARK: - Master gain + balance
