@@ -478,7 +478,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let credits = NSAttributedString(
             string: """
             Find your sound.
-            Copyright 2016 Shawn M. Brown
+            Copyright 2026 Shawn M. Brown
             Distributed under the Open Source Initiative MIT License.
             """,
             attributes: [
