@@ -5,7 +5,7 @@ import AppKit
 /// compensation slider, toggle the tinnitus notch or Listening Comfort,
 /// hit Reference Mode. Configuration (audiogram entry, parametric EQ,
 /// per-processor comfort tuning, etc.) lives in the main window — opened
-/// by the arrow button in the header.
+/// by the "Open Main Window" button at the bottom.
 struct MainPopoverView: View {
     @EnvironmentObject private var audioState: AudioState
     @EnvironmentObject private var profileStore: ProfileStore
@@ -45,6 +45,7 @@ struct MainPopoverView: View {
             ListeningComfortRow()
             ReferenceButton()
             Divider()
+            openWindowRow
             quitRow
         }
         .padding(14)
@@ -59,8 +60,6 @@ struct MainPopoverView: View {
 
     @ViewBuilder private var header: some View {
         HStack(spacing: 8) {
-            Image(systemName: "waveform.and.magnifyingglass")
-                .foregroundStyle(.tint)
             Text("SherlockEQ").font(.headline)
             Spacer()
             // Output device — read-only label for now; full picker comes when
@@ -73,13 +72,23 @@ struct MainPopoverView: View {
                     .truncationMode(.middle)
             }
             .foregroundStyle(.secondary)
+        }
+    }
 
+    /// Explicit, labeled way into the main window. The header used to carry
+    /// only a small arrow-icon button, which wasn't discoverable — this spells
+    /// the action out (accent-tinted, so it reads as the primary action) right
+    /// above Quit.
+    @ViewBuilder private var openWindowRow: some View {
+        HStack(spacing: 8) {
             Button(action: openMainWindow) {
-                Image(systemName: "arrow.up.forward.app")
-                    .font(.system(size: 13))
+                Label("Open Main Window", systemImage: "macwindow")
+                    .font(.callout.weight(.medium))
             }
             .buttonStyle(.plain)
-            .help("Open SherlockEQ")
+            .foregroundStyle(.tint)
+            .help("Open the main SherlockEQ window")
+            Spacer()
         }
     }
 
@@ -91,7 +100,6 @@ struct MainPopoverView: View {
     /// termination path (same as the App menu's Quit item).
     @ViewBuilder private var quitRow: some View {
         HStack(spacing: 8) {
-            Spacer()
             Button {
                 NSApp.terminate(nil)
             } label: {
@@ -101,6 +109,7 @@ struct MainPopoverView: View {
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
             .help("Quit SherlockEQ (⌘Q)")
+            Spacer()
         }
     }
 
