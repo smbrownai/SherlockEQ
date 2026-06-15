@@ -68,7 +68,11 @@ EXPORT_OPTS="$BUILD_DIR/ExportOptions.plist"
 DMG_STAGE="$BUILD_DIR/dmg-stage"
 DMG="$BUILD_DIR/SherlockEQ-$VERSION.dmg"
 
-rm -rf "$BUILD_DIR"
+# Clean the build dir. Retry once after a beat: the Finder can drop a fresh
+# .DS_Store into the directory between `rm` emptying it and removing the
+# directory itself, which aborts `rm -rf` with "Directory not empty" (and
+# under `set -e`, kills the whole release). The retry clears the straggler.
+rm -rf "$BUILD_DIR" || { sleep 1; rm -rf "$BUILD_DIR"; }
 mkdir -p "$BUILD_DIR" "$DMG_STAGE"
 
 # ---- ExportOptions.plist (generated; never edit by hand) ---------------------
