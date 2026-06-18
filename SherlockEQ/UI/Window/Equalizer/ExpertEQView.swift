@@ -708,7 +708,7 @@ struct ExpertEQView: View {
                     if tab == .left { updated.rightEar.bands = mirrored }
                     else { updated.leftEar.bands = mirrored }
                 }
-                try? profileStore.save(updated)
+                try? profileStore.save(updated, actionName: "Adjust EQ band")
             }
         )
     }

@@ -297,7 +297,7 @@ struct AdvancedEQView: View {
         EQBandLookup.mutateBands(of: &updated, ear: ear, linkChannels: linkChannels) { bands in
             EQBandLookup.setGain(gain, at: frequency, bandwidth: Self.bandwidth, filterType: .parametric, in: &bands)
         }
-        try? profileStore.save(updated)
+        try? profileStore.save(updated, actionName: "Adjust \(formatFreq(frequency))")
     }
 
     private func reset(_ profile: HearingProfile) {
