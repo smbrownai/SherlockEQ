@@ -20,6 +20,19 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.6.0
+
+This release sharpens the two parts of SherlockEQ that turn your input into sound: the audiogram-based personal correction now uses a real, citable prescription instead of a rough rule of thumb, and dragging EQ bands now produces clear, named undo steps so you can walk back individual tweaks without losing the rest of your edits.
+
+**Added**
+
+- **Descriptive undo for EQ band drags.** Adjusting a band in any of the EQ views now records an undo entry labeled with the band you actually changed — "Adjust Bass", "Adjust 1 kHz", and so on — instead of a generic "Edit". Quick back-to-back drags still coalesce into a single step, so one undo cleanly reverses one gesture.
+
+**Changed**
+
+- **More accurate audiogram-to-EQ correction.** The audiogram screen now derives your per-ear EQ from a well-established hearing-aid fitting prescription that is frequency-aware: it eases off in the low end where extra boost only muddies speech, and emphasizes the ranges where added clarity actually helps. The strength slider scales the whole prescription up or down so you can dial in what sounds best to you. If you already use an audiogram-based profile, it keeps its current correction until the next time you edit your audiogram — at which point it's recomputed with the new prescription.
+- **Closely-spaced bands no longer over-boost.** At higher frequencies the audiogram's measurement points sit close together, and neighboring EQ bands overlap. SherlockEQ now compensates for that overlap when fitting the curve, so the sound you hear matches the target instead of stacking up into an exaggerated treble.
+
 ## 0.5.0
 
 This release reworks the first-launch experience and the menu-bar popover. Onboarding now opens with a short intro video and ends with a clear "here's where SherlockEQ lives" wayfinding step, and the popover gains an obvious button for opening the main window.
