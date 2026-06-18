@@ -97,7 +97,7 @@ final class ProfileStore: ObservableObject {
     /// On failure `lastError` is set and the error is re-thrown — callers
     /// using `try?` get the silent ignore they asked for, but the value
     /// shows up in DebugView's Profiles section.
-    func save(_ profile: HearingProfile) throws {
+    func save(_ profile: HearingProfile, actionName: String? = nil) throws {
         try tracking("Save") {
             ensureDirectory()
             let now = Date()
@@ -120,7 +120,9 @@ final class ProfileStore: ObservableObject {
             }
 
             if let undoManager, !inBurst {
-                let actionName = previousOnDisk == nil ? "Create \(p.name)" : "Edit \(p.name)"
+                // Caller-supplied name (e.g. "Adjust 1 kHz" from a band drag)
+                // wins; otherwise fall back to the generic create/edit label.
+                let resolvedName = actionName ?? (previousOnDisk == nil ? "Create \(p.name)" : "Edit \(p.name)")
                 if let snapshot = previousOnDisk {
                     undoManager.registerUndo(withTarget: self) { store in
                         try? store.save(snapshot)
@@ -131,7 +133,7 @@ final class ProfileStore: ObservableObject {
                         try? store.delete(p)
                     }
                 }
-                undoManager.setActionName(actionName)
+                undoManager.setActionName(resolvedName)
             }
             lastBurstSaveAt[profile.id] = now
 

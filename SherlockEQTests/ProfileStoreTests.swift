@@ -330,4 +330,31 @@ struct ProfileStoreTests {
             try store.relocate(to: dir, moveExisting: true)
         }
     }
+
+    // MARK: - Undo action names
+
+    @Test func saveUsesCustomActionName() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+        let store = Self.makeStore(at: dir)
+        let undo = UndoManager()
+        undo.groupsByEvent = false   // close each group synchronously for the test
+        store.undoManager = undo
+
+        try store.save(HearingProfile.makeDefault(name: "P"), actionName: "Adjust 1 kHz")
+        #expect(undo.canUndo)
+        #expect(undo.undoActionName == "Adjust 1 kHz")
+    }
+
+    @Test func saveWithoutActionNameKeepsGenericLabel() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+        let store = Self.makeStore(at: dir)
+        let undo = UndoManager()
+        undo.groupsByEvent = false
+        store.undoManager = undo
+
+        try store.save(HearingProfile.makeDefault(name: "Custom Mix"))
+        #expect(undo.undoActionName == "Create Custom Mix")
+    }
 }

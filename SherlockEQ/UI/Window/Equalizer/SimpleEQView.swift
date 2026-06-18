@@ -270,7 +270,7 @@ struct SimpleEQView: View {
         EQBandLookup.mutateBands(of: &updated, ear: ear, linkChannels: linkChannels) { bands in
             EQBandLookup.setGain(gain, at: band.frequencyHz, bandwidth: band.bandwidth, filterType: band.filterType, in: &bands)
         }
-        try? profileStore.save(updated)
+        try? profileStore.save(updated, actionName: "Adjust \(band.label)")
     }
 
     private func reset(_ profile: HearingProfile) {
