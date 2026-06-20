@@ -21,6 +21,62 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 0.6.1</title>
+      <pubDate>Sat, 20 Jun 2026 14:19:07 +0000</pubDate>
+      <sparkle:version>00601</sparkle:version>
+      <sparkle:shortVersionString>0.6.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<h2>SherlockEQ 0.6.1</h2>
+
+<p>
+  A visual refresh: SherlockEQ has a brand-new app icon, an updated onboarding
+  video, and now follows your system accent colour.
+</p>
+
+<h3>Changed</h3>
+
+<ul>
+  <li>
+    <strong>New app icon.</strong>
+    A glassy lens over a glowing teal-to-blue waveform on a dark field,
+    rendered cleanly at every size from the Dock down to the menu bar.
+  </li>
+  <li>
+    <strong>Refreshed onboarding video.</strong>
+    The intro that plays the first time you launch SherlockEQ has been
+    re-recorded.
+  </li>
+  <li>
+    <strong>Follows your system accent colour.</strong>
+    SherlockEQ no longer forces its own gold accent — highlights, toggles, and
+    sliders now use whatever accent colour you've chosen in System Settings.
+  </li>
+</ul>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not diagnose,
+  treat, measure, or monitor any hearing condition, tinnitus, or disability.
+  For concerns about your hearing, consult a doctor, audiologist, or licensed
+  healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.6.0">0.6.0 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v0.6.1/SherlockEQ-0.6.1.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="70JSJFa0ujGO3SW0Q+LRA1bftAdheBdDk3rSZt2EYwfamaRMJ/W7MezypBl3v1ib1IIj4ff/LjkwFgmgVJKDDA==" length="14590228" />
+    </item>
+
+    <item>
       <title>SherlockEQ 0.6.0</title>
       <pubDate>Thu, 18 Jun 2026 18:56:32 +0000</pubDate>
       <sparkle:version>00600</sparkle:version>
