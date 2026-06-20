@@ -1019,7 +1019,7 @@ SherlockEQ/
 │       └── UndoManagerLink.swift           ← Pipes SwiftUI undoManager into ProfileStore
 │
 └── Resources/
-    ├── Assets.xcassets                     ← AppIcon, AccentColor
+    ├── Assets.xcassets                     ← AppIcon (accent left to system default)
     ├── Info.plist
     └── SherlockEQ.entitlements
 ```
