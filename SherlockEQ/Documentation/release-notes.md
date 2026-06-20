@@ -20,6 +20,16 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.6.1
+
+A visual refresh: SherlockEQ has a brand-new app icon, an updated onboarding video, and now follows your system accent colour.
+
+**Changed**
+
+- **New app icon.** A glassy lens over a glowing teal-to-blue waveform on a dark field, rendered cleanly at every size from the Dock down to the menu bar.
+- **Refreshed onboarding video.** The intro that plays the first time you launch SherlockEQ has been re-recorded.
+- **Follows your system accent colour.** SherlockEQ no longer forces its own gold accent — highlights, toggles, and sliders now use whatever accent colour you've chosen in System Settings.
+
 ## 0.6.0
 
 This release sharpens the two parts of SherlockEQ that turn your input into sound: the audiogram-based personal correction now uses a real, citable prescription instead of a rough rule of thumb, and dragging EQ bands now produces clear, named undo steps so you can walk back individual tweaks without losing the rest of your edits.
