@@ -570,6 +570,41 @@ final class CATapEngine: ObservableObject {
         return noErr
     }
 
+    /// Resolve a global channel index within an aggregate's input ABL —
+    /// which may mix interleaved and planar buffers — and deinterleave that
+    /// one channel into `ring`, accumulating the channel's peak. Returns the
+    /// frame count written (0 if the channel index isn't present). RT-safe:
+    /// no allocation, just index arithmetic and the ring's strided copy.
+    private static func emitTapChannel(
+        abl: UnsafeMutableAudioBufferListPointer,
+        globalChannel: Int,
+        into ring: TapRingBuffer,
+        peak: inout Float
+    ) -> Int {
+        var base = 0
+        for b in abl {
+            let ch = Int(b.mNumberChannels)
+            if ch == 0 { continue }
+            if globalChannel < base + ch, let raw = b.mData {
+                let within = globalChannel - base
+                let frames = Int(b.mDataByteSize) / (MemoryLayout<Float>.size * ch)
+                if frames <= 0 { return 0 }
+                let ptr = raw.assumingMemoryBound(to: Float.self)
+                var i = within
+                let n = frames * ch
+                while i < n {
+                    let a = abs(ptr[i])
+                    if a > peak { peak = a }
+                    i += ch
+                }
+                ring.writeChannel(from: ptr, frameCount: frames, channelIndex: within, channelCount: ch)
+                return frames
+            }
+            base += ch
+        }
+        return 0
+    }
+
     // MARK: - IO
 
     private func startIO() throws {
@@ -578,7 +613,6 @@ final class CATapEngine: ObservableObject {
         let leftRef = Unmanaged.passUnretained(leftRing)
         let rightRef = Unmanaged.passUnretained(rightRing)
         let counterRef = Unmanaged.passUnretained(tapFramesIn)
-        let channelCount = tapChannelCount
 
         let peakRef = Unmanaged.passUnretained(ringInputPeakMilli)
         let layoutCountRef = Unmanaged.passUnretained(ioProcBufferCount)
@@ -598,50 +632,33 @@ final class CATapEngine: ObservableObject {
             layoutChannelsRef.takeUnretainedValue().set(Int64(first.mNumberChannels))
             layoutBytesRef.takeUnretainedValue().set(Int64(first.mDataByteSize))
 
-            let isInterleaved = abl.count == 1 && first.mNumberChannels >= 2
             let leftBuf = leftRef.takeUnretainedValue()
             let rightBuf = rightRef.takeUnretainedValue()
             let peakBuf = peakRef.takeUnretainedValue()
 
-            var peak: Float = 0
+            // The process tap occupies the LAST stereo pair of channels in the
+            // aggregate's input scope. CoreAudio appends tap channels after
+            // each sub-device's channels, so when the output device is itself
+            // an interface with hardware inputs (e.g. a RODECaster), those
+            // input channels appear FIRST and the tap follows — reading
+            // channels 0-1 there grabs the device's live input (static) instead
+            // of the captured system audio. For an output-only device the tap
+            // is the only input, so the trailing pair IS channels 0-1 and
+            // behaviour is unchanged. Buffers may be interleaved (one buffer,
+            // N channels) or planar (N buffers, one channel each); emitTapChannel
+            // resolves a global channel index across both layouts.
+            var totalChannels = 0
+            for b in abl { totalChannels += Int(b.mNumberChannels) }
+            guard totalChannels >= 1 else { return }
 
-            if isInterleaved {
-                guard let basePtr = first.mData else { return }
-                let chCount = Int(first.mNumberChannels)
-                let frames = Int(first.mDataByteSize) / (MemoryLayout<Float>.size * chCount)
-                if frames <= 0 { return }
-                let src = basePtr.assumingMemoryBound(to: Float.self)
-                for i in 0..<(frames * chCount) {
-                    let a = abs(src[i])
-                    if a > peak { peak = a }
-                }
-                leftBuf.writeChannel(from: src, frameCount: frames, channelIndex: 0, channelCount: chCount)
-                rightBuf.writeChannel(
-                    from: src, frameCount: frames,
-                    channelIndex: chCount > 1 ? 1 : 0, channelCount: chCount
-                )
-                counterRef.takeUnretainedValue().add(frames)
-            } else {
-                guard let lPtr = abl[0].mData?.assumingMemoryBound(to: Float.self) else { return }
-                let frames = Int(abl[0].mDataByteSize) / MemoryLayout<Float>.size
-                if frames <= 0 { return }
-                for i in 0..<frames {
-                    let a = abs(lPtr[i])
-                    if a > peak { peak = a }
-                }
-                leftBuf.write(from: lPtr, frameCount: frames)
-                if abl.count > 1, let rPtr = abl[1].mData?.assumingMemoryBound(to: Float.self) {
-                    for i in 0..<frames {
-                        let a = abs(rPtr[i])
-                        if a > peak { peak = a }
-                    }
-                    rightBuf.write(from: rPtr, frameCount: frames)
-                } else {
-                    rightBuf.write(from: lPtr, frameCount: frames)
-                }
-                _ = channelCount
-                counterRef.takeUnretainedValue().add(frames)
-            }
+            let tapRight = totalChannels - 1
+            let tapLeft = totalChannels >= 2 ? totalChannels - 2 : tapRight
+
+            var peak: Float = 0
+            let framesL = Self.emitTapChannel(abl: abl, globalChannel: tapLeft, into: leftBuf, peak: &peak)
+            let framesR = Self.emitTapChannel(abl: abl, globalChannel: tapRight, into: rightBuf, peak: &peak)
+            let frames = max(framesL, framesR)
+            if frames > 0 { counterRef.takeUnretainedValue().add(frames) }
 
             peakBuf.set(Int64(peak * 1000))
         }
