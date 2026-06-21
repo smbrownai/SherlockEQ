@@ -20,6 +20,16 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.6.2
+
+A bug-fix release focused on audio output reliability — especially when you use an audio interface or mixer, or switch between output devices.
+
+**Fixed**
+
+- **Audio interfaces and mixers now play correctly.** When the output device was an interface with its own inputs (for example a RØDECaster Pro II), SherlockEQ could play static or sound in only one ear. It now reads the correct audio channels regardless of the device's input layout.
+- **Switching output devices is seamless.** Changing your output — speakers to an interface to headphones, and back — while audio is playing no longer leaves sound in a broken state that required relaunching the app. The audio engine now rebuilds cleanly on every device change.
+- **Profiles survive an unavailable custom folder.** If you moved your profiles to a custom folder that later became unreachable (an unmounted drive, or a temporary location cleared on restart), SherlockEQ now falls back to the default folder and keeps your profiles instead of showing an empty list.
+
 ## 0.6.1
 
 A visual refresh: SherlockEQ has a brand-new app icon, an updated onboarding video, and now follows your system accent colour.
