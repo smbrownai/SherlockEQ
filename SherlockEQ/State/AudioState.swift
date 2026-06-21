@@ -508,7 +508,7 @@ final class AudioState: ObservableObject {
 
         tap.onOutputDeviceChanged = { [weak self] deviceID in
             Task { @MainActor in
-                self?.rebuildAudioGraph()
+                self?.scheduleRebuild()
                 self?.autoSwitchProfileIfLinked(deviceID: deviceID)
             }
         }
@@ -517,9 +517,11 @@ final class AudioState: ObservableObject {
         // change, sample-rate renegotiation, etc.) and stops rendering
         // until the graph is rebuilt. The notification can land at any
         // time — already on main via the observer's Task hop in
-        // `SherlockEQAudioEngine`, so we just kick the existing rebuild.
+        // `SherlockEQAudioEngine`. Funnel it through the same coalescing
+        // rebuild so a config-change that accompanies a device switch
+        // doesn't race the device-change rebuild.
         audio.onConfigurationChange = { [weak self] in
-            self?.rebuildAudioGraph()
+            self?.scheduleRebuild()
         }
 
         // No always-on subscribe. Both analyzers run a CHEAP level pass in
@@ -733,7 +735,7 @@ final class AudioState: ObservableObject {
         guard audio.lastError != nil, !audio.isRunning else { return }
         guard case .running = tap.state else { return }
         log.info("Engine carries a lastError on didBecomeActive — retrying rebuild")
-        rebuildAudioGraph()
+        scheduleRebuild()
     }
 
     private func handleWillSleep() {
@@ -763,7 +765,7 @@ final class AudioState: ObservableObject {
         wasRunningBeforeSleep = false
         log.info("System woke — rebuilding audio graph")
         if case .running = tap.state {
-            rebuildAudioGraph()
+            scheduleRebuild()
         } else {
             Task { await startAll() }
         }
@@ -825,12 +827,44 @@ final class AudioState: ObservableObject {
             log.error("Tap did not reach .running — skipping AVAudioEngine start")
             return
         }
-        rebuildAudioGraph()
+        scheduleRebuild()
     }
 
     func stopAll() async {
         audio.teardown()
         await tap.stop()
+    }
+
+    /// In-flight trailing-edge rebuild task, plus a pending flag set by any
+    /// trigger that arrives while one is running. nil when idle.
+    private var rebuildTask: Task<Void, Never>?
+    private var rebuildPending = false
+
+    /// Coalesce + serialize every audio-graph rebuild. A single physical
+    /// output-device switch emits a burst of CoreAudio notifications —
+    /// default-output change, per-device stream/sample-rate topology changes,
+    /// and an AVAudioEngineConfigurationChange — that each independently want
+    /// to rebuild. Previously each fired its own detached `Task` calling
+    /// `rebuildAudioGraph()`, so two rebuilds could overlap or run out of order
+    /// against the tap's own (separately serialized) teardown/rebuild, leaving
+    /// the engine attached to half-rebuilt source nodes. Funnelling them all
+    /// through one trailing-edge task collapses the burst into a single rebuild
+    /// that runs after the tap has settled, always against the latest source
+    /// nodes, and guarantees one final pass after the last trigger.
+    private func scheduleRebuild() {
+        rebuildPending = true
+        guard rebuildTask == nil else { return }
+        rebuildTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.rebuildTask = nil }
+            // No `await` between the final `rebuildPending` read and clearing
+            // `rebuildTask`, so a trigger either collapses into this loop or
+            // starts a fresh task — a rebuild is never silently dropped.
+            while self.rebuildPending {
+                self.rebuildPending = false
+                self.rebuildAudioGraph()
+            }
+        }
     }
 
     private func rebuildAudioGraph() {

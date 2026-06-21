@@ -281,11 +281,19 @@ struct ProfileStoreTests {
 
     // MARK: - Relocate two-phase commit
 
+    /// `relocate(to:)` persists the new path into the shared UserDefaults
+    /// override key. Because tests run hosted in the app bundle, that key is
+    /// the real `com.shawnbrown.SherlockEQ` domain — leaving it set points the
+    /// production app at a temp dir that gets purged on reboot, silently
+    /// "losing" every profile. Always clear it after a relocate test.
+    private static let directoryOverrideKey = "sherlockeq.profilesDirectory"
+
     @Test func relocateMovesFilesIntoNewDir() throws {
         let oldDir = Self.makeTempDir()
         defer { Self.cleanup(oldDir) }
         let newDir = Self.makeTempDir()
         defer { Self.cleanup(newDir) }
+        defer { UserDefaults.standard.removeObject(forKey: Self.directoryOverrideKey) }
 
         let store = Self.makeStore(at: oldDir)
         try store.save(HearingProfile.makeDefault(name: "A"))
@@ -309,6 +317,7 @@ struct ProfileStoreTests {
         defer { Self.cleanup(oldDir) }
         let newDir = Self.makeTempDir()
         defer { Self.cleanup(newDir) }
+        defer { UserDefaults.standard.removeObject(forKey: Self.directoryOverrideKey) }
 
         let store = Self.makeStore(at: oldDir)
         try store.save(HearingProfile.makeDefault(name: "Stays in old"))

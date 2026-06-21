@@ -333,6 +333,19 @@ final class ProfileStore: ObservableObject {
     static func bootDirectory() -> URL {
         if let path = UserDefaults.standard.string(forKey: directoryOverrideKey),
            !path.isEmpty {
+            // Reject an override that points inside the per-user temporary
+            // directory. A user never relocates profiles there; the only way
+            // it happens is test pollution — ProfileStoreTests runs hosted in
+            // the app bundle, so `relocate(to:)` writes its temp path into the
+            // shared production defaults domain. macOS purges /var/folders/.../T
+            // on reboot, so honoring the path would silently surface an empty
+            // profile list after a restart while the real data sits untouched
+            // in the default folder. Self-heal by clearing the stale key.
+            let tempRoot = URL(fileURLWithPath: NSTemporaryDirectory()).standardizedFileURL.path
+            if URL(fileURLWithPath: path).standardizedFileURL.path.hasPrefix(tempRoot) {
+                UserDefaults.standard.removeObject(forKey: directoryOverrideKey)
+                return defaultDirectory()
+            }
             return URL(fileURLWithPath: path)
         }
         return defaultDirectory()
