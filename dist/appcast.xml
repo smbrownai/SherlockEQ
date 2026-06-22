@@ -21,6 +21,116 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 0.6.3</title>
+      <pubDate>Mon, 22 Jun 2026 17:43:04 +0000</pubDate>
+      <sparkle:version>00603</sparkle:version>
+      <sparkle:shortVersionString>0.6.3</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<h2>SherlockEQ 0.6.3</h2>
+
+<p>
+  A large bug-fix release from a full code audit. It protects your saved EQ
+  work, makes the daily listening-safety tracking dependable across restarts
+  and midnight, and hardens profile and headphone-correction importing.
+</p>
+
+<h3>Fixed</h3>
+
+<ul>
+  <li>
+    <strong>Editing an audiogram no longer erases your manual EQ.</strong>
+    Adjusting a hearing-threshold point used to overwrite every band you had
+    tuned in the Simple, Speech, Advanced, or Expert tabs. The audiogram now
+    updates only its own bands and leaves the rest of your EQ intact.
+  </li>
+  <li>
+    <strong>Linked left/right channels stay truly in sync.</strong>
+    In Expert, adding, removing, or dragging a band with channels linked now
+    mirrors to the other ear correctly instead of letting the two ears drift
+    apart or overwriting an unrelated band.
+  </li>
+  <li>
+    <strong>Your daily listening dose is remembered.</strong>
+    The safe-listening dose now persists across app relaunches within the same
+    day, rolls over at midnight even when no audio is playing, and counts time
+    more accurately across pauses — so a high-exposure day is tracked honestly.
+  </li>
+  <li>
+    <strong>Safe-listening alerts aren't missed at startup.</strong>
+    A notification triggered moments after launch is no longer dropped while
+    notification permission is still being checked.
+  </li>
+  <li>
+    <strong>Importing profiles and headphone corrections is more robust.</strong>
+    Shared or hand-edited profile files load even when they omit internal ids,
+    AutoEQ files whose filters omit a Q value now import fully instead of
+    partially, and the correct correction is matched when the catalog has two
+    headphones with the same name.
+  </li>
+  <li>
+    <strong>The Expert EQ graph shows its full range.</strong>
+    Bands set to the ±24 dB extremes are now drawn and stay draggable on the
+    curve instead of being silently clamped to ±18 dB.
+  </li>
+  <li>
+    <strong>The tinnitus-notch preview shows the correct ear.</strong>
+    With separate per-ear notches enabled, the Expert graph now shows the notch
+    for the ear you're editing rather than always the left.
+  </li>
+  <li>
+    <strong>Diagnostic and calibration tones behave across device changes.</strong>
+    The test tone and SPL-calibration tone now stop cleanly when you switch
+    output devices or the Mac sleeps, instead of getting stuck "on" with no
+    sound or quietly corrupting an in-progress calibration.
+  </li>
+  <li>
+    <strong>Cleaner audio recovery and rarer edge cases.</strong>
+    Audio now self-heals after a brief interruption instead of staying choppy,
+    a rare feedback-loop condition at startup is prevented, and an
+    output-permission change mid-session is handled without leaving the audio
+    engine in a bad state.
+  </li>
+  <li>
+    <strong>A profile that can't be loaded is reported, not hidden.</strong>
+    If a profile file fails to load, SherlockEQ now tells you instead of
+    silently dropping it from the list.
+  </li>
+  <li>
+    <strong>Smoother VU metering and immediate diagnostic toggles.</strong>
+    The analog VU needle no longer jumps after sleep/wake, and signal-chain
+    bypass switches take effect immediately while a diagnostic tone is active.
+  </li>
+  <li>
+    <strong>Command-line tool: <code>install</code> is safer.</strong>
+    <code>sherlockeq install</code> now refuses to overwrite an unrelated file
+    at the target path instead of replacing it.
+  </li>
+</ul>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not diagnose,
+  treat, measure, or monitor any hearing condition, tinnitus, or disability.
+  For concerns about your hearing, consult a doctor, audiologist, or licensed
+  healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.6.2">0.6.2 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v0.6.3/SherlockEQ-0.6.3.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="C1YGR8WGlODZK1CHo6ZWhoeoV9UqVusOyTK3Sk7SyoflW2QKe9wL82rGsyuT/HDoR8MaFkdI6JudJS6f7zNJAQ==" length="14622110" />
+    </item>
+
+    <item>
       <title>SherlockEQ 0.6.2</title>
       <pubDate>Sun, 21 Jun 2026 14:48:19 +0000</pubDate>
       <sparkle:version>00602</sparkle:version>
