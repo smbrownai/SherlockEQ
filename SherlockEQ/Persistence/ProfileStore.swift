@@ -311,7 +311,10 @@ final class ProfileStore: ObservableObject {
         let fm = FileManager.default
         if !fm.fileExists(atPath: directory.path) {
             do {
-                try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+                // Owner-only: profiles can encode a user's hearing thresholds.
+                try fm.createDirectory(at: directory,
+                                       withIntermediateDirectories: true,
+                                       attributes: [.posixPermissions: 0o700])
             } catch {
                 // Subsequent save / loadAll calls will fail with less-
                 // actionable I/O errors; capture the underlying cause
@@ -323,6 +326,10 @@ final class ProfileStore: ObservableObject {
                 log.error("Could not create profiles dir: \(error.localizedDescription, privacy: .public)")
                 lastError = "Could not create profiles directory: \(error.localizedDescription)"
             }
+        } else {
+            // Tighten an existing directory — installs from before 0.6.4
+            // created it with the umask default (typically 0755). Best-effort.
+            try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
         }
     }
 
@@ -391,7 +398,9 @@ final class ProfileStore: ObservableObject {
 
             let fm = FileManager.default
             if !fm.fileExists(atPath: newDirectory.path) {
-                try fm.createDirectory(at: newDirectory, withIntermediateDirectories: true)
+                try fm.createDirectory(at: newDirectory,
+                                       withIntermediateDirectories: true,
+                                       attributes: [.posixPermissions: 0o700])
             }
 
             if moveExisting, fm.fileExists(atPath: oldDirectory.path) {
