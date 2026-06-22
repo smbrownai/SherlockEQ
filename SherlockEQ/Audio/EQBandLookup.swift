@@ -66,6 +66,30 @@ enum EQBandLookup {
         return best?.idx
     }
 
+    /// Merge audiogram-derived parametric bands into an existing per-ear chain.
+    /// Replaces only the parametric slots the audiogram owns (its measured
+    /// frequencies, within tolerance) and preserves every other band — shelves,
+    /// notches, and parametric bands at non-audiogram frequencies authored in
+    /// the Simple/Speech/Advanced/Expert tabs. Editing the audiogram therefore
+    /// updates its own bands without wiping the user's manual EQ work, matching
+    /// the app's "switching modes is non-destructive" contract.
+    static func mergingAudiogramBands(
+        _ derived: [EQBand],
+        into existing: [EQBand]
+    ) -> [EQBand] {
+        var result = existing.filter { band in
+            // Keep anything that isn't a parametric band sitting on an
+            // audiogram slot; those slots are the audiogram's to own.
+            guard band.filterType == .parametric else { return true }
+            return !derived.contains { d in
+                abs(band.frequencyHz - d.frequencyHz) <= d.frequencyHz * matchToleranceRatio
+            }
+        }
+        result.append(contentsOf: derived)
+        result.sort { $0.frequencyHz < $1.frequencyHz }
+        return result
+    }
+
     /// Read the gain at `frequencyHz` for a band of `filterType`.
     static func gain(
         at frequencyHz: Double,

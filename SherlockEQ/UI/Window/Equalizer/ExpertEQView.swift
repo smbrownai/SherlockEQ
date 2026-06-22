@@ -111,7 +111,11 @@ struct ExpertEQView: View {
                 bands: bandsBinding(for: profile),
                 shadowBands: shadowBands(for: profile),
                 targetBands: target,
-                notch: profile.leftNotch,
+                // Show the displayed ear's notch — not always the left. With
+                // separate notches enabled, editing the right ear otherwise
+                // drew the left notch's marker/curve. (When notches aren't
+                // separate, both ears are kept in sync, so this still matches.)
+                notch: tab == .left ? profile.leftNotch : profile.rightNotch,
                 spectrumSampleRate: audioState.audio.outputSampleRate ?? 48_000,
                 earColor: earColor,
                 shadowColor: shadowColor,
@@ -135,6 +139,9 @@ struct ExpertEQView: View {
                 // in its settings card immediately reshapes the danger fill.
                 safetyCeilingDBA: profile.safeListeningCeilingDB,
                 calibrationOffsetDBA: audioState.calibrationOffsetDBA,
+                // Match Expert's ±24 dB clamp so extreme bands (keyboard/import)
+                // are drawn and stay draggable instead of snapping to ±18.
+                gainRangeDB: -24...24,
                 dynamicsMonitor: audioState.dynamicActivity,
                 dynamicsEar: tab == .left ? .left : .right,
                 dynamicsKinds: enabledDynamicsKinds(profile),
@@ -699,38 +706,58 @@ struct ExpertEQView: View {
                 var updated = profile
                 if tab == .left { updated.leftEar.bands = newBands }
                 else { updated.rightEar.bands = newBands }
-                if linkChannels {
-                    // Mirror to the other ear, preserving each band's identity
-                    // by frequency match (so the canvas's selectedBandID still
-                    // works after the round-trip).
-                    let other = (tab == .left ? updated.rightEar.bands : updated.leftEar.bands)
-                    let mirrored = Self.mirrorBands(newBands, ontoExisting: other)
-                    if tab == .left { updated.rightEar.bands = mirrored }
-                    else { updated.leftEar.bands = mirrored }
-                }
+                mirrorEditedEarIfLinked(&updated)
                 try? profileStore.save(updated, actionName: "Adjust EQ band")
             }
         )
     }
 
-    /// When linking ears, we propagate freq/gain/Q/type/enabled from the
-    /// edited side onto the other, but keep the other side's band IDs (and
-    /// any bands it has that the edited side doesn't, by index).
+    /// Mirror the edited ear's bands onto the other ear when channels are
+    /// linked. Centralised so every mutation path (drag, keyboard, add,
+    /// remove) keeps the ears in sync identically.
+    private func mirrorEditedEarIfLinked(_ profile: inout HearingProfile) {
+        guard linkChannels else { return }
+        let editing = tab == .left ? profile.leftEar.bands : profile.rightEar.bands
+        let other = tab == .left ? profile.rightEar.bands : profile.leftEar.bands
+        let mirrored = Self.mirrorBands(editing, ontoExisting: other)
+        if tab == .left { profile.rightEar.bands = mirrored }
+        else { profile.leftEar.bands = mirrored }
+    }
+
+    /// When linking ears, propagate the edited side's bands onto the other
+    /// side. Matches by *slot* (filter type + frequency within tolerance),
+    /// NOT by array index: once the two ears differ in count or order — e.g.
+    /// after an add/remove, or after the arrays were reordered independently
+    /// by `EQBandLookup` — index alignment silently rewrote unrelated bands on
+    /// the other ear. Slot matching keeps each target band's `id` (so canvas
+    /// selection survives the round-trip), mints a fresh band where the edited
+    /// side has one the other lacks, and drops target bands with no counterpart
+    /// (linked ears must match).
     private static func mirrorBands(_ source: [EQBand], ontoExisting target: [EQBand]) -> [EQBand] {
-        var result = target
-        for (i, src) in source.enumerated() {
-            if i < result.count {
-                result[i].frequencyHz = src.frequencyHz
-                result[i].gaindB = src.gaindB
-                result[i].bandwidth = src.bandwidth
-                result[i].filterType = src.filterType
-                result[i].enabled = src.enabled
+        var remaining = target
+        var result: [EQBand] = []
+        for src in source {
+            if let idx = remaining.firstIndex(where: {
+                $0.filterType == src.filterType
+                    && abs($0.frequencyHz - src.frequencyHz)
+                        <= src.frequencyHz * EQBandLookup.matchToleranceRatio
+            }) {
+                var band = remaining.remove(at: idx)   // keep its id
+                band.frequencyHz = src.frequencyHz
+                band.gaindB = src.gaindB
+                band.bandwidth = src.bandwidth
+                band.filterType = src.filterType
+                band.enabled = src.enabled
+                result.append(band)
             } else {
-                result.append(src)
+                result.append(EQBand(
+                    frequencyHz: src.frequencyHz,
+                    gaindB: src.gaindB,
+                    bandwidth: src.bandwidth,
+                    filterType: src.filterType,
+                    enabled: src.enabled
+                ))
             }
-        }
-        if result.count > source.count {
-            result.removeLast(result.count - source.count)
         }
         return result
     }
@@ -748,12 +775,7 @@ struct ExpertEQView: View {
         guard let idx = bands.firstIndex(where: { $0.id == band.id }) else { return }
         mutate(&bands[idx])
         if tab == .left { profile.leftEar.bands = bands } else { profile.rightEar.bands = bands }
-        if linkChannels {
-            let other = (tab == .left ? profile.rightEar.bands : profile.leftEar.bands)
-            let mirrored = Self.mirrorBands(bands, ontoExisting: other)
-            if tab == .left { profile.rightEar.bands = mirrored }
-            else { profile.leftEar.bands = mirrored }
-        }
+        mirrorEditedEarIfLinked(&profile)
         try? profileStore.save(profile)
     }
 
@@ -772,6 +794,7 @@ struct ExpertEQView: View {
         )
         if tab == .left { profile.leftEar.bands.append(new) }
         else { profile.rightEar.bands.append(new) }
+        mirrorEditedEarIfLinked(&profile)   // else linked ears diverge by a band
         try? profileStore.save(profile)
         selectedBandID = new.id
     }
@@ -780,6 +803,7 @@ struct ExpertEQView: View {
         guard var profile = activeProfile else { return }
         if tab == .left { profile.leftEar.bands.removeAll { $0.id == band.id } }
         else { profile.rightEar.bands.removeAll { $0.id == band.id } }
+        mirrorEditedEarIfLinked(&profile)   // else the band lingers on the other ear
         try? profileStore.save(profile)
         selectedBandID = nil
     }

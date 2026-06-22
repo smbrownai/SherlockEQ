@@ -130,12 +130,16 @@ struct AudiogramView: View {
                     for: newPoints,
                     compensationFactor: updated.compensationFactor
                 )
+                // Merge — never replace. A wholesale `bands = bands` here wiped
+                // every band the user authored in the EQ tabs (shelves, notches,
+                // parametric bands at non-audiogram frequencies). Merge updates
+                // only the audiogram's own slots and keeps the rest.
                 if tab == .left {
                     updated.leftEar.thresholds = newPoints
-                    updated.leftEar.bands = bands
+                    updated.leftEar.bands = EQBandLookup.mergingAudiogramBands(bands, into: updated.leftEar.bands)
                 } else {
                     updated.rightEar.thresholds = newPoints
-                    updated.rightEar.bands = bands
+                    updated.rightEar.bands = EQBandLookup.mergingAudiogramBands(bands, into: updated.rightEar.bands)
                 }
                 try? profileStore.save(updated)
             }
