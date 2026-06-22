@@ -41,6 +41,7 @@ SherlockEQ goes beyond a normal EQ:
 - [Audiogram & Hearing Profiles](help:audiogram-profiles) — shape a listening profile from audiogram-like inputs.
 - [Tinnitus Tone Matching](help:tinnitus-tone-matching) — explore a perceived tone and set a notch.
 - [Headphone Correction / AutoEQ](help:headphone-correction-autoeq) — flatten a headphone's measured response.
+- [Listening Comfort](help:listening-comfort) — adaptive tools that ease harshness and sibilance and lift speech when needed.
 
 ## Listening responsibly
 

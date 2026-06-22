@@ -35,10 +35,10 @@ A menu-bar popover surfaces live levels, today's dose, master gain, balance, and
 
 ## How it works
 
-- **Core Audio Tap API** (macOS 14.2+) reads system audio at the source. No virtual driver, no kernel extension, no audio routing to configure.
+- **Core Audio Tap API** reads system audio at the source. No virtual driver, no kernel extension, no audio routing to configure.
 - **Custom per-ear biquad cascade**, derived from Audio EQ Cookbook formulas, runs in an `AVAudioSourceNode` render block. This bypasses `AVAudioUnitEQ`'s stereo coupling — a left-ear notch leaves the right channel untouched.
 - **vDSP / Accelerate** for a 2048-point Hann-windowed FFT, the IEC 61672-1 A-weighting curve, and the dose math. The audio thread does a `memcpy` into a ring buffer; the FFT runs off-thread.
-- **Up to 16 bands per ear.** Seven filter types: parametric, low/high shelf, notch, band/low/high pass.
+- **Stack as many bands per ear as you need.** Seven filter types: parametric, low/high shelf, notch, band/low/high pass.
 
 ## Install
 

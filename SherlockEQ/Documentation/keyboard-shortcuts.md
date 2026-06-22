@@ -49,12 +49,42 @@ Closing a window does not quit SherlockEQ — it keeps running in the menu bar.
 
 ## Expert Equalizer
 
+With a band selected, the arrow keys edit it. Modifiers change the step size, so
+you can sweep coarsely or nudge surgically without leaving the keyboard.
+
+**Selecting a band**
+
 | Shortcut | Action |
 | --- | --- |
 | Tab or L | Select next band (by frequency) |
 | J | Select previous band |
-| ↑ / ↓ | Nudge selected band gain |
-| ⇧⌘↑ / ⇧⌘↓ | Fine gain adjustment |
+
+**Gain** (↑ raises, ↓ lowers)
+
+| Shortcut | Step |
+| --- | --- |
+| ↑ / ↓ | ±1 dB |
+| ⇧↑ / ⇧↓ | ±0.5 dB |
+| ⌘↑ / ⌘↓ | ±5 dB |
+| ⇧⌘↑ / ⇧⌘↓ | ±0.1 dB (fine) |
+
+**Frequency** (← lower, → higher)
+
+| Shortcut | Step |
+| --- | --- |
+| ← / → | ±5 % |
+| ⇧← / ⇧→ | ±15 % |
+| ⌘← / ⌘→ | ±50 % |
+| ⇧⌘← / ⇧⌘→ | ±1 Hz (absolute — for surgical tuning, e.g. a tinnitus notch) |
+
+**Other edits**
+
+| Shortcut | Action |
+| --- | --- |
+| [ / ] | Tighten / widen Q |
+| Space | Toggle the selected band on/off |
+| Return | Reset the selected band's gain to 0 dB |
+| Delete | Remove the selected band |
 
 Note: ⇧Tab is reserved by macOS for focus traversal and can't be used as a
 "previous band" shortcut, which is why **J** serves that role.
