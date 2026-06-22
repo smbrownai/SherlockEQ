@@ -197,11 +197,44 @@ final class CLICommandHandler {
         }
     }
 
+    /// Confine CLI-driven file I/O. The control port is local-only but
+    /// unauthenticated at the Mach layer (see `CLIControlServer`) and the app
+    /// is unsandboxed, so we treat every caller-supplied path as untrusted:
+    /// it must name a plain `.json` file, and we refuse to follow a symlink at
+    /// the final component. That blocks using the app as a confused deputy to
+    /// clobber dotfiles / keys / launch agents on write, or to read secrets
+    /// outside the user's intent on read. `.standardizedFileURL` first resolves
+    /// any `..` lexically so a relative escape can't slip past the extension
+    /// check.
+    private struct PathRejected: Error { let message: String }
+
+    private static func validatedJSONURL(_ path: String, forWriting: Bool) -> Result<URL, PathRejected> {
+        let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath).standardizedFileURL
+        guard url.pathExtension.lowercased() == "json" else {
+            return .failure(PathRejected(message: "Path must name a .json file."))
+        }
+        // lstat via attributesOfItem reports the link itself, not its target.
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path) {
+            let type = attrs[.type] as? FileAttributeType
+            if type == .typeSymbolicLink {
+                return .failure(PathRejected(message: "Refusing to follow a symlink at \(url.lastPathComponent)."))
+            }
+            if forWriting && type != .typeRegular {
+                return .failure(PathRejected(message: "Refusing to overwrite a non-regular file at \(url.lastPathComponent)."))
+            }
+        }
+        return .success(url)
+    }
+
     private func profilesImport(_ request: [String: Any]) -> Data {
         guard let path = request["path"] as? String, !path.isEmpty else {
             return Self.fail(code: "invalid_argument", "Missing file path.")
         }
-        let url = URL(fileURLWithPath: path)
+        let url: URL
+        switch Self.validatedJSONURL(path, forWriting: false) {
+        case .success(let u): url = u
+        case .failure(let rejection): return Self.fail(code: "invalid_path", rejection.message)
+        }
         guard FileManager.default.fileExists(atPath: url.path) else {
             return Self.fail(code: "not_found", "No such file: \(path)")
         }
@@ -217,7 +250,11 @@ final class CLICommandHandler {
         guard let path = request["path"] as? String, !path.isEmpty else {
             return Self.fail(code: "invalid_argument", "Missing file path.")
         }
-        let url = URL(fileURLWithPath: path)
+        let url: URL
+        switch Self.validatedJSONURL(path, forWriting: true) {
+        case .success(let u): url = u
+        case .failure(let rejection): return Self.fail(code: "invalid_path", rejection.message)
+        }
         let all = (request["all"] as? Bool) ?? false
 
         if all {

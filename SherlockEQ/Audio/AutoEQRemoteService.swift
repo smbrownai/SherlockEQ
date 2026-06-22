@@ -129,7 +129,8 @@ final class AutoEQRemoteService: ObservableObject {
         let url = Self.indexCacheURL
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
-            withIntermediateDirectories: true
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
         )
         let data = try JSONEncoder.autoEQ.encode(bundle)
         try data.write(to: url, options: .atomic)
@@ -197,7 +198,8 @@ final class AutoEQRemoteService: ObservableObject {
         let url = Self.profileCacheURL(source: profile.source, type: profile.type, name: profile.headphoneName)
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
-            withIntermediateDirectories: true
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
         )
         let data = try JSONEncoder.autoEQ.encode(profile)
         try data.write(to: url, options: .atomic)
@@ -322,9 +324,30 @@ final class AutoEQRemoteService: ObservableObject {
 
     private static func profileCacheURL(source: String, type: String, name: String) -> URL {
         profileCacheRoot
-            .appendingPathComponent(source, isDirectory: true)
-            .appendingPathComponent(type, isDirectory: true)
-            .appendingPathComponent("\(name).json", isDirectory: false)
+            .appendingPathComponent(safePathComponent(source), isDirectory: true)
+            .appendingPathComponent(safePathComponent(type), isDirectory: true)
+            .appendingPathComponent("\(safePathComponent(name)).json", isDirectory: false)
+    }
+
+    /// Sanitize an untrusted catalog string into a single safe path component.
+    /// The headphone name / source / type are parsed from a remote markdown
+    /// index, so a crafted or MITM'd entry like `../../../../tmp/evil` (or a
+    /// `name` containing `/`) would otherwise escape the cache root when used
+    /// to build a file path — `appendingPathComponent` happily interprets
+    /// embedded separators and `..`. We strip path-meaningful and illegal
+    /// characters and neutralize leading dots so every component stays inside
+    /// `autoeq_profiles/`. Applied on both the write (persist) and read
+    /// (load/delete) paths via this one chokepoint, so they map identically.
+    static func safePathComponent(_ raw: String) -> String {
+        var s = raw
+        s = s.replacingOccurrences(of: "/", with: "_")
+        s = s.replacingOccurrences(of: "\\", with: "_")
+        s = s.replacingOccurrences(of: ":", with: "_")   // HFS path separator
+        s = s.replacingOccurrences(of: "\u{0}", with: "")
+        // Drop leading dots so "..", "." and hidden names can't traverse/hide.
+        while s.hasPrefix(".") { s.removeFirst() }
+        s = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        return s.isEmpty ? "_" : s
     }
 }
 
