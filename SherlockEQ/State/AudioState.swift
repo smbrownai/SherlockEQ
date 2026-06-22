@@ -495,6 +495,10 @@ final class AudioState: ObservableObject {
         self.preSpectrum = preSpectrum
         self.stereoMonitor = stereoMonitor
         self.safeListening = tracker
+        // Restore today's accumulated dose from the previous run and start the
+        // midnight-rollover timer. Kept here (not in the tracker's init) so
+        // bare trackers built in unit tests don't touch the shared defaults.
+        tracker.beginDailyTracking()
 
         // Activity meters read live gain deltas from the per-ear dynamic
         // processors (owned by the tap). Provider runs on the main actor
@@ -627,9 +631,21 @@ final class AudioState: ObservableObject {
             .dropFirst()
             .sink { [weak self] on in self?.audio.setCalibrationTone(on) }
             .store(in: &eqChainSubscriptions)
-        // The four per-stage bypass toggles share one handler — each
-        // flip rebuilds the chain against the new mask.
-        let applyOnFlip: (Bool) -> Void = { [weak self] _ in self?.applyActiveProfile() }
+        // The per-stage bypass toggles share one handler — each flip rebuilds
+        // the chain against the new mask. If the diagnostic test curve is
+        // active it owns the cascades, so applyActiveProfile() would no-op and
+        // the flip would silently appear to do nothing until the test curve is
+        // turned off. A user touching a chain stage is done with the
+        // diagnostic, so yield it: clearing testCurveEnabled fires its sink,
+        // which restores the profile and applies the new mask immediately.
+        let applyOnFlip: (Bool) -> Void = { [weak self] _ in
+            guard let self else { return }
+            if self.testCurveEnabled {
+                self.testCurveEnabled = false
+            } else {
+                self.applyActiveProfile()
+            }
+        }
         eqChain.$eqMasterEnabled.dropFirst().sink(receiveValue: applyOnFlip).store(in: &eqChainSubscriptions)
         eqChain.$autoEQEnabled.dropFirst().sink(receiveValue: applyOnFlip).store(in: &eqChainSubscriptions)
         eqChain.$notchFilterEnabled.dropFirst().sink(receiveValue: applyOnFlip).store(in: &eqChainSubscriptions)

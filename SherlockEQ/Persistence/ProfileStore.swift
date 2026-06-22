@@ -63,6 +63,7 @@ final class ProfileStore: ObservableObject {
         do {
             let urls = try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
             var loaded: [HearingProfile] = []
+            var skipped: [String] = []
             for url in urls where url.pathExtension == "json" {
                 do {
                     let data = try Data(contentsOf: url)
@@ -70,11 +71,22 @@ final class ProfileStore: ObservableObject {
                     loaded.append(profile)
                 } catch {
                     log.error("Skipping \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    skipped.append(url.lastPathComponent)
                 }
             }
             loaded.sort { $0.createdAt < $1.createdAt }
             profiles = loaded
-            lastError = nil
+            // Surface skipped files instead of clearing the error. A profile
+            // that fails to decode otherwise vanishes from the list with the
+            // only trace in OSLog — clearing `lastError` here hid it entirely.
+            if skipped.isEmpty {
+                lastError = nil
+            } else {
+                let names = skipped.sorted().joined(separator: ", ")
+                lastError = skipped.count == 1
+                    ? "Couldn't load 1 profile (\(names)) — it was skipped."
+                    : "Couldn't load \(skipped.count) profiles (\(names)) — they were skipped."
+            }
             return loaded
         } catch {
             // Empty result but surface the reason so DebugView (and any

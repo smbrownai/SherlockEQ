@@ -14,9 +14,14 @@ final class TapRingBuffer {
     let capacityFrames: Int
 
     private let storage: UnsafeMutableBufferPointer<Float>
-    private let indices = OSAllocatedUnfairLock<Indices>(initialState: Indices(read: 0, write: 0))
+    private let indices = OSAllocatedUnfairLock<Indices>(initialState: Indices(read: 0, write: 0, dropped: 0))
 
-    private struct Indices { var read: Int; var write: Int }
+    private struct Indices { var read: Int; var write: Int; var dropped: Int }
+
+    /// Total frames dropped to overflow since creation (for diagnostics).
+    /// Non-zero indicates the consumer stalled and the oldest audio was
+    /// discarded to keep latency bounded. Lock-guarded; safe to read off-thread.
+    var droppedFrameCount: Int { indices.withLock { $0.dropped } }
 
     init(capacityFrames: Int) {
         let cap = Self.nextPowerOfTwo(max(64, capacityFrames))
@@ -30,13 +35,37 @@ final class TapRingBuffer {
 
     // MARK: - Producer
 
-    /// Writes `frameCount` mono samples from `src` into the ring.
-    /// Frames beyond available capacity are dropped (callers should over-provision).
-    func write(from src: UnsafePointer<Float>, frameCount: Int) {
-        let (w, available) = indices.withLock { state -> (Int, Int) in
-            (state.write, capacityFrames - (state.write &- state.read))
+    /// Reserve room for `frameCount` frames, dropping the *oldest* frames if the
+    /// ring would overflow. Returns the write index to start at and the number
+    /// of frames to write (clamped to capacity).
+    ///
+    /// Overflow policy is drop-oldest (advance `read`), not drop-newest: when
+    /// the consumer (render block) stalls and the ring fills, dropping the
+    /// newest frames pins latency at maximum and produces *steady-state*
+    /// dropouts that never recover while production keeps up with consumption.
+    /// Discarding the oldest frames instead keeps the freshest audio, bounds
+    /// latency, and self-heals after a single glitch. Advancing `read` from the
+    /// producer is normally the consumer's job, but every index mutation is
+    /// lock-guarded, so the only consequence is at most one buffer of stale
+    /// samples on the consumer side — a one-time glitch, not a persistent one.
+    private func reserveWrite(_ frameCount: Int) -> (w: Int, toWrite: Int) {
+        indices.withLock { state in
+            let toWrite = min(frameCount, capacityFrames)
+            let free = capacityFrames - (state.write &- state.read)
+            if toWrite > free {
+                let overflow = toWrite - free
+                state.read = state.read &+ overflow
+                state.dropped = state.dropped &+ overflow
+            }
+            return (state.write, toWrite)
         }
-        let toWrite = min(frameCount, available)
+    }
+
+    /// Writes `frameCount` mono samples from `src` into the ring. On overflow
+    /// the oldest buffered frames are dropped (see `reserveWrite`).
+    func write(from src: UnsafePointer<Float>, frameCount: Int) {
+        if frameCount <= 0 { return }
+        let (w, toWrite) = reserveWrite(frameCount)
         if toWrite <= 0 { return }
 
         let mask = capacityFrames - 1
@@ -57,10 +86,8 @@ final class TapRingBuffer {
         channelIndex: Int,
         channelCount: Int
     ) {
-        let (w, available) = indices.withLock { state -> (Int, Int) in
-            (state.write, capacityFrames - (state.write &- state.read))
-        }
-        let toWrite = min(frameCount, available)
+        if frameCount <= 0 { return }
+        let (w, toWrite) = reserveWrite(frameCount)
         if toWrite <= 0 { return }
 
         let mask = capacityFrames - 1

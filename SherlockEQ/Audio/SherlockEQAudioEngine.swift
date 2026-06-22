@@ -387,6 +387,18 @@ final class SherlockEQAudioEngine: ObservableObject {
         leftDynamics = nil
         rightDynamics = nil
         if let t = toneSourceNode { engine.detach(t); toneSourceNode = nil }
+        // The diagnostic test tone and the SPL-calibration tone are
+        // AVAudioPlayerNodes attached straight to mainMixerNode, outside the
+        // graph wiring above. They must be detached here too — otherwise each
+        // rebuild (device change, sleep/wake) leaks an orphaned node, leaves
+        // the @Published toggle stuck "on" with no audible tone, and the
+        // `guard …Player == nil` re-arm guard then permanently no-ops. This
+        // also silently corrupted an in-progress dBA calibration on any route
+        // change. Reset the pointers + flags so the tone can be re-armed.
+        if let tp = tonePlayer { tp.stop(); engine.detach(tp); tonePlayer = nil }
+        if toneEnabled { toneEnabled = false }
+        if let cp = calibrationTonePlayer { cp.stop(); engine.detach(cp); calibrationTonePlayer = nil }
+        if calibrationToneEnabled { calibrationToneEnabled = false }
     }
 
     // MARK: - Controls

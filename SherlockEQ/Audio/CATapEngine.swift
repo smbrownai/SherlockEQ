@@ -191,12 +191,25 @@ final class CATapEngine: ObservableObject {
         guard case .running = state else { return }
         guard AudioCapturePermission.preflight() != .authorized else { return }
         log.error("System Audio Recording permission revoked mid-session — tearing tap down")
-        state = .failed("""
-            System Audio Recording permission was revoked. \
-            Open System Settings → Privacy & Security → System Audio \
-            Recording, re-enable SherlockEQ, then quit and relaunch the app.
-            """)
-        tearDownTapAndAggregate()
+        // Route the teardown through the same FIFO serializer as start/stop/
+        // device-change. Calling `tearDownTapAndAggregate()` directly here let
+        // it interleave with an in-flight rebuild (a queued `performStart`),
+        // which leaks the tap/aggregate CoreAudio handles — exactly what the
+        // serializer exists to prevent. Re-confirm state + permission inside
+        // the queue, since a rebuild ahead of us may have changed both.
+        Task { @MainActor in
+            await enqueue { [weak self] in
+                guard let self else { return }
+                guard case .running = self.state,
+                      AudioCapturePermission.preflight() != .authorized else { return }
+                self.state = .failed("""
+                    System Audio Recording permission was revoked. \
+                    Open System Settings → Privacy & Security → System Audio \
+                    Recording, re-enable SherlockEQ, then quit and relaunch the app.
+                    """)
+                self.tearDownTapAndAggregate()
+            }
+        }
     }
 
     func requestPermissionAndStart() async {
@@ -330,7 +343,14 @@ final class CATapEngine: ObservableObject {
         let outputDeviceID = try defaultOutputDeviceID()
         let outputDeviceName = (try? deviceName(outputDeviceID)) ?? "Device \(outputDeviceID)"
         let outputDeviceUID = try deviceUID(outputDeviceID)
-        let ownProcessObjectID = (try? processObjectIDForCurrentPID()) ?? 0
+        // Must succeed: if the PID→ProcessObject lookup fails and we fall back
+        // to 0, the tap excludes process 0 (not SherlockEQ), so the app's own
+        // processed output is no longer excluded — it gets re-tapped and
+        // re-processed into an audio feedback loop. `processObjectIDForCurrentPID`
+        // already throws `processObjectLookupFailed` on a bad lookup; let it
+        // propagate to `performStart`'s catch → `.failed`, which is the correct,
+        // visible outcome rather than a silent loop.
+        let ownProcessObjectID = try processObjectIDForCurrentPID()
 
         // Global tap, excluding our own process to prevent the
         // AVAudioEngine output → tap → output feedback loop.

@@ -91,10 +91,8 @@ public struct VUBallisticsState {
     /// `referenceDBFS` dBFS. Pass `rms = 0` for "no audio"; the
     /// needle decays smoothly toward the floor.
     public mutating func update(rms: Double, referenceDBFS: Double, dt: Double) {
-        // Clamp dt: zero step is a no-op; a step >100 ms (suspend,
-        // missed frames, sleep/wake) would otherwise explode the
-        // integrator. Better to take a few smaller virtual steps than
-        // to bound the bug.
+        // Clamp dt: zero step is a no-op; a long step (suspend, missed frames,
+        // sleep/wake) is bounded to 100 ms of catch-up.
         let dt = max(0, min(0.1, dt))
         if dt == 0 { return }
 
@@ -108,17 +106,29 @@ public struct VUBallisticsState {
         let omega = Self.omega
         let omegaSq = omega * omega
         let twoZetaOmega = 2 * omega  // ζ = 1, critical damping
-        let accel = omegaSq * (target - vu) - twoZetaOmega * velocity
-        velocity += accel * dt
-        let next = vu + velocity * dt
-        if next < Self.floorVU {
-            // Clamp + zero velocity so a fast transient-to-silence
-            // transition doesn't leave residual downward velocity
-            // that would cause a tiny visible bounce at the floor.
-            vu = Self.floorVU
-            velocity = 0
-        } else {
-            vu = next
+
+        // Integrate in sub-steps so each one stays inside the semi-implicit
+        // Euler stability bound (ωn·h < 2). With ωn ≈ 22.13 a single 0.1 s
+        // step gives ωn·h ≈ 2.2 — past the bound — so the needle could ring
+        // or jump after a stall/sleep-wake. Capping each step at ~20 ms
+        // (ωn·h ≈ 0.44) and taking as many as `dt` needs is the "few smaller
+        // virtual steps" the clamp comment always described but never did.
+        let maxStep = 0.02
+        let steps = max(1, Int((dt / maxStep).rounded(.up)))
+        let h = dt / Double(steps)
+        for _ in 0..<steps {
+            let accel = omegaSq * (target - vu) - twoZetaOmega * velocity
+            velocity += accel * h
+            let next = vu + velocity * h
+            if next < Self.floorVU {
+                // Clamp + zero velocity so a fast transient-to-silence
+                // transition doesn't leave residual downward velocity
+                // that would cause a tiny visible bounce at the floor.
+                vu = Self.floorVU
+                velocity = 0
+            } else {
+                vu = next
+            }
         }
     }
 }

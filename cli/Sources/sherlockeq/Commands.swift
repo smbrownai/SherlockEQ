@@ -434,11 +434,15 @@ struct Install: ParsableCommand {
                 manualHint(selfURL, link)
             }
         }
-        // Replace only a prior symlink (or our own name) — never clobber an
-        // unrelated regular file at that path.
+        // Replace only a prior symlink — never clobber an unrelated regular
+        // file at that path. (`attributesOfItem` uses lstat, so it reports the
+        // link itself, not its target.) The old `|| lastPathComponent ==
+        // "sherlockeq"` clause was always true — `link` is literally
+        // `<dir>/sherlockeq` — so the refusal could never fire and a real file
+        // named `sherlockeq` on the user's PATH would be silently deleted.
         if let info = try? fm.attributesOfItem(atPath: link.path) {
             let isSymlink = (info[.type] as? FileAttributeType) == .typeSymbolicLink
-            guard isSymlink || link.lastPathComponent == "sherlockeq" else {
+            guard isSymlink else {
                 die("\(link.path) already exists and is not a sherlockeq symlink. Refusing to overwrite.")
             }
             try? fm.removeItem(at: link)

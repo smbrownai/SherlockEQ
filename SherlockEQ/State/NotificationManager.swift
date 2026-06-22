@@ -57,18 +57,34 @@ final class NotificationManager: NSObject, ObservableObject {
         }
     }
 
-    /// Send a user-visible notification immediately. Silently no-ops when
-    /// authorization hasn't been granted.
+    /// Send a user-visible notification. No-ops when notifications aren't
+    /// authorized. Fire-and-forget for callers (sync signature preserved).
+    ///
+    /// The authorization gate is checked *after* an on-demand refresh when the
+    /// status is still `.notDetermined`: a dose crossing can fire moments after
+    /// launch, before the async `refreshAuthorizationStatus()` kicked off in
+    /// `init` has resolved. Gating on the stale `.notDetermined` there would
+    /// silently drop the warning — and because the safe-listening crossing flag
+    /// is one-shot per day, that warning would never re-fire. Refreshing first
+    /// ensures a genuinely-authorized user still gets it.
     func send(title: String, body: String, identifier: String = UUID().uuidString) {
-        guard isAuthorized else { return }
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request) { [log] error in
-            if let error {
-                log.error("Notification post failed: \(error.localizedDescription, privacy: .public)")
+        Task { @MainActor in
+            if authorizationStatus == .notDetermined {
+                await refreshAuthorizationStatus()
+            }
+            guard isAuthorized else {
+                log.info("Notification suppressed — not authorized (status \(self.authorizationStatus.rawValue))")
+                return
+            }
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            content.sound = .default
+            let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
+            UNUserNotificationCenter.current().add(request) { [log] error in
+                if let error {
+                    log.error("Notification post failed: \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
     }

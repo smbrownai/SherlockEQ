@@ -129,15 +129,16 @@ struct ParametricCanvasView: View {
     private let minHz: Double = 20
     private let maxHz: Double = 20_000
     private var freqAxis: LogFreqAxis { LogFreqAxis(minHz: minHz, maxHz: maxHz) }
-    /// Y-axis range for the EQ curve (dB gain, around 0). Tightened
-    /// from ±24 → ±18 so typical bands (mostly ±6 dB) deflect ~33 %
-    /// more pixels and the curve reads as a real shape rather than a
-    /// faint wobble near zero. Profile bands max out at ±12 dB, so
-    /// 6 dB of headroom remains for the rare extreme tweak before the
-    /// node hits the visible ceiling. Pair this with `drawDBLabels`'s
-    /// stride-by-6 so the axis still divides cleanly.
-    private let minDB: Double = -18
-    private let maxDB: Double = 18
+    /// Y-axis range for the EQ curve (dB gain, around 0). Defaults to ±18:
+    /// tightened from ±24 so typical bands (mostly ±6 dB) deflect ~33 % more
+    /// pixels and the curve reads as a real shape rather than a faint wobble
+    /// near zero, with stride-by-6 dividing the axis cleanly. The Expert canvas
+    /// passes ±24 to match its own ±24 gain clamp — otherwise a band set to the
+    /// extremes via keyboard/import is both undrawable AND silently re-clamped
+    /// to ±18 the instant the user drags it (the drag clamp uses this range).
+    var gainRangeDB: ClosedRange<Double> = -18...18
+    private var minDB: Double { gainRangeDB.lowerBound }
+    private var maxDB: Double { gainRangeDB.upperBound }
     private let nodeRadius: CGFloat = 8
     private let nodeHitRadius: CGFloat = 16
 
@@ -2083,6 +2084,8 @@ struct LiveParametricCanvas: View {
     var showPersistence: Bool = false
     var safetyCeilingDBA: Double = 85
     var calibrationOffsetDBA: Double = 100
+    /// Forwarded EQ-curve gain range. Expert passes ±24 to match its clamp.
+    var gainRangeDB: ClosedRange<Double> = -18...18
 
     /// Dynamic-EQ activity telemetry. When supplied (Expert canvas), an
     /// inner observer reads it at the monitor's ~15 Hz cadence and feeds the
@@ -2236,7 +2239,8 @@ struct LiveParametricCanvas: View {
             showTimeAxis: showTimeAxis,
             showPersistence: showPersistence,
             safetyCeilingDBA: safetyCeilingDBA,
-            calibrationOffsetDBA: calibrationOffsetDBA
+            calibrationOffsetDBA: calibrationOffsetDBA,
+            gainRangeDB: gainRangeDB
         )
     }
 
