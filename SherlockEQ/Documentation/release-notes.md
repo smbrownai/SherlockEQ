@@ -20,6 +20,17 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.6.4
+
+A security-hardening release. SherlockEQ runs without the macOS sandbox so it can tap system audio, which means its helper surfaces deserve extra care. This update tightens how the command-line tool talks to the app, what files that channel can touch, and the permissions on the app's own data — closing the findings from a focused security review. There are no changes to how EQ, profiles, or safe-listening work.
+
+**Security**
+
+- **The command-line control channel is now authenticated.** The `sherlockeq` tool talks to the running app over a local channel that previously accepted any message from any program on your Mac. The app now issues a private, per-launch token that only your account can read, and ignores any request that doesn't present it — so another program can't quietly drive SherlockEQ on your behalf.
+- **Profile import and export stay where they belong.** Importing and exporting profiles through the command-line tool now accepts only real `.json` files and won't follow a symlink in place of the target. This prevents the app from being tricked into overwriting an unrelated file or reading something it shouldn't.
+- **Downloaded headphone-correction files are kept inside their cache.** Entries fetched from the online AutoEQ catalog are sanitized before being written to disk, so a malformed or tampered catalog entry can't place a file outside SherlockEQ's own cache folder.
+- **Your data folders are now private to your account.** The folders SherlockEQ creates for your profiles and cached corrections are created — and existing ones tightened — so only your account can read them. Profiles can encode details about your hearing; they shouldn't be readable by other users on a shared Mac.
+
 ## 0.6.3
 
 A large bug-fix release from a full code audit. It protects your saved EQ work, makes the daily listening-safety tracking dependable across restarts and midnight, and hardens profile and headphone-correction importing.
