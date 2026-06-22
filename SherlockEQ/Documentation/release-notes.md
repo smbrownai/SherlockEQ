@@ -20,6 +20,25 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.6.3
+
+A large bug-fix release from a full code audit. It protects your saved EQ work, makes the daily listening-safety tracking dependable across restarts and midnight, and hardens profile and headphone-correction importing.
+
+**Fixed**
+
+- **Editing an audiogram no longer erases your manual EQ.** Adjusting a hearing-threshold point used to overwrite every band you had tuned in the Simple, Speech, Advanced, or Expert tabs. The audiogram now updates only its own bands and leaves the rest of your EQ intact.
+- **Linked left/right channels stay truly in sync.** In Expert, adding, removing, or dragging a band with channels linked now mirrors to the other ear correctly instead of letting the two ears drift apart or overwriting an unrelated band.
+- **Your daily listening dose is remembered.** The safe-listening dose now persists across app relaunches within the same day, rolls over at midnight even when no audio is playing, and counts time more accurately across pauses — so a high-exposure day is tracked honestly.
+- **Safe-listening alerts aren't missed at startup.** A notification triggered moments after launch is no longer dropped while notification permission is still being checked.
+- **Importing profiles and headphone corrections is more robust.** Shared or hand-edited profile files load even when they omit internal ids, AutoEQ files whose filters omit a Q value now import fully instead of partially, and the correct correction is matched when the catalog has two headphones with the same name.
+- **The Expert EQ graph shows its full range.** Bands set to the ±24 dB extremes are now drawn and stay draggable on the curve instead of being silently clamped to ±18 dB.
+- **The tinnitus-notch preview shows the correct ear.** With separate per-ear notches enabled, the Expert graph now shows the notch for the ear you're editing rather than always the left.
+- **Diagnostic and calibration tones behave across device changes.** The test tone and SPL-calibration tone now stop cleanly when you switch output devices or the Mac sleeps, instead of getting stuck "on" with no sound or quietly corrupting an in-progress calibration.
+- **Cleaner audio recovery and rarer edge cases.** Audio now self-heals after a brief interruption instead of staying choppy, a rare feedback-loop condition at startup is prevented, and an output-permission change mid-session is handled without leaving the audio engine in a bad state.
+- **A profile that can't be loaded is reported, not hidden.** If a profile file fails to load, SherlockEQ now tells you instead of silently dropping it from the list.
+- **Smoother VU metering and immediate diagnostic toggles.** The analog VU needle no longer jumps after sleep/wake, and signal-chain bypass switches take effect immediately while a diagnostic tone is active.
+- **Command-line tool: `install` is safer.** `sherlockeq install` now refuses to overwrite an unrelated file at the target path instead of replacing it.
+
 ## 0.6.2
 
 A bug-fix release focused on audio output reliability — especially when you use an audio interface or mixer, or switch between output devices.
