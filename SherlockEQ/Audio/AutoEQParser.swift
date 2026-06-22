@@ -49,7 +49,11 @@ enum AutoEQParser {
         // Look up Fc / Gain / Q labels positionally so we tolerate the
         // varying decimal precision producers use ("Fc 100 Hz" vs "100.0 Hz").
         let tokens = line.split(whereSeparator: \.isWhitespace).map(String.init)
-        guard tokens.count >= 11 else { return nil }
+        // Need at least "Filter N: ON TYPE" (4 tokens). Fc/Gain are required;
+        // Q is optional (handled below), so a Q-less row — e.g.
+        // "Filter 1: ON PK Fc 100 Hz Gain -3.5 dB" (10 tokens) — must not be
+        // rejected here. The old `>= 11` guard silently dropped such rows.
+        guard tokens.count >= 4 else { return nil }
 
         let stateToken = tokens[2]                  // ON / OFF
         let typeToken  = tokens[3]                  // PK / LSC / HSC / NO / …
@@ -65,8 +69,11 @@ enum AutoEQParser {
         }
 
         guard let fc   = doubleAfter("Fc",   in: tokens),
-              let gain = doubleAfter("Gain", in: tokens),
-              let q    = doubleAfter("Q",    in: tokens) else { return nil }
+              let gain = doubleAfter("Gain", in: tokens) else { return nil }
+        // Q is optional — EqualizerAPO / oratory1990 exports omit it for
+        // default-Q rows. Fall back to 0.707 (Butterworth) instead of dropping
+        // the band, which silently yielded a partial correction.
+        let q = doubleAfter("Q", in: tokens) ?? 0.707
 
         return EQBand(
             frequencyHz: fc,

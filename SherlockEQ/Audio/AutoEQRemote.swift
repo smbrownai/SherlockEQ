@@ -234,8 +234,11 @@ enum AutoEQRemoteParser {
     /// (skip per spec), or the filter type is unrecognized (skip + log).
     private static func parseFilter(_ line: String) -> AutoEQRemoteFilter? {
         let tokens = line.split(whereSeparator: \.isWhitespace).map(String.init)
-        // "Filter 1: ON PK Fc 100 Hz Gain -3.5 dB Q 0.700" → 11 tokens.
-        guard tokens.count >= 11 else {
+        // Need at least "Filter N: ON TYPE" (4 tokens). Fc/Gain are required;
+        // Q is optional (handled below), so a Q-less row like
+        // "Filter 1: ON PK Fc 100 Hz Gain -3.5 dB" (10 tokens) is valid and
+        // must not be rejected here — the old `>= 11` guard dropped it.
+        guard tokens.count >= 4 else {
             log.warning("Filter line has too few tokens: \(line, privacy: .public)")
             return nil
         }
@@ -263,13 +266,13 @@ enum AutoEQRemoteParser {
         }
 
         guard let fc = numericAfter("Fc", in: tokens),
-              let gain = numericAfter("Gain", in: tokens),
-              let qRaw = numericAfter("Q", in: tokens) else {
-            log.warning("Missing Fc/Gain/Q in: \(line, privacy: .public)")
+              let gain = numericAfter("Gain", in: tokens) else {
+            log.warning("Missing Fc/Gain in: \(line, privacy: .public)")
             return nil
         }
-
-        let q = max(0.1, min(16.0, qRaw))
+        // Q optional — default to Butterworth (0.707) when absent rather than
+        // dropping the row, which silently produced a partial correction.
+        let q = max(0.1, min(16.0, numericAfter("Q", in: tokens) ?? 0.707))
 
         return AutoEQRemoteFilter(
             index: index,

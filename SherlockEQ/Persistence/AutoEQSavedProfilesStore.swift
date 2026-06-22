@@ -109,6 +109,7 @@ final class AutoEQSavedProfilesStore: ObservableObject {
         copy.autoEQName = entry.name
         copy.autoEQBands = cached.bands
         copy.autoEQPreampDB = cached.preampGain
+        copy.autoEQSourcePath = entry.path   // unambiguous identity (see appliedPath)
         do {
             try profileStore.save(copy)
             return true
@@ -118,15 +119,19 @@ final class AutoEQSavedProfilesStore: ObservableObject {
         }
     }
 
-    /// Identifier the active hearing profile's AutoEQ section is
-    /// currently sourced from, if any — by name match. The hearing
-    /// profile stores AutoEQ data inline (it might have been imported
-    /// before the remote catalog existed), so we identify "this saved
-    /// entry is the one currently applied" through the user-facing
-    /// name. Returns nil when the profile's AutoEQ section is empty
-    /// or doesn't match any saved entry.
+    /// Identifier the active hearing profile's AutoEQ section is currently
+    /// sourced from, if any. Prefers the unambiguous catalog `path` stamped at
+    /// apply time; falls back to a name match only for legacy profiles applied
+    /// before the path was recorded. Matching on name alone is wrong when the
+    /// catalog has duplicate display names across source/type — it can mark the
+    /// wrong saved row as "applied" and re-apply a different correction's bands.
+    /// Returns nil when the profile's AutoEQ section is empty or matches nothing.
     func appliedPath(in profile: HearingProfile?) -> String? {
-        guard let profile, let name = profile.autoEQName else { return nil }
+        guard let profile else { return nil }
+        if let path = profile.autoEQSourcePath, contains(path: path) {
+            return path
+        }
+        guard let name = profile.autoEQName else { return nil }
         return entries.first(where: { $0.name == name })?.path
     }
 

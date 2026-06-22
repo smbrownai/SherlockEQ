@@ -20,6 +20,42 @@ struct EQBand: Codable, Hashable, Identifiable {
     var bandwidth: Double           // Q value (parametric / notch); octaves for shelves
     var filterType: EQFilterType
     var enabled: Bool
+
+    init(
+        id: UUID = UUID(),
+        frequencyHz: Double,
+        gaindB: Double,
+        bandwidth: Double,
+        filterType: EQFilterType,
+        enabled: Bool
+    ) {
+        self.id = id
+        self.frequencyHz = frequencyHz
+        self.gaindB = gaindB
+        self.bandwidth = bandwidth
+        self.filterType = filterType
+        self.enabled = enabled
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, frequencyHz, gaindB, bandwidth, filterType, enabled
+    }
+
+    // Custom decoder so `id` is optional on disk: hand-edited or third-party
+    // profile JSON that omits per-band ids should still load. A synthesised
+    // decoder treats a property with a default value as still-required, so a
+    // missing `id` previously failed the entire profile decode (the file then
+    // silently vanished from the list / refused to import). Mint a fresh id
+    // when absent; encoding stays synthesised so saved files keep their ids.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.frequencyHz = try c.decode(Double.self, forKey: .frequencyHz)
+        self.gaindB = try c.decode(Double.self, forKey: .gaindB)
+        self.bandwidth = try c.decode(Double.self, forKey: .bandwidth)
+        self.filterType = try c.decode(EQFilterType.self, forKey: .filterType)
+        self.enabled = try c.decode(Bool.self, forKey: .enabled)
+    }
 }
 
 extension EQBand {
