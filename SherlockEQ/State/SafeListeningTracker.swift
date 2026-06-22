@@ -68,6 +68,37 @@ final class SafeListeningTracker: ObservableObject {
     /// per-sample jitter.
     private let estimatePublishInterval: TimeInterval = 60
 
+    /// Largest inter-sample interval still treated as continuous listening.
+    /// Dose samples arrive at ~20 Hz (every ~50 ms) while audio renders; a gap
+    /// longer than this means audio paused, the Mac slept, or the analysis
+    /// pipeline stalled, so we don't credit the whole unobserved span as
+    /// exposure. (The old fixed 5 s cap credited up to 5 s of a pause at the
+    /// resumed — possibly loud — level.) ~1 s tolerates scheduling jitter while
+    /// keeping the accumulation honest.
+    private let maxIntegrationStep: TimeInterval = 1.0
+
+    // MARK: - Persistence (daily dose survives relaunch within the same day)
+
+    private let defaults = UserDefaults.standard
+    private enum DefaultsKey {
+        static let dose = "sherlockeq.dose.sessionDose"
+        static let crossedAmber = "sherlockeq.dose.crossedAmber"
+        static let crossedRed = "sherlockeq.dose.crossedRed"
+        static let resetDayEpoch = "sherlockeq.dose.resetDayEpoch"
+    }
+    /// Only true once `beginDailyTracking()` runs (the real app at launch).
+    /// Gates restore + persist so unit tests that construct a bare tracker
+    /// stay pristine and never read or write the shared defaults domain
+    /// (which hosted tests share with production — see memory note).
+    private var trackingActive = false
+    /// Throttle for the periodic dose write; crossings + resets persist eagerly.
+    private var lastPersist: Date?
+    private let persistInterval: TimeInterval = 15
+    /// Fires ~once a minute so the day rolls over even with no audio playing.
+    private var rolloverTimer: Timer?
+
+    deinit { rolloverTimer?.invalidate() }
+
     /// Permissible exposure duration in seconds at a given dBA level.
     static func permissibleDuration(at dBA: Double) -> TimeInterval {
         nioshReferenceDuration / pow(
@@ -83,12 +114,8 @@ final class SafeListeningTracker: ObservableObject {
         let elapsed = lastUpdateTime.map { now.timeIntervalSince($0) } ?? 0
         lastUpdateTime = now
 
-        // Midnight rollover.
-        let today = Calendar.current.startOfDay(for: now)
-        if today != currentResetDay {
-            resetDose(reason: "midnight rollover")
-            currentResetDay = today
-        }
+        // Midnight rollover (also driven by `rolloverTimer` when no audio plays).
+        checkDayRollover(now: now)
 
         let priorDose = sessionDose
 
@@ -111,7 +138,10 @@ final class SafeListeningTracker: ObservableObject {
 
         // Accumulate dose at all levels — the NIOSH math is self-regulating
         // (permissible duration at low dBA is huge, contribution near zero).
-        let chunk = min(5.0, max(0, elapsed))
+        // Cap the credited interval to one integration step so an unobserved
+        // gap (pause / sleep / stall) isn't booked as exposure (see
+        // `maxIntegrationStep`).
+        let chunk = min(maxIntegrationStep, max(0, elapsed))
         if chunk > 0 {
             let perm = Self.permissibleDuration(at: clamped)
             if perm.isFinite, perm > 0 {
@@ -164,6 +194,7 @@ final class SafeListeningTracker: ObservableObject {
         if !didCrossAmberToday, priorDose < 0.8, sessionDose >= 0.8 {
             didCrossAmberToday = true
             log.info("Crossed 80% dose threshold")
+            persistState()   // eager: a crossing is the state we most want to survive a crash
             if notificationsEnabled {
                 NotificationManager.shared.send(
                     title: "Approaching your safe listening limit",
@@ -174,12 +205,21 @@ final class SafeListeningTracker: ObservableObject {
         if !didCrossRedToday, priorDose < 1.0, sessionDose >= 1.0 {
             didCrossRedToday = true
             log.info("Reached 100% dose threshold")
+            persistState()
             if notificationsEnabled {
                 NotificationManager.shared.send(
                     title: "Safe listening limit reached",
                     body: "You've reached your safe listening limit for today. Consider taking a break."
                 )
             }
+        }
+
+        // Persist periodically so a relaunch within the same day resumes the
+        // accumulated dose instead of restarting from zero. No-op until
+        // `beginDailyTracking()` has run (i.e. only in the real app).
+        if trackingActive,
+           lastPersist == nil || now.timeIntervalSince(lastPersist!) >= persistInterval {
+            persistState()
         }
     }
 
@@ -221,6 +261,72 @@ final class SafeListeningTracker: ObservableObject {
         avgPower = 0
         lastEstimatePublish = nil
         remainingMinutes = nil
+        persistState()   // record the zeroed state so a relaunch doesn't restore stale dose
+    }
+
+    // MARK: - Daily lifecycle + persistence
+
+    /// Called once by `AudioState` at app launch (NOT from `init`, so unit
+    /// tests that construct a bare tracker stay pristine). Restores today's
+    /// accumulated dose from the previous run and starts the midnight-rollover
+    /// timer so the day rolls over even when no audio is playing.
+    func beginDailyTracking() {
+        guard !trackingActive else { return }
+        trackingActive = true
+        restoreState()
+        startRolloverTimer()
+    }
+
+    /// Roll the daily counters over when the calendar day changes. Driven both
+    /// by incoming level samples (`update`) and by `rolloverTimer`, so the reset
+    /// happens even with no audio across midnight. `currentResetDay` is advanced
+    /// *before* `resetDose` so the persisted state carries the new day.
+    private func checkDayRollover(now: Date = Date()) {
+        let today = Calendar.current.startOfDay(for: now)
+        guard today != currentResetDay else { return }
+        currentResetDay = today
+        resetDose(reason: "midnight rollover")
+    }
+
+    private func startRolloverTimer() {
+        let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.checkDayRollover() }
+        }
+        // .common so it still fires during UI tracking/menu interaction.
+        RunLoop.main.add(timer, forMode: .common)
+        rolloverTimer = timer
+    }
+
+    private func restoreState() {
+        // Restore only when the persisted dose belongs to *today*; otherwise
+        // it's a previous day's figure and the daily counter starts fresh.
+        guard let storedDayEpoch = defaults.object(forKey: DefaultsKey.resetDayEpoch) as? Double,
+              storedDayEpoch == currentResetDay.timeIntervalSince1970 else {
+            clearPersistedState()
+            return
+        }
+        sessionDose = min(1.0, max(0, defaults.double(forKey: DefaultsKey.dose)))
+        didCrossAmberToday = defaults.bool(forKey: DefaultsKey.crossedAmber)
+        didCrossRedToday = defaults.bool(forKey: DefaultsKey.crossedRed)
+        if sessionDose > 0 {
+            log.info("Restored today's dose: \(self.sessionDose, format: .fixed(precision: 2))")
+        }
+    }
+
+    private func persistState() {
+        guard trackingActive else { return }
+        defaults.set(sessionDose, forKey: DefaultsKey.dose)
+        defaults.set(didCrossAmberToday, forKey: DefaultsKey.crossedAmber)
+        defaults.set(didCrossRedToday, forKey: DefaultsKey.crossedRed)
+        defaults.set(currentResetDay.timeIntervalSince1970, forKey: DefaultsKey.resetDayEpoch)
+        lastPersist = Date()
+    }
+
+    private func clearPersistedState() {
+        defaults.removeObject(forKey: DefaultsKey.dose)
+        defaults.removeObject(forKey: DefaultsKey.crossedAmber)
+        defaults.removeObject(forKey: DefaultsKey.crossedRed)
+        defaults.removeObject(forKey: DefaultsKey.resetDayEpoch)
     }
 
     /// Spec §5.4 dose tinting band. Single source of truth for any UI
