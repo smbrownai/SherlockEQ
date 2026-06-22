@@ -21,6 +21,79 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 0.6.4</title>
+      <pubDate>Mon, 22 Jun 2026 18:32:48 +0000</pubDate>
+      <sparkle:version>00604</sparkle:version>
+      <sparkle:shortVersionString>0.6.4</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<h2>SherlockEQ 0.6.4</h2>
+
+<p>
+  A security-hardening release. SherlockEQ runs without the macOS sandbox so it
+  can tap system audio, which means its helper surfaces deserve extra care. This
+  update tightens how the command-line tool talks to the app, what files that
+  channel can touch, and the permissions on the app's own data — closing the
+  findings from a focused security review. There are no changes to how EQ,
+  profiles, or safe-listening work.
+</p>
+
+<h3>Security</h3>
+
+<ul>
+  <li>
+    <strong>The command-line control channel is now authenticated.</strong>
+    The <code>sherlockeq</code> tool talks to the running app over a local
+    channel that previously accepted any message from any program on your Mac.
+    The app now issues a private, per-launch token that only your account can
+    read, and ignores any request that doesn't present it — so another program
+    can't quietly drive SherlockEQ on your behalf.
+  </li>
+  <li>
+    <strong>Profile import and export stay where they belong.</strong>
+    Importing and exporting profiles through the command-line tool now accepts
+    only real <code>.json</code> files and won't follow a symlink in place of
+    the target. This prevents the app from being tricked into overwriting an
+    unrelated file or reading something it shouldn't.
+  </li>
+  <li>
+    <strong>Downloaded headphone-correction files are kept inside their cache.</strong>
+    Entries fetched from the online AutoEQ catalog are sanitized before being
+    written to disk, so a malformed or tampered catalog entry can't place a file
+    outside SherlockEQ's own cache folder.
+  </li>
+  <li>
+    <strong>Your data folders are now private to your account.</strong>
+    The folders SherlockEQ creates for your profiles and cached corrections are
+    created — and existing ones tightened — so only your account can read them.
+    Profiles can encode details about your hearing; they shouldn't be readable
+    by other users on a shared Mac.
+  </li>
+</ul>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not diagnose,
+  treat, measure, or monitor any hearing condition, tinnitus, or disability.
+  For concerns about your hearing, consult a doctor, audiologist, or licensed
+  healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.6.3">0.6.3 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v0.6.4/SherlockEQ-0.6.4.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="3MUBPjwIHRCqVXbsNVp17au/+U9GPC0r2CmCJQy78fR1UyHT7LSELwEQervizgusiXfWNtixcEx89snUKJlLAw==" length="14614730" />
+    </item>
+
+    <item>
       <title>SherlockEQ 0.6.3</title>
       <pubDate>Mon, 22 Jun 2026 17:43:04 +0000</pubDate>
       <sparkle:version>00603</sparkle:version>
