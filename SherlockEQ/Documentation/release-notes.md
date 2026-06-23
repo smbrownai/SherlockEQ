@@ -20,6 +20,21 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.6.5
+
+A correction-focused fix. In earlier versions, choosing an equalizer preset or editing bands by hand could quietly overwrite the hearing correction derived from your audiogram — leaving you listening through the preset alone. This release makes your audiogram correction its own layer that always stays applied: equalizer presets and manual tweaks now sit *on top of* it rather than replacing it. It also makes the on-screen curves easier to read.
+
+**Fixes**
+
+- **Your hearing correction is no longer overwritten by EQ presets or edits.** The correction calculated from your audiogram is now kept separate from the equalizer, and the two are combined when you listen. Picking a preset, dragging bands, or clearing the equalizer changes only the equalizer — your hearing correction stays in place.
+- **An entered audiogram always produces a correction.** Profiles that had an audiogram but were showing a flat correction — for example after clearing equalizer bands — now rebuild the correction from your stored thresholds automatically.
+
+**Improvements**
+
+- **A clearer picture of what you hear.** The equalizer chart now shows a combined *Result* line — your hearing correction and equalizer together — as the main curve, with an optional *Breakdown* view that separates the correction and your equalizer into their own lines.
+- **Easier-to-read curves, per ear.** Each curve type now has its own line style and each ear its own color, with a new on-chart legend that labels them. The encoding is designed to stay clear for color-vision differences.
+- **More complete in-app Help.** New and corrected Help articles for Speech EQ, Advanced EQ, and Listening Comfort, with fixes to several documentation inconsistencies.
+
 ## 0.6.4
 
 A security-hardening release. SherlockEQ runs without the macOS sandbox so it can tap system audio, which means its helper surfaces deserve extra care. This update tightens how the command-line tool talks to the app, what files that channel can touch, and the permissions on the app's own data — closing the findings from a focused security review. There are no changes to how EQ, profiles, or safe-listening work.
