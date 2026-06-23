@@ -94,9 +94,11 @@ struct AudiogramView: View {
 
     @ViewBuilder private func previewCard(_ profile: HearingProfile) -> some View {
         card {
+            // "Combined across all tabs" = the Result the listener hears:
+            // hearing correction summed with the user/preset EQ, per ear.
             EQPreviewView(
-                leftBands: profile.leftEar.bands,
-                rightBands: profile.rightEar.bands,
+                leftBands: profile.leftEar.correctionBands + profile.leftEar.bands,
+                rightBands: profile.rightEar.correctionBands + profile.rightEar.bands,
                 compensationFactor: profile.compensationFactor
             )
         }
@@ -126,20 +128,24 @@ struct AudiogramView: View {
             get: { tab == .left ? profile.leftEar.thresholds : profile.rightEar.thresholds },
             set: { newPoints in
                 var updated = profile
-                let bands = AudiogramConversion.bands(
+                let derived = AudiogramConversion.bands(
                     for: newPoints,
                     compensationFactor: updated.compensationFactor
                 )
-                // Merge — never replace. A wholesale `bands = bands` here wiped
-                // every band the user authored in the EQ tabs (shelves, notches,
-                // parametric bands at non-audiogram frequencies). Merge updates
-                // only the audiogram's own slots and keeps the rest.
+                // The hearing correction lands in its OWN `correctionBands`
+                // layer — never in `bands` — so EQ presets/edits layer on top
+                // of it instead of overwriting it. We also strip any correction
+                // a legacy profile had baked into `bands` (pre-layer) so
+                // re-editing the audiogram doesn't double-apply it. User-authored
+                // shelves, notches, and off-slot parametric bands are preserved.
                 if tab == .left {
                     updated.leftEar.thresholds = newPoints
-                    updated.leftEar.bands = EQBandLookup.mergingAudiogramBands(bands, into: updated.leftEar.bands)
+                    updated.leftEar.correctionBands = derived
+                    updated.leftEar.bands = EQBandLookup.removingAudiogramBands(matching: derived, from: updated.leftEar.bands)
                 } else {
                     updated.rightEar.thresholds = newPoints
-                    updated.rightEar.bands = EQBandLookup.mergingAudiogramBands(bands, into: updated.rightEar.bands)
+                    updated.rightEar.correctionBands = derived
+                    updated.rightEar.bands = EQBandLookup.removingAudiogramBands(matching: derived, from: updated.rightEar.bands)
                 }
                 try? profileStore.save(updated)
             }

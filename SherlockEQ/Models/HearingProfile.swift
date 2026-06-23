@@ -126,6 +126,26 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.presetTags             = try c.decodeIfPresent([String].self, forKey: .presetTags) ?? []
         self.createdAt              = try c.decode(Date.self, forKey: .createdAt)
         self.modifiedAt             = try c.decode(Date.self, forKey: .modifiedAt)
+
+        // Backfill the audiogram correction layer for profiles whose audiogram
+        // predates it (correctionBands empty but thresholds carry loss), or
+        // whose derived bands were deleted out of `bands`. Derive from the
+        // stored thresholds and strip any baked-in correction from `bands` so
+        // it can't apply twice. Flat / zero-compensation audiograms derive to
+        // all-disabled bands and are skipped, so normal hearing stays inert.
+        Self.backfillCorrection(&self.leftEar, compensationFactor: compensationFactor)
+        Self.backfillCorrection(&self.rightEar, compensationFactor: compensationFactor)
+    }
+
+    /// Populate `ear.correctionBands` from its thresholds when the layer is
+    /// empty (legacy profile or deleted bands). No-op once populated, so it's
+    /// idempotent across loads. See [[audiogram-correction-layer]].
+    private static func backfillCorrection(_ ear: inout EarProfile, compensationFactor: Double) {
+        guard ear.correctionBands.isEmpty else { return }
+        let derived = AudiogramConversion.bands(for: ear.thresholds, compensationFactor: compensationFactor)
+        guard derived.contains(where: { $0.enabled }) else { return }
+        ear.correctionBands = derived
+        ear.bands = EQBandLookup.removingAudiogramBands(matching: derived, from: ear.bands)
     }
 
     init(

@@ -66,28 +66,27 @@ enum EQBandLookup {
         return best?.idx
     }
 
-    /// Merge audiogram-derived parametric bands into an existing per-ear chain.
-    /// Replaces only the parametric slots the audiogram owns (its measured
-    /// frequencies, within tolerance) and preserves every other band — shelves,
-    /// notches, and parametric bands at non-audiogram frequencies authored in
-    /// the Simple/Speech/Advanced/Expert tabs. Editing the audiogram therefore
-    /// updates its own bands without wiping the user's manual EQ work, matching
-    /// the app's "switching modes is non-destructive" contract.
-    static func mergingAudiogramBands(
-        _ derived: [EQBand],
-        into existing: [EQBand]
+    /// Strip parametric bands sitting on audiogram slots out of `existing`.
+    ///
+    /// The audiogram correction now lives in its own `EarProfile.correctionBands`
+    /// layer (cascaded separately so presets can't overwrite it). This removes
+    /// any correction that was previously *baked into* `bands` — i.e. legacy
+    /// profiles whose audiogram predates the correction layer — so that, once
+    /// their audiogram is re-edited and the correction moves to its own layer,
+    /// it isn't applied twice. A band is dropped when it's parametric and within
+    /// 1/12 octave of a `derived` correction frequency; non-parametric bands
+    /// (shelves, notches) and parametric bands at non-audiogram frequencies are
+    /// preserved, matching the old slot-ownership contract.
+    static func removingAudiogramBands(
+        matching derived: [EQBand],
+        from existing: [EQBand]
     ) -> [EQBand] {
-        var result = existing.filter { band in
-            // Keep anything that isn't a parametric band sitting on an
-            // audiogram slot; those slots are the audiogram's to own.
+        existing.filter { band in
             guard band.filterType == .parametric else { return true }
             return !derived.contains { d in
                 abs(band.frequencyHz - d.frequencyHz) <= d.frequencyHz * matchToleranceRatio
             }
         }
-        result.append(contentsOf: derived)
-        result.sort { $0.frequencyHz < $1.frequencyHz }
-        return result
     }
 
     /// Read the gain at `frequencyHz` for a band of `filterType`.

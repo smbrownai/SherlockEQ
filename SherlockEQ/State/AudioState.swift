@@ -442,6 +442,12 @@ final class AudioState: ObservableObject {
             copy.rightNotch.enabled = false
             copy.leftEar.bands = []
             copy.rightEar.bands = []
+            // Master off means truly flat — drop the audiogram correction
+            // layer as well, not just the user/preset EQ. (The per-stage
+            // `manualEQEnabled` toggle below intentionally leaves the
+            // correction running: it flattens only the tone shaping on top.)
+            copy.leftEar.correctionBands = []
+            copy.rightEar.correctionBands = []
             copy.globalTrimDB = 0
             copy.dynamics = DynamicProcessingSettings()
             return copy

@@ -202,12 +202,18 @@ struct SpeechEQView: View {
             preSpectrum: audioState.preSpectrum,
             bands: .constant(profile.leftEar.bands),
             shadowBands: profile.rightEar.bands,
+            targetBands: profile.leftEar.correctionBands,
+            shadowTargetBands: profile.rightEar.correctionBands,
             notch: profile.leftNotch,
             spectrumSampleRate: audioState.audio.outputSampleRate ?? 48_000,
             earColor: audioState.leftEarColor,
             shadowColor: audioState.rightEarColor,
             readOnly: true,
-            selectedBandID: $dummySelection
+            selectedBandID: $dummySelection,
+            // Toggle-less preview shows the Result ("what you hear") line —
+            // EQ + hearing correction (identical to EQ when no audiogram).
+            showEQCurve: false,
+            showResultCurve: true
         )
         .frame(height: 200)
     }

@@ -30,8 +30,12 @@ struct ExpertEQView: View {
     // Each chip in the layer strip mutates one of these.
     @AppStorage("sherlockeq.layer.output")    private var showOutputLayer    = true
     @AppStorage("sherlockeq.layer.input")     private var showInputLayer     = true
-    @AppStorage("sherlockeq.layer.eq")        private var showEQLayer        = true
-    @AppStorage("sherlockeq.layer.audiogram") private var showAudiogramLayer = true
+    // Result (correction + EQ) is the default-visible hero; the EQ-only and
+    // Correction traces are the breakdown, off until chosen. Drag handles stay
+    // available because node drawing is gated on EQ *or* Result being visible.
+    @AppStorage("sherlockeq.layer.result")    private var showResultLayer    = true
+    @AppStorage("sherlockeq.layer.eq")        private var showEQLayer        = false
+    @AppStorage("sherlockeq.layer.audiogram") private var showAudiogramLayer = false
     @AppStorage("sherlockeq.layer.safety")    private var showSafetyLayer    = false
     @AppStorage("sherlockeq.layer.peaks")     private var showPeaksLayer     = false
     /// Live dynamic-feature (Clarity) overlay. Default on, but the chip is
@@ -66,7 +70,11 @@ struct ExpertEQView: View {
     @FocusState private var canvasFocused: Bool
 
     @ViewBuilder private func content(_ profile: HearingProfile) -> some View {
-        let target = targetBands(for: profile)
+        // Hearing correction for the displayed ear (and the other, for its
+        // shadow Result line). Stored per-ear, independent of channel linking.
+        let correction = targetBands(for: profile)
+        let shadowCorrection = tab == .left ? profile.rightEar.correctionBands : profile.leftEar.correctionBands
+        let hasAudiogram = !correction.isEmpty || !shadowCorrection.isEmpty
         // Wrapped in ScrollView (matching AdvancedEQView) so the view
         // breathes when window height is tight. Outer padding bumped from
         // 20 → 24 to match the rest of the app's window-content margins,
@@ -85,10 +93,11 @@ struct ExpertEQView: View {
                     showOutputSpectrum: $showOutputLayer,
                     showEQCurve: $showEQLayer,
                     showAudiogramTarget: $showAudiogramLayer,
+                    showResultCurve: $showResultLayer,
                     showSafetyOverlay: $showSafetyLayer,
                     showPeakCallouts: $showPeaksLayer,
                     showDynamics: $showDynamicsLayer,
-                    hasAudiogram: !target.isEmpty,
+                    hasAudiogram: hasAudiogram,
                     hasDynamics: hasEnabledDynamics,
                     earColor: earColor
                 )
@@ -110,7 +119,8 @@ struct ExpertEQView: View {
                 includeHistory: true,
                 bands: bandsBinding(for: profile),
                 shadowBands: shadowBands(for: profile),
-                targetBands: target,
+                targetBands: correction,
+                shadowTargetBands: shadowCorrection,
                 // Show the displayed ear's notch — not always the left. With
                 // separate notches enabled, editing the right ear otherwise
                 // drew the left notch's marker/curve. (When notches aren't
@@ -125,6 +135,7 @@ struct ExpertEQView: View {
                 showOutputSpectrum: showOutputLayer,
                 showEQCurve: showEQLayer,
                 showAudiogramTarget: showAudiogramLayer,
+                showResultCurve: showResultLayer,
                 showSafetyOverlay: showSafetyLayer,
                 showPeakCallouts: showPeaksLayer,
                 showNotchLine: showNotchLineLayer,
@@ -661,7 +672,7 @@ struct ExpertEQView: View {
             let targetDB = BiquadResponse.compositeMagnitudeDB(at: band.frequencyHz, bands: target)
             let delta = userDB - targetDB
             VStack(alignment: .leading, spacing: 1) {
-                Text("vs target")
+                Text("vs corr.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 Text(formatDelta(delta))
@@ -669,7 +680,7 @@ struct ExpertEQView: View {
                     .foregroundStyle(deltaTint(delta))
             }
             .frame(width: 78, alignment: .leading)
-            .help("How far your active EQ is from the audiogram-derived target at \(Int(band.frequencyHz)) Hz. Drag Gain (or other bands) to close the gap.")
+            .help("How far your tone EQ sits from the hearing-correction curve at \(Int(band.frequencyHz)) Hz. The correction is applied automatically on top of your EQ — this is just for reference.")
         }
     }
 
@@ -686,17 +697,12 @@ struct ExpertEQView: View {
         return .orange
     }
 
-    /// Audiogram-derived "target" correction bands for the active ear.
-    /// Computed from the profile's stored thresholds and the user's
-    /// compensation factor — this is what the user's EQ "should" look
-    /// like if they were tracking the audiogram cleanly. Empty when the
-    /// audiogram is flat (no derived bands) so the canvas hides the layer.
+    /// Hearing-correction bands actually applied for the active ear — the
+    /// stored `correctionBands` (audiogram-derived, kept as its own layer and
+    /// summed with the user's EQ). Empty when the audiogram is flat, so the
+    /// canvas hides the Correction layer.
     private func targetBands(for profile: HearingProfile) -> [EQBand] {
-        let thresholds = tab == .left ? profile.leftEar.thresholds : profile.rightEar.thresholds
-        return AudiogramConversion.bands(
-            for: thresholds,
-            compensationFactor: profile.compensationFactor
-        )
+        tab == .left ? profile.leftEar.correctionBands : profile.rightEar.correctionBands
     }
 
     private func bandsBinding(for profile: HearingProfile) -> Binding<[EQBand]> {

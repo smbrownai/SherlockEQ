@@ -21,6 +21,9 @@ struct CanvasLayerChipStrip: View {
     @Binding var showOutputSpectrum: Bool
     @Binding var showEQCurve: Bool
     @Binding var showAudiogramTarget: Bool
+    /// The combined "Result" curve — correction + EQ, i.e. what's actually
+    /// heard. The default-visible hero line when an audiogram exists.
+    @Binding var showResultCurve: Bool
     @Binding var showSafetyOverlay: Bool
     @Binding var showPeakCallouts: Bool
     /// Live dynamic-feature bells overlay (Clarity features). A manually
@@ -79,19 +82,31 @@ struct CanvasLayerChipStrip: View {
                     isOn: $showInputSpectrum,
                     hint: "Pre-EQ spectrum — what's arriving before the EQ runs."
                 )
+                // Primary curve. With an audiogram it's the "Result" (what you
+                // hear = correction + EQ); without one, Result == EQ, so it's
+                // just labelled "EQ". The two breakdown chips below only appear
+                // when an audiogram makes them carry distinct information.
                 chip(
-                    "EQ",
+                    hasAudiogram ? "Result" : "EQ",
                     swatch: earColor,
-                    isOn: $showEQCurve,
-                    hint: "Your active equaliser curve and band handles."
+                    isOn: $showResultCurve,
+                    hint: hasAudiogram
+                        ? "What you actually hear — the hearing correction and your EQ combined."
+                        : "Your active equaliser curve and band handles."
                 )
                 if hasAudiogram {
                     chip(
-                        "Audiogram",
+                        "EQ",
+                        swatch: earColor,
+                        isOn: $showEQCurve,
+                        hint: "Your tone EQ on its own, without the hearing correction — the difference from Result is what the correction adds."
+                    )
+                    chip(
+                        "Correction",
                         swatch: earColor,
                         pattern: .dashed,
                         isOn: $showAudiogramTarget,
-                        hint: "Audiogram-derived target curve — the clinical reference your EQ is trying to match."
+                        hint: "The audiogram-derived hearing correction on its own."
                     )
                 }
                 chip(
@@ -189,13 +204,18 @@ struct CanvasLayerChipStrip: View {
                 isOn: $showInputSpectrum
             )
             popoverRow(
-                "EQ",
+                hasAudiogram ? "Result" : "EQ",
                 swatch: earColor,
-                isOn: $showEQCurve
+                isOn: $showResultCurve
             )
             if hasAudiogram {
                 popoverRow(
-                    "Audiogram",
+                    "EQ",
+                    swatch: earColor,
+                    isOn: $showEQCurve
+                )
+                popoverRow(
+                    "Correction",
                     swatch: earColor,
                     pattern: .dashed,
                     isOn: $showAudiogramTarget
@@ -312,6 +332,7 @@ struct CanvasLayerChipStrip: View {
         showInputSpectrum   = lens.visibility.input
         showEQCurve         = lens.visibility.eq
         showAudiogramTarget = lens.visibility.audiogram
+        showResultCurve     = lens.visibility.result
         showSafetyOverlay   = lens.visibility.safety
         showPeakCallouts    = lens.visibility.peaks
     }
@@ -398,13 +419,14 @@ struct CanvasLayerChipStrip: View {
 /// Curated layer combinations. Each lens is a one-click way to put the
 /// canvas in a mode optimised for a specific workflow.
 enum CanvasLens: String, CaseIterable, Identifiable {
-    case eq, compare, audiogram, loudness
+    case eq, breakdown, compare, audiogram, loudness
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .eq:        return "EQ"
+        case .eq:        return "Result"
+        case .breakdown: return "Breakdown"
         case .compare:   return "Compare"
         case .audiogram: return "Audiogram"
         case .loudness:  return "Loudness"
@@ -414,6 +436,7 @@ enum CanvasLens: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .eq:        return "slider.horizontal.3"
+        case .breakdown: return "square.3.layers.3d.down.right"
         case .compare:   return "arrow.left.arrow.right"
         case .audiogram: return "ear"
         case .loudness:  return "exclamationmark.shield"
@@ -422,9 +445,10 @@ enum CanvasLens: String, CaseIterable, Identifiable {
 
     var tagline: String {
         switch self {
-        case .eq:        return "Focused on tuning — output + your curve, nothing else."
+        case .eq:        return "Just the result — output + what you actually hear."
+        case .breakdown: return "Pull the curve apart — Result, your EQ, and the correction layered together."
         case .compare:   return "Input + output, see how the chain is shaping the sound."
-        case .audiogram: return "Clinical view — your curve next to the audiogram target."
+        case .audiogram: return "Clinical view — what you hear next to the hearing-correction curve."
         case .loudness:  return "Monitoring view — spectrum with safety zones called out."
         }
     }
@@ -434,18 +458,22 @@ enum CanvasLens: String, CaseIterable, Identifiable {
         let input: Bool
         let eq: Bool
         let audiogram: Bool
+        let result: Bool
         let safety: Bool
         let peaks: Bool
     }
 
     var visibility: Visibility {
         switch self {
-        case .eq:        return .init(output: true,  input: false, eq: true,  audiogram: false, safety: false, peaks: false)
+        // Result-focused: the "what you hear" line and the output spectrum.
+        case .eq:        return .init(output: true,  input: false, eq: false, audiogram: false, result: true,  safety: false, peaks: false)
+        // Decomposition: Result + its two contributors at once.
+        case .breakdown: return .init(output: true,  input: false, eq: true,  audiogram: true,  result: true,  safety: false, peaks: false)
         // Compare turns peaks on — they're useful as anchor points when
         // visually diffing the input vs output silhouettes.
-        case .compare:   return .init(output: true,  input: true,  eq: true,  audiogram: false, safety: false, peaks: true)
-        case .audiogram: return .init(output: true,  input: false, eq: true,  audiogram: true,  safety: false, peaks: false)
-        case .loudness:  return .init(output: true,  input: false, eq: true,  audiogram: false, safety: true,  peaks: true)
+        case .compare:   return .init(output: true,  input: true,  eq: false, audiogram: false, result: true,  safety: false, peaks: true)
+        case .audiogram: return .init(output: true,  input: false, eq: false, audiogram: true,  result: true,  safety: false, peaks: false)
+        case .loudness:  return .init(output: true,  input: false, eq: false, audiogram: false, result: true,  safety: true,  peaks: true)
         }
     }
 }
