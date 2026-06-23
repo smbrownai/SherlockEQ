@@ -46,11 +46,15 @@ enum CanvasVizMode: String, CaseIterable, Identifiable {
 struct ParametricCanvasView: View {
     @Binding var bands: [EQBand]
     var shadowBands: [EQBand] = []
-    /// Audiogram-derived correction bands for the *active* ear. Drawn as a
-    /// dashed ghost behind the active curve so the user can see how far
-    /// their manually-tuned EQ has drifted from the clinical target. Empty
+    /// Audiogram-derived hearing-correction bands for the *active* ear. Drawn
+    /// as a dashed line (the "Correction" layer) and summed with `bands` to
+    /// form the solid "Result" curve — what the listener actually hears. Empty
     /// means no audiogram available (or the caller wants the layer hidden).
     var targetBands: [EQBand] = []
+    /// Correction bands for the *other* ear, used to compute that ear's Result
+    /// curve (the dotted shadow). The audiogram is inherently per-ear, so this
+    /// can differ from `targetBands` even when the EQ is edited in lockstep.
+    var shadowTargetBands: [EQBand] = []
     /// Optional tinnitus notch (spec §5.3). Rendered as an extra band on the
     /// composite curve when `enabled`. Not draggable from the canvas — edits
     /// happen via `NotchControlView` so the dedicated frequency/depth/width
@@ -90,6 +94,10 @@ struct ParametricCanvasView: View {
     var showOutputSpectrum: Bool = true
     var showEQCurve: Bool = true
     var showAudiogramTarget: Bool = true
+    /// The solid "Result" curve — `bands` summed with the audiogram correction
+    /// (`targetBands`), i.e. what the listener actually hears. When on, the EQ
+    /// curve drops to a thinner weight so Result reads as the dominant line.
+    var showResultCurve: Bool = false
     var showSafetyOverlay: Bool = true
     var showPeakCallouts: Bool = false
 
@@ -190,8 +198,14 @@ struct ParametricCanvasView: View {
     @State private var cachedCurveDB: [Double] = []
     /// Same idea for the other-ear "shadow" trace.
     @State private var cachedShadowDB: [Double] = []
-    /// And the audiogram-derived "target" trace.
+    /// And the audiogram-derived "target"/correction trace.
     @State private var cachedTargetDB: [Double] = []
+    /// The "Result" trace (active ear = `bands` + correction) and its
+    /// other-ear shadow. Cached on the same edit cadence as the rest.
+    @State private var cachedResultDB: [Double] = []
+    @State private var cachedResultShadowDB: [Double] = []
+    /// Other-ear correction trace (for the per-ear Correction line).
+    @State private var cachedTargetShadowDB: [Double] = []
 
     /// How many log-spaced samples to compute per curve. 512 across a typical
     /// 600–900px wide canvas means ~1.5px between samples; the Path's line
@@ -233,35 +247,39 @@ struct ParametricCanvasView: View {
                         drawOctaveBars(context, size: size)
                     }
                     drawGrid(context, size: size)
-                    if showEQCurve {
-                        // Shadow other-ear curve is always rendered DOTTED
-                        // (regardless of color contrast) so it has a unique
-                        // pattern that distinguishes it from the audiogram's
-                        // dashed line and the solid active curve. Redundant
-                        // encoding for accessibility — pattern, not just hue.
-                        drawShadowCurve(
-                            context, size: size,
-                            cachedDB: cachedShadowDB
-                        )
+                    // Transfer curves. Consistent encoding: hue = ear
+                    // (earColor active / shadowColor other), style = type
+                    // (dotted EQ, dashed Correction, solid-thick Result).
+                    // Drawn least-dominant first so Result lands on top, and
+                    // the other-ear (shadow-hue) line under its active twin.
+                    // Other-ear lines only when the ears actually differ — a
+                    // symmetric profile draws one line per type.
+                    let drawOtherEar = earsAsymmetric
+                    if showAudiogramTarget {
+                        if drawOtherEar {
+                            drawTypedCurve(context, size: size, cachedDB: cachedTargetShadowDB, color: shadowColor, kind: .correction)
+                        }
+                        drawTypedCurve(context, size: size, cachedDB: cachedTargetDB, color: earColor, kind: .correction)
                     }
-                    // Audiogram target ghost — drawn UNDER the active curve so
-                    // when the user is tracking it perfectly the active hides
-                    // it, and any drift is what shows through.
-                    if showAudiogramTarget { drawTargetCurve(context, size: size) }
-                    // Live dynamic-feature bells — also under the static
-                    // curve, dashed + ear-tinted so they read as a distinct,
-                    // moving layer.
+                    // Live dynamic-feature bells — under the static curves.
                     if showDynamicsOverlay { drawDynamicsOverlay(context, size: size) }
                     if showEQCurve {
-                        drawCurve(
-                            context, size: size,
-                            cachedDB: cachedCurveDB,
-                            color: earColor,
-                            thick: true
-                        )
+                        if drawOtherEar {
+                            drawTypedCurve(context, size: size, cachedDB: cachedShadowDB, color: shadowColor, kind: .eq)
+                        }
+                        drawTypedCurve(context, size: size, cachedDB: cachedCurveDB, color: earColor, kind: .eq)
+                    }
+                    if showResultCurve {
+                        if drawOtherEar {
+                            drawTypedCurve(context, size: size, cachedDB: cachedResultShadowDB, color: shadowColor, kind: .result)
+                        }
+                        drawTypedCurve(context, size: size, cachedDB: cachedResultDB, color: earColor, kind: .result)
                     }
                     drawNotchMarker(context, size: size)
-                    if !readOnly && showEQCurve { drawNodes(context, size: size) }
+                    // Editable handles show whenever an EQ-derived curve is
+                    // visible — either the EQ-only trace or the Result line —
+                    // so dragging works even when only Result is shown.
+                    if !readOnly && (showEQCurve || showResultCurve) { drawNodes(context, size: size) }
                     drawFrequencyLabels(context, size: size)
                     drawDBLabels(context, size: size)
                 }
@@ -272,6 +290,14 @@ struct ParametricCanvasView: View {
                     case .active(let location): hoverLocation = location
                     case .ended: hoverLocation = nil
                     }
+                }
+                // Curve legend (native text so it scales with Dynamic Type).
+                // Top-leading, click-through, only in the curve scene.
+                if vizMode == .spectrum {
+                    curveLegend
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .padding(8)
+                        .allowsHitTesting(false)
                 }
                 // Cursor readout: a small native-text overlay positioned
                 // near the pointer. SwiftUI's body-level Text scales with
@@ -298,6 +324,7 @@ struct ParametricCanvasView: View {
         .onChange(of: bands) { _, _ in recomputeCachedCurves() }
         .onChange(of: shadowBands) { _, _ in recomputeCachedCurves() }
         .onChange(of: targetBands) { _, _ in recomputeCachedCurves() }
+        .onChange(of: shadowTargetBands) { _, _ in recomputeCachedCurves() }
         .onChange(of: notch) { _, _ in recomputeCachedCurves() }
         // Peak chips are sticky — recomputed only when fresh spectrum data
         // arrives, not on every body re-eval, so chips don't churn across
@@ -311,6 +338,20 @@ struct ParametricCanvasView: View {
         cachedCurveDB = sampledDB(for: bandsForCurve)
         cachedShadowDB = sampledDB(for: shadowBands)
         cachedTargetDB = sampledDB(for: targetBands)
+        // Result = what's heard: the EQ curve summed (in dB, via cascade) with
+        // the audiogram correction. Computed per ear so an asymmetric audiogram
+        // shows two Result lines even when the EQ is edited in lockstep.
+        cachedResultDB = sampledDB(for: bandsForCurve + targetBands)
+        cachedResultShadowDB = sampledDB(for: shadowBands + shadowTargetBands)
+        cachedTargetShadowDB = sampledDB(for: shadowTargetBands)
+    }
+
+    /// True when the two ears' curves differ audibly — drives whether the
+    /// right-ear (shadow-hue) lines and the legend's Left/Right split are
+    /// shown. Symmetric profiles draw one line per type and a simpler legend.
+    private var earsAsymmetric: Bool {
+        !bands.audiblyEquivalent(to: shadowBands)
+            || !targetBands.audiblyEquivalent(to: shadowTargetBands)
     }
 
     private func sampledDB(for bands: [EQBand]) -> [Double] {
@@ -392,83 +433,42 @@ struct ParametricCanvasView: View {
         return "Peak at \(hzLabel), \(Int(bestDB.rounded())) dBFS"
     }
 
-    // MARK: - Shadow curve (other ear)
+    // MARK: - Transfer curves
 
-    /// Other-ear curve, rendered DOTTED. The dotted pattern is the redundant
-    /// accessibility encoding (color alone would fail for users with
-    /// protanopia/deuteranopia when the L+R palette is similar). Drawn at
-    /// reduced opacity so the active ear's solid curve still dominates.
-    private func drawShadowCurve(
-        _ context: GraphicsContext,
-        size: CGSize,
-        cachedDB: [Double]
-    ) {
-        guard cachedDB.count > 1 else { return }
-        var path = Path()
-        let n = cachedDB.count
-        let denom = CGFloat(n - 1)
-        for i in 0..<n {
-            let x = CGFloat(i) / denom * size.width
-            let y = yForDB(cachedDB[i], height: size.height)
-            if i == 0 {
-                path.move(to: CGPoint(x: x, y: y))
-            } else {
-                path.addLine(to: CGPoint(x: x, y: y))
-            }
+    /// The three transfer-curve types. Encoding is two-dimensional and each
+    /// dimension carries a redundant non-colour signal so the chart stays
+    /// legible for colour-vision-deficient users:
+    ///   • **hue** = ear (active/earColor vs other/shadowColor), labelled in
+    ///     the legend with "Left"/"Right" text — never colour alone.
+    ///   • **line style + weight** = type (solid-thick Result, dotted EQ,
+    ///     dashed Correction), also labelled in the legend.
+    enum CurveKind { case result, eq, correction }
+
+    private func strokeStyle(for kind: CurveKind) -> StrokeStyle {
+        switch kind {
+        case .result:     return StrokeStyle(lineWidth: 2.6, lineCap: .round, lineJoin: .round)
+        case .eq:         return StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round, dash: [2, 3.5])
+        case .correction: return StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round, dash: [6, 4])
         }
-        context.stroke(
-            path,
-            with: .color(shadowColor.opacity(a11yOpacity(0.55, reduceFactor: 1.5))),
-            style: StrokeStyle(
-                lineWidth: 1.0,
-                lineCap: .round,
-                lineJoin: .round,
-                dash: [1.5, 3]
-            )
-        )
     }
 
-    /// Audiogram-derived target curve. Dashed stroke in the active ear's
-    /// color at reduced opacity — reads as a "ghost target." Drawn under
-    /// the active curve so perfect tracking hides it and only the drift is
-    /// visible. Pattern (dashed) is the redundant encoding for accessibility:
-    /// the curve is identifiable even at low color contrast.
-    private func drawTargetCurve(_ context: GraphicsContext, size: CGSize) {
-        guard cachedTargetDB.count > 1 else { return }
-        var path = Path()
-        let n = cachedTargetDB.count
-        let denom = CGFloat(n - 1)
-        for i in 0..<n {
-            let x = CGFloat(i) / denom * size.width
-            let y = yForDB(cachedTargetDB[i], height: size.height)
-            if i == 0 {
-                path.move(to: CGPoint(x: x, y: y))
-            } else {
-                path.addLine(to: CGPoint(x: x, y: y))
-            }
+    /// Opacity per type — Result is the opaque hero; EQ/Correction read as
+    /// lighter contributors. Bumped under Reduce Transparency for legibility.
+    private func opacity(for kind: CurveKind) -> Double {
+        switch kind {
+        case .result:     return 1.0
+        case .eq:         return a11yOpacity(0.85, reduceFactor: 1.15)
+        case .correction: return a11yOpacity(0.7, reduceFactor: 1.3)
         }
-        context.stroke(
-            path,
-            with: .color(earColor.opacity(0.55)),
-            style: StrokeStyle(
-                lineWidth: 1.25,
-                lineCap: .round,
-                lineJoin: .round,
-                dash: [5, 4]
-            )
-        )
     }
 
-    /// Stroke a curve from precomputed dB samples evenly spaced in log
-    /// frequency. The expensive biquad math happened once in
-    /// `recomputeCachedCurves()`; here we just map (index → x, dB → y) and
-    /// stroke the path. Pure linear arithmetic.
-    private func drawCurve(
+    /// Draw one transfer curve with the type's style in the given ear hue.
+    private func drawTypedCurve(
         _ context: GraphicsContext,
         size: CGSize,
         cachedDB: [Double],
         color: Color,
-        thick: Bool
+        kind: CurveKind
     ) {
         guard cachedDB.count > 1 else { return }
         var path = Path()
@@ -477,17 +477,76 @@ struct ParametricCanvasView: View {
         for i in 0..<n {
             let x = CGFloat(i) / denom * size.width
             let y = yForDB(cachedDB[i], height: size.height)
-            if i == 0 {
-                path.move(to: CGPoint(x: x, y: y))
-            } else {
-                path.addLine(to: CGPoint(x: x, y: y))
-            }
+            if i == 0 { path.move(to: CGPoint(x: x, y: y)) }
+            else { path.addLine(to: CGPoint(x: x, y: y)) }
         }
-        context.stroke(
-            path,
-            with: .color(color),
-            style: StrokeStyle(lineWidth: thick ? 2.0 : 1.0, lineCap: .round, lineJoin: .round)
-        )
+        context.stroke(path, with: .color(color.opacity(opacity(for: kind))), style: strokeStyle(for: kind))
+    }
+
+    // MARK: - Legend
+
+    /// On-canvas legend keyed to the same two-dimensional encoding the curves
+    /// use: line **style** → type, line **colour** → ear. Both axes carry text
+    /// labels, so nothing depends on colour alone. Shown only when it adds
+    /// information — i.e. more than one curve type is visible, or the two ears
+    /// differ (so the Left/Right colour key matters). A single symmetric line
+    /// needs no legend.
+    @ViewBuilder
+    private var curveLegend: some View {
+        let types: [(CurveKind, String)] = {
+            var t: [(CurveKind, String)] = []
+            if showResultCurve { t.append((.result, "Result")) }
+            if showEQCurve { t.append((.eq, "EQ")) }
+            if showAudiogramTarget { t.append((.correction, "Correction")) }
+            return t
+        }()
+        if !types.isEmpty && (types.count > 1 || earsAsymmetric) {
+            // When both ears are drawn the line samples stay neutral (the ear
+            // key carries colour); when symmetric, tint them the single hue
+            // in play so the sample matches the on-screen line.
+            let sampleColor: Color = earsAsymmetric ? .white.opacity(0.9) : earColor
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(Array(types.enumerated()), id: \.offset) { _, item in
+                    HStack(spacing: 6) {
+                        legendSampleLine(item.0, color: sampleColor)
+                        Text(item.1).font(.caption2)
+                    }
+                }
+                if earsAsymmetric {
+                    Divider().frame(width: 92)
+                    HStack(spacing: 12) {
+                        legendEarKey(earColor, "Left")
+                        legendEarKey(shadowColor, "Right")
+                    }
+                }
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(Color.black.opacity(reduceTransparency ? 0.85 : 0.5))
+            )
+        }
+    }
+
+    /// A short line drawn in the type's exact stroke style — the redundant
+    /// non-colour signal for "which type is this".
+    private func legendSampleLine(_ kind: CurveKind, color: Color) -> some View {
+        Canvas { ctx, size in
+            var p = Path()
+            p.move(to: CGPoint(x: 1, y: size.height / 2))
+            p.addLine(to: CGPoint(x: size.width - 1, y: size.height / 2))
+            ctx.stroke(p, with: .color(color), style: strokeStyle(for: kind))
+        }
+        .frame(width: 26, height: 10)
+    }
+
+    private func legendEarKey(_ color: Color, _ label: String) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 9, height: 9)
+            Text(label).font(.caption2)
+        }
     }
 
     /// Draw each live dynamic-feature bell as a dashed, ear-tinted stroke.
@@ -2062,6 +2121,7 @@ struct LiveParametricCanvas: View {
     @Binding var bands: [EQBand]
     var shadowBands: [EQBand] = []
     var targetBands: [EQBand] = []
+    var shadowTargetBands: [EQBand] = []
     var notch: TinnitusNotch? = nil
     var spectrumSampleRate: Double = 48_000
     var earColor: Color = .blue
@@ -2073,6 +2133,7 @@ struct LiveParametricCanvas: View {
     var showOutputSpectrum: Bool = true
     var showEQCurve: Bool = true
     var showAudiogramTarget: Bool = true
+    var showResultCurve: Bool = false
     var showSafetyOverlay: Bool = true
     var showPeakCallouts: Bool = false
     // Spectrogram-mode layers — declared in the SAME order as
@@ -2214,6 +2275,7 @@ struct LiveParametricCanvas: View {
             bands: $bands,
             shadowBands: shadowBands,
             targetBands: targetBands,
+            shadowTargetBands: shadowTargetBands,
             notch: notch,
             spectrumBinsDB: spectrum.logSpectrumDB,
             spectrumPeakHoldDB: spectrum.logSpectrumPeakHoldDB,
@@ -2229,6 +2291,7 @@ struct LiveParametricCanvas: View {
             showOutputSpectrum: showOutputSpectrum,
             showEQCurve: showEQCurve,
             showAudiogramTarget: showAudiogramTarget,
+            showResultCurve: showResultCurve,
             showSafetyOverlay: showSafetyOverlay,
             showPeakCallouts: showPeakCallouts,
             dynamicOverlays: overlays,

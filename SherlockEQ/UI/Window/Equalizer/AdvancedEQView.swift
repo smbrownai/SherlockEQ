@@ -22,8 +22,11 @@ struct AdvancedEQView: View {
     // so the user's chip preference is consistent across modes.
     @AppStorage("sherlockeq.layer.output")    private var showOutputLayer    = true
     @AppStorage("sherlockeq.layer.input")     private var showInputLayer     = true
-    @AppStorage("sherlockeq.layer.eq")        private var showEQLayer        = true
-    @AppStorage("sherlockeq.layer.audiogram") private var showAudiogramLayer = true
+    // Result is the default-visible hero. The EQ-only and Correction traces
+    // are the breakdown, off until the user picks them (or the Breakdown lens).
+    @AppStorage("sherlockeq.layer.result")    private var showResultLayer    = true
+    @AppStorage("sherlockeq.layer.eq")        private var showEQLayer        = false
+    @AppStorage("sherlockeq.layer.audiogram") private var showAudiogramLayer = false
     @AppStorage("sherlockeq.layer.safety")    private var showSafetyLayer    = false
     @AppStorage("sherlockeq.layer.peaks")     private var showPeaksLayer     = false
 
@@ -40,7 +43,11 @@ struct AdvancedEQView: View {
     }
 
     @ViewBuilder private func content(_ profile: HearingProfile) -> some View {
-        let target = targetBands(for: profile)
+        // Per-ear hearing correction (what's actually applied). The audiogram
+        // is inherently per-ear, so we surface both even when EQ is linked.
+        let leftCorrection = profile.leftEar.correctionBands
+        let rightCorrection = profile.rightEar.correctionBands
+        let hasAudiogram = !leftCorrection.isEmpty || !rightCorrection.isEmpty
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 topBar
@@ -50,29 +57,23 @@ struct AdvancedEQView: View {
                     showOutputSpectrum: $showOutputLayer,
                     showEQCurve: $showEQLayer,
                     showAudiogramTarget: $showAudiogramLayer,
+                    showResultCurve: $showResultLayer,
                     showSafetyOverlay: $showSafetyLayer,
                     showPeakCallouts: $showPeaksLayer,
                     // Dynamic-feature overlay is an Expert-canvas affordance
                     // (live node semantics); the graphic-EQ canvas hides it.
                     showDynamics: .constant(false),
-                    hasAudiogram: !target.isEmpty,
+                    hasAudiogram: hasAudiogram,
                     hasDynamics: false,
                     earColor: audioState.leftEarColor
                 )
-                previewCanvas(profile, target: target)
+                previewCanvas(profile, leftCorrection: leftCorrection, rightCorrection: rightCorrection)
                 slidersRow(profile)
                 resetButton(profile)
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-
-    private func targetBands(for profile: HearingProfile) -> [EQBand] {
-        AudiogramConversion.bands(
-            for: profile.leftEar.thresholds,
-            compensationFactor: profile.compensationFactor
-        )
     }
 
     private var topBar: some View {
@@ -147,13 +148,14 @@ struct AdvancedEQView: View {
     @State private var dummySelection: UUID? = nil
 
     @ViewBuilder
-    private func previewCanvas(_ profile: HearingProfile, target: [EQBand]) -> some View {
+    private func previewCanvas(_ profile: HearingProfile, leftCorrection: [EQBand], rightCorrection: [EQBand]) -> some View {
         LiveParametricCanvas(
             spectrum: audioState.spectrum,
             preSpectrum: audioState.preSpectrum,
             bands: .constant(profile.leftEar.bands),
             shadowBands: profile.rightEar.bands,
-            targetBands: target,
+            targetBands: leftCorrection,
+            shadowTargetBands: rightCorrection,
             notch: profile.leftNotch,
             spectrumSampleRate: audioState.audio.outputSampleRate ?? 48_000,
             earColor: audioState.leftEarColor,
@@ -164,6 +166,7 @@ struct AdvancedEQView: View {
             showOutputSpectrum: showOutputLayer,
             showEQCurve: showEQLayer,
             showAudiogramTarget: showAudiogramLayer,
+            showResultCurve: showResultLayer,
             showSafetyOverlay: showSafetyLayer,
             showPeakCallouts: showPeaksLayer,
             safetyCeilingDBA: profile.safeListeningCeilingDB,

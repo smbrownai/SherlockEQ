@@ -509,11 +509,17 @@ final class SherlockEQAudioEngine: ObservableObject {
         leftBalanceMixer?.outputVolume = Float(leftLinear)
         rightBalanceMixer?.outputVolume = Float(rightLinear)
 
-        // Combined per-ear EQ stack:
+        // Combined per-ear EQ stack (cascaded in series → summed in dB):
         //   1. AutoEQ headphone-correction bands (same for both ears —
         //      AutoEQ files describe a stereo pair, not per-cup)
-        //   2. Profile bands for this ear
-        //   3. Tinnitus notch (shared across ears, spec §5.3)
+        //   2. Audiogram hearing-correction bands for this ear
+        //   3. Profile (user/preset) bands for this ear
+        //   4. Tinnitus notch (shared across ears, spec §5.3)
+        //
+        // The audiogram correction sits ahead of the user/preset EQ so the
+        // two layer rather than collide: presets edit `ear.bands` only, and
+        // the prescribed hearing correction in `ear.correctionBands` is
+        // always applied on top of whatever tone shape the user picks.
         //
         // Combined preamp = AutoEQ preamp + profile global trim. All of
         // it goes through the BiquadCascade so the L and R signal paths
@@ -527,8 +533,8 @@ final class SherlockEQAudioEngine: ObservableObject {
         // sync, so leftNotch and rightNotch carry the same values.
         let leftNotchBand = Self.notchAsBand(profile.leftNotch)
         let rightNotchBand = Self.notchAsBand(profile.rightNotch)
-        let combinedLeftBands = autoBands + profile.leftEar.bands + leftNotchBand
-        let combinedRightBands = autoBands + profile.rightEar.bands + rightNotchBand
+        let combinedLeftBands = autoBands + profile.leftEar.correctionBands + profile.leftEar.bands + leftNotchBand
+        let combinedRightBands = autoBands + profile.rightEar.correctionBands + profile.rightEar.bands + rightNotchBand
         let combinedPreampDB = (profile.autoEQPreampDB ?? 0) + profile.globalTrimDB
 
         leftEQCascade?.setBands(combinedLeftBands, preampDB: combinedPreampDB, sampleRate: tapSampleRate)
