@@ -27,10 +27,10 @@ final class HelpLibrary {
             .home, .gettingStarted, .featureGuide,
         ]),
         HelpSection(title: "Core EQ", topics: [
-            .understandingEQ, .gainVolume, .balance, .simpleEQ, .parametricEQ,
+            .understandingEQ, .gainVolume, .balance, .simpleEQ, .speechEQ, .advancedEQ, .parametricEQ,
         ]),
         HelpSection(title: "Hearing-Aware Features", topics: [
-            .perEarEQ, .audiogramProfiles, .tinnitusToneMatching, .headphoneCorrection,
+            .perEarEQ, .audiogramProfiles, .tinnitusToneMatching, .headphoneCorrection, .listeningComfort,
         ]),
         HelpSection(title: "Metering & Visualization", topics: [
             .vuMeters, .spectrumVisualization,

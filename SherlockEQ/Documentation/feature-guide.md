@@ -24,14 +24,20 @@ A map of SherlockEQ's capabilities. Each entry links to a full article.
 - [Volume / Gain](help:gain-volume) — master output level after EQ.
 - [Balance](help:balance) — left/right level offset.
 - [Simple EQ](help:simple-eq) — Bass / Mid / Treble.
-- [Parametric EQ](help:parametric-eq) — frequency, gain, Q, filter type, stacked bands.
+- [Speech EQ](help:speech-eq) — six named bands tuned for voice and dialogue.
+- [Advanced EQ](help:advanced-eq) — ten-band graphic EQ at octave centers.
+- [Parametric EQ](help:parametric-eq) — frequency, gain, Q, filter type, stacked bands (Expert).
 - [Per-Ear EQ](help:per-ear-eq) — independent left and right correction.
+
+Each profile picks **one** of these EQ modes for the Equalizer screen; they all
+write to the same per-ear band storage, so switching is non-destructive.
 
 ## Hearing-aware tools
 
 - [Audiogram & Hearing Profiles](help:audiogram-profiles) — shape a profile from audiogram-like thresholds.
 - [Tinnitus Tone Matching](help:tinnitus-tone-matching) — sweep, identify a tone, set a notch.
-- [Headphone Correction / AutoEQ](help:headphone-correction-autoeq) — import correction curves.
+- [Headphone Correction / AutoEQ](help:headphone-correction-autoeq) — import or download correction curves.
+- [Listening Comfort](help:listening-comfort) — adaptive Speech Presence, Harshness Control, and Sibilance Tamer.
 
 ## Metering & visualization
 

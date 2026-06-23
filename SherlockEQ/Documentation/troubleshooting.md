@@ -67,8 +67,11 @@ Bluetooth adds inherent **latency**. For tight A/V sync, use wired output. See
 
 ## macOS version requirements
 
-SherlockEQ relies on Core Audio system-audio capture introduced in recent macOS.
-If features are missing, update macOS to a supported version.
+SherlockEQ requires **macOS 14.6 (Sonoma) or later**. It relies on the Core
+Audio system-audio capture (tap) API, and 14.6 is the oldest version it is
+built and tested against. If the app won't launch or features are missing,
+check **Apple menu → About This Mac** and update if you're on an earlier
+version.
 
 ## "Unverified developer" / Gatekeeper warning
 
@@ -78,7 +81,7 @@ may need to be opened via **right-click → Open** the first time, or allowed in
 
 ## Reset settings
 
-- To reset a single setup, duplicate a built-in [profile](help:profiles) and start fresh.
+- To reset a single setup, edit a [profile](help:profiles) and start fresh — or, for a factory preset, use **Reset to Factory Default** to return it to its shipped values.
 - To clear everything, quit SherlockEQ and remove `~/Library/Application Support/SherlockEQ/` (this deletes your profiles — export first if you want backups). See [Privacy & Local Data](help:privacy-local-data).
 
 ## Uninstall

@@ -34,9 +34,26 @@ adjustments (profile, audiogram shaping) start from a more neutral base.
 
 ## How to use it
 
+There are two ways to get a correction onto a profile.
+
+**Browse the built-in catalog (online):**
+
+1. Open the headphone-correction section of the profile and search the built-in **AutoEQ catalog** for your model.
+2. Pick a result — SherlockEQ downloads that curve from the public AutoEQ project and applies it.
+3. Your choice is saved to the profile and the curve is cached locally, so it's offline from then on.
+
+This is the easy path: it fetches public correction files on demand. It's the
+only feature that uses the network, it sends nothing about you, and it's
+described in [Privacy & Local Data](help:privacy-local-data). If you'd rather not
+go online, use the manual path below.
+
+**Import a file by hand (offline):**
+
 1. Obtain an AutoEQ-style correction file for your headphone model (a preamp value plus a list of filters).
 2. Import it in the headphone-correction section of the profile.
 3. SherlockEQ applies the preamp and filters ahead of your profile EQ.
+
+Either way, SherlockEQ applies the preamp and filters ahead of your profile EQ.
 
 ## What changes in the audio
 

@@ -23,8 +23,10 @@ related:
 ## The short version
 
 SherlockEQ keeps your data **on your Mac**. There is **no telemetry, no account,
-and no cloud sync.** It does not record your audio and does not phone home with
-your settings.
+and no cloud sync.** It does not record your audio and never sends your settings
+anywhere. The one time it reaches the internet is an **optional, on-demand
+download** of public headphone-correction curves — and only when you ask for one
+(see **The one network feature** below).
 
 ## What SherlockEQ does not collect
 
@@ -32,14 +34,33 @@ your settings.
 - **No account or sign-in.** Nothing to register.
 - **No cloud sync** of your settings or profiles unless a future feature explicitly offers it and you turn it on.
 - **No audio recording.** SherlockEQ processes the system audio stream in real time to play it back; it does not capture or store it.
+- **Your settings never leave your Mac.** The network feature below only *downloads* public correction files; it never uploads anything about you or your configuration.
+
+## The one network feature
+
+The [Headphone Correction / AutoEQ](help:headphone-correction-autoeq) browser can
+fetch correction curves from the public **AutoEQ** catalog. When (and only when)
+you open that browser or pick a headphone:
+
+- SherlockEQ requests the catalog index and the curve you chose from
+  `raw.githubusercontent.com` over HTTPS.
+- The request carries no account, token, identifier, or information about you —
+  it's an anonymous download of a public file, the same as opening the page in a
+  browser. Your IP address is visible to GitHub, as with any web request.
+- Downloaded curves are cached locally so the app doesn't refetch them. You can
+  also import a correction file by hand and never touch the network at all.
+
+If you never open the AutoEQ browser, SherlockEQ makes no network connections.
 
 ## What it stores, and where
 
 - **Profiles** — your EQ, balance, notch, and correction settings — as JSON files in `~/Library/Application Support/SherlockEQ/profiles/`.
 - **Preferences** — UI and app settings in standard macOS user defaults.
 - **Headphone correction files** you import are read from the location you choose.
+- **Downloaded AutoEQ curves** are cached under `~/Library/Application Support/SherlockEQ/autoeq_profiles/` so they aren't refetched. These are public correction files, not personal data.
 
-All of this lives in your user account on your machine.
+All of this lives in your user account on your machine, in folders readable only
+by your account.
 
 ## What is exported when you export settings
 
