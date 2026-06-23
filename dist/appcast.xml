@@ -21,6 +21,87 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 0.6.5</title>
+      <pubDate>Tue, 23 Jun 2026 19:35:20 +0000</pubDate>
+      <sparkle:version>00605</sparkle:version>
+      <sparkle:shortVersionString>0.6.5</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<h2>SherlockEQ 0.6.5</h2>
+
+<p>
+  A correction-focused fix. In earlier versions, choosing an equalizer preset or
+  editing bands by hand could quietly overwrite the hearing correction derived
+  from your audiogram — leaving you listening through the preset alone. This
+  release makes your audiogram correction its own layer that always stays
+  applied: equalizer presets and manual tweaks now sit <em>on top of</em> it
+  rather than replacing it. It also makes the on-screen curves easier to read.
+</p>
+
+<h3>Fixes</h3>
+
+<ul>
+  <li>
+    <strong>Your hearing correction is no longer overwritten by EQ presets or edits.</strong>
+    The correction calculated from your audiogram is now kept separate from the
+    equalizer, and the two are combined when you listen. Picking a preset,
+    dragging bands, or clearing the equalizer changes only the equalizer — your
+    hearing correction stays in place.
+  </li>
+  <li>
+    <strong>An entered audiogram always produces a correction.</strong>
+    Profiles that had an audiogram but were showing a flat correction — for
+    example after clearing equalizer bands — now rebuild the correction from
+    your stored thresholds automatically.
+  </li>
+</ul>
+
+<h3>Improvements</h3>
+
+<ul>
+  <li>
+    <strong>A clearer picture of what you hear.</strong>
+    The equalizer chart now shows a combined <em>Result</em> line — your hearing
+    correction and equalizer together — as the main curve, with an optional
+    <em>Breakdown</em> view that separates the correction and your equalizer into
+    their own lines.
+  </li>
+  <li>
+    <strong>Easier-to-read curves, per ear.</strong>
+    Each curve type now has its own line style and each ear its own color, with a
+    new on-chart legend that labels them. The encoding is designed to stay clear
+    for color-vision differences.
+  </li>
+  <li>
+    <strong>More complete in-app Help.</strong>
+    New and corrected Help articles for Speech EQ, Advanced EQ, and Listening
+    Comfort, with fixes to several documentation inconsistencies.
+  </li>
+</ul>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not diagnose,
+  treat, measure, or monitor any hearing condition, tinnitus, or disability.
+  For concerns about your hearing, consult a doctor, audiologist, or licensed
+  healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.6.4">0.6.4 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v0.6.5/SherlockEQ-0.6.5.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="1DaB+qhCUDjaiHv4NK1p4z4JHsMfJUXbNsYKjxMjxuRE+nuN1OmGdnpOi8hLb/OYvYXenfux4TXVKAuWDxFSCA==" length="14646367" />
+    </item>
+
+    <item>
       <title>SherlockEQ 0.6.4</title>
       <pubDate>Mon, 22 Jun 2026 18:32:48 +0000</pubDate>
       <sparkle:version>00604</sparkle:version>
