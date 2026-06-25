@@ -20,6 +20,18 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.6.6
+
+A reliability release. The main fix is for audio that didn't come back cleanly after your Mac woke from sleep — most often after sitting overnight. In that state the audio engine or the system-audio tap could fail to start, leaving SherlockEQ silent until you toggled it off and on or relaunched. This release detects those momentary start-up failures and retries them on its own, so sound returns without you having to do anything. Nothing changes in how EQ, profiles, or safe-listening work.
+
+**Fixes**
+
+- **Audio reliably restarts after sleep and wake.** After waking from sleep, the audio engine and the system-audio tap could occasionally report a transient start-up error and stay silent. SherlockEQ now retries these momentary failures with a short back-off on both start paths, and recovers a tap that didn't come up — so audio resumes on its own instead of needing a manual restart.
+
+**Under the hood**
+
+- **Equalizer filtering now runs on Apple's Accelerate framework.** The per-ear equalizer cascade was moved onto Apple's maintained `vDSP` signal-processing routines. The sound you hear is unchanged — this keeps the audio path leaner and easier to maintain.
+
 ## 0.6.5
 
 A correction-focused fix. In earlier versions, choosing an equalizer preset or editing bands by hand could quietly overwrite the hearing correction derived from your audiogram — leaving you listening through the preset alone. This release makes your audiogram correction its own layer that always stays applied: equalizer presets and manual tweaks now sit *on top of* it rather than replacing it. It also makes the on-screen curves easier to read.
