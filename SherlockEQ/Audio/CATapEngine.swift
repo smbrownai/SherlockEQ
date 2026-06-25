@@ -300,21 +300,67 @@ final class CATapEngine: ObservableObject {
 
     private func performStart() async {
         state = .starting
-        do {
-            let prep = try await Task.detached(priority: .userInitiated) {
-                try Self.prepareTapAndAggregate()
-            }.value
-            try applyTapPrep(prep)
-            try startIO()
-            installDefaultOutputDeviceListener()
-            state = .running
-            log.info("CATapEngine running on device \(self.currentOutputDeviceID)")
-        } catch {
-            state = .failed(String(describing: error))
-            log.error("CATapEngine start failed: \(String(describing: error))")
-            tearDown()
+        var attempt = 0
+        while true {
+            do {
+                let prep = try await Task.detached(priority: .userInitiated) {
+                    try Self.prepareTapAndAggregate()
+                }.value
+                try applyTapPrep(prep)
+                try startIO()
+                installDefaultOutputDeviceListener()
+                state = .running
+                log.info("CATapEngine running on device \(self.currentOutputDeviceID)")
+                return
+            } catch {
+                // Free whatever the failed attempt created before retrying
+                // or surfacing — leftover handles would leak across rebuilds.
+                tearDown()
+                // After the Mac wakes, the HAL can hand back stale object IDs
+                // ('!obj'), a not-yet-running device ('stop'), or a generic
+                // hiccup — transient states that clear once it settles. Retry
+                // with escalating backoff before showing a permanent banner.
+                // We loop in place rather than re-`enqueue`-ing because this
+                // already runs inside the FIFO serializer; re-entering it would
+                // deadlock on `inFlight`. Holding the queue across the short
+                // sleep is correct — coalesced wake/device-change triggers
+                // queue behind us and find us already `.running`.
+                if Self.isTransientHALError(error), attempt < Self.maxStartRetries {
+                    attempt += 1
+                    let delayMS = 200 << (attempt - 1)   // 200, 400, 800 ms
+                    log.info("Transient HAL error on tap start (\(String(describing: error), privacy: .public)) — retry \(attempt)/\(Self.maxStartRetries) in \(delayMS) ms")
+                    try? await Task.sleep(nanoseconds: UInt64(delayMS) * 1_000_000)
+                    continue
+                }
+                state = .failed(String(describing: error))
+                log.error("CATapEngine start failed: \(String(describing: error))")
+                return
+            }
         }
     }
+
+    /// Post-wake / device-settling HAL failures: the HAL handed back a
+    /// stale or not-yet-ready object rather than a hard, permanent error.
+    /// These clear once the hardware settles, so `performStart` retries
+    /// with backoff instead of dropping straight to a `.failed` banner.
+    /// Mirrors the AVAudioEngine.start retry in `SherlockEQAudioEngine`.
+    private static func isTransientHALError(_ error: Error) -> Bool {
+        guard let tapError = error as? TapError, let status = tapError.osStatus else {
+            return false
+        }
+        return transientHALStatuses.contains(status)
+    }
+
+    private static let transientHALStatuses: Set<OSStatus> = [
+        OSStatus(kAudioHardwareBadObjectError),        // '!obj' (560947818) — stale object ID after wake
+        OSStatus(kAudioHardwareBadDeviceError),        // '!dev' — device handle gone stale
+        OSStatus(kAudioHardwareNotRunningError),       // 'stop' — HAL/device not yet running
+        OSStatus(kAudioHardwareUnspecifiedError),      // 'what' — generic post-wake hiccup
+        OSStatus(kAudioHardwareIllegalOperationError), // 'nope' (1852797029) — can't act in this context
+    ]
+
+    /// Consecutive transient-failure retries before the banner surfaces.
+    private static let maxStartRetries = 3
 
     // MARK: - Build
 
@@ -894,6 +940,21 @@ final class CATapEngine: ObservableObject {
             case .formatUnsupported: return "Stream format could not be expressed as AVAudioFormat"
             case .processObjectLookupFailed(let s): return "PID→AudioObjectID lookup failed (\(s))"
             case .notConfigured: return "Tap not configured"
+            }
+        }
+
+        /// The underlying CoreAudio OSStatus, when the case carries one.
+        /// Used to classify transient HAL failures for the start retry.
+        var osStatus: OSStatus? {
+            switch self {
+            case .tapCreationFailed(let s), .aggregateCreationFailed(let s),
+                 .ioProcCreationFailed(let s), .ioProcStartFailed(let s),
+                 .defaultOutputUnavailable(let s), .deviceUIDUnavailable(let s),
+                 .tapUIDUnavailable(let s), .formatUnavailable(let s),
+                 .processObjectLookupFailed(let s):
+                return s
+            case .formatUnsupported, .notConfigured:
+                return nil
             }
         }
     }

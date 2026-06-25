@@ -746,14 +746,25 @@ final class AudioState: ObservableObject {
         }
     }
 
-    /// One-shot recovery for a non-running AVAudioEngine carrying a
-    /// surfaced `lastError`. Called when the app becomes active — the
-    /// natural moment something the user changed in System Settings
-    /// (output device, audio session priority, etc.) might have made
-    /// the previously-failed start retryable. Idempotent: if the
-    /// engine is already running, no error, or the tap isn't ready,
-    /// this is a no-op.
+    /// Recovery on app activation — the natural moment something the
+    /// user changed (output device, System Settings, or just enough
+    /// elapsed time for a wedged HAL to settle) might make a previously
+    /// failed start succeed. Two cases:
+    ///
+    ///   - Tap is `.running` but the AVAudioEngine carries a surfaced
+    ///     `lastError`: rebuild the graph in place.
+    ///   - Tap itself is `.failed` (e.g. a post-wake transient HAL error
+    ///     that exhausted `performStart`'s retries overnight): restart
+    ///     the whole chain from scratch.
+    ///
+    /// `.permissionDenied` is deliberately excluded — that needs the user
+    /// to grant access, not a silent retry. Idempotent everywhere else.
     private func recoverIfAudioFailed() {
+        if case .failed = tap.state {
+            log.info("Tap failed — restarting audio chain on didBecomeActive")
+            Task { await startAll() }
+            return
+        }
         guard audio.lastError != nil, !audio.isRunning else { return }
         guard case .running = tap.state else { return }
         log.info("Engine carries a lastError on didBecomeActive — retrying rebuild")
