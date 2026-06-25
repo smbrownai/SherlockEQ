@@ -85,8 +85,12 @@ final class DynamicBandProcessor {
 
     // MARK: - Runtime state (audio thread only — no synchronisation)
 
-    /// Normalised biquad (a0 factored out), Direct Form II transposed —
-    /// identical recurrence to `BiquadCascade.Section`.
+    /// Normalised biquad (a0 factored out), Direct Form II transposed. The
+    /// per-block modulated bell recomputes coefficients every buffer, so this
+    /// stays a hand-rolled single-section recurrence rather than a
+    /// `vDSP_biquad` setup (which would reallocate on each coefficient change);
+    /// the static `BiquadCascade` uses vDSP because its coefficients are stable
+    /// between profile edits.
     private struct Biquad {
         var b0: Float = 1, b1: Float = 0, b2: Float = 0, a1: Float = 0, a2: Float = 0
     }
