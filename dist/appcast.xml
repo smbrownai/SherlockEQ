@@ -21,6 +21,71 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 0.6.6</title>
+      <pubDate>Thu, 25 Jun 2026 21:55:00 +0000</pubDate>
+      <sparkle:version>00606</sparkle:version>
+      <sparkle:shortVersionString>0.6.6</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<h2>SherlockEQ 0.6.6</h2>
+
+<p>
+  A reliability release. The main fix is for audio that didn't come back
+  cleanly after your Mac woke from sleep — most often after sitting overnight.
+  In that state the audio engine or the system-audio tap could fail to start,
+  leaving SherlockEQ silent until you toggled it off and on or relaunched. This
+  release detects those momentary start-up failures and retries them on its
+  own, so sound returns without you having to do anything. Nothing changes in
+  how EQ, profiles, or safe-listening work.
+</p>
+
+<h3>Fixes</h3>
+
+<ul>
+  <li>
+    <strong>Audio reliably restarts after sleep and wake.</strong>
+    After waking from sleep, the audio engine and the system-audio tap could
+    occasionally report a transient start-up error and stay silent. SherlockEQ
+    now retries these momentary failures with a short back-off on both start
+    paths, and recovers a tap that didn't come up — so audio resumes on its own
+    instead of needing a manual restart.
+  </li>
+</ul>
+
+<h3>Under the hood</h3>
+
+<ul>
+  <li>
+    <strong>Equalizer filtering now runs on Apple's Accelerate framework.</strong>
+    The per-ear equalizer cascade was moved onto Apple's maintained
+    <code>vDSP</code> signal-processing routines. The sound you hear is
+    unchanged — this keeps the audio path leaner and easier to maintain.
+  </li>
+</ul>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not diagnose,
+  treat, measure, or monitor any hearing condition, tinnitus, or disability.
+  For concerns about your hearing, consult a doctor, audiologist, or licensed
+  healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.6.5">0.6.5 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v0.6.6/SherlockEQ-0.6.6.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="qjzQpkZmHZb8gkNXq9POvC5mKkTECDZKJHn3pFRPtDG+iEsoAoHVivSPQoj6MEg0arG7OwOGXB9JiXsrlSrkCQ==" length="14650375" />
+    </item>
+
+    <item>
       <title>SherlockEQ 0.6.5</title>
       <pubDate>Tue, 23 Jun 2026 19:35:20 +0000</pubDate>
       <sparkle:version>00605</sparkle:version>
