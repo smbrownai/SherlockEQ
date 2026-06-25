@@ -30,7 +30,26 @@ import Security
 /// back. The check fails closed — no token, no service. This raises the bar to
 /// "can read a file in the user's home"; a fully trusted same-user process can
 /// still read the token, so this is defense-in-depth, not a privilege boundary.
-/// True peer authentication would require migrating to XPC (`auditToken`).
+///
+/// True peer authentication (verifying the *caller's* code signature, not just
+/// possession of a secret) is deliberately not implemented here, because none
+/// of the routes fit this app's model cleanly:
+///   - **XPC** (`NSXPCConnection.setCodeSigningRequirement`, the blessed peer
+///     check) needs an `NSXPCListener(machServiceName:)`, which only a launchd-
+///     advertised Mach service can vend — i.e. a LaunchAgent registered via
+///     `SMAppService`. launchd would then *on-demand-launch* that service, but
+///     this app is an already-running, user-launched GUI process that owns the
+///     live `AudioState`; a second launchd-spawned instance collides with the
+///     multi-instance guard. CFMessagePort is used precisely because a running
+///     app can claim a bootstrap name imperatively, with no launchd.
+///   - **Unix-domain socket** + peer audit token (`LOCAL_PEERTOKEN` getsockopt
+///     → `SecCodeCreateWithAuditToken` → `SecStaticCodeCheckValidity` against a
+///     Team-ID requirement) *would* give real peer auth with no launchd, and is
+///     the path to take if confused-deputy resistance ever needs to be a true
+///     privilege boundary. It costs a socket server + client rewrite that the
+///     original "no sockets to manage" design intentionally avoided.
+/// Decision (see backlog #16): keep the per-launch token as accepted defense-
+/// in-depth; revisit the unix-socket route only if the threat model changes.
 final class CLIControlServer {
 
     /// Bootstrap name the CLI looks up. Derived from the bundle id so a
