@@ -109,12 +109,15 @@ struct AudiogramInterchangeTests {
         #expect(updated.leftEar.correctionBands.contains { $0.enabled })
         #expect(updated.rightEar.correctionBands.contains { $0.enabled })
 
-        // The derived correction equals a direct conversion of the new thresholds.
+        // The derived correction equals a direct conversion of the new
+        // thresholds. Compare with audiblyEquivalent, not ==: EQBand's
+        // Equatable includes its random `id`, and each derivation mints fresh
+        // UUIDs, so == never matches even when every audible field is identical.
         let expected = AudiogramConversion.bands(
             for: updated.leftEar.thresholds,
             compensationFactor: updated.compensationFactor
         )
-        #expect(updated.leftEar.correctionBands == expected)
+        #expect(updated.leftEar.correctionBands.audiblyEquivalent(to: expected))
 
         #expect(updated.modifiedAt == Self.stamp)
     }
