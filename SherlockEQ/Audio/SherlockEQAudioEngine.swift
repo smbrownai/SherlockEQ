@@ -124,6 +124,13 @@ final class SherlockEQAudioEngine: ObservableObject {
         sampleRate: Double
     ) -> Bool {
         teardownGraph()
+        // A fresh graph build is a clean slate for the start() backoff
+        // budget. Without this, a wake that burned all retries overnight
+        // would leave startRetryCount maxed out, so the next rebuild's
+        // start() gets a single attempt with no backoff. Reset here (the
+        // new-graph boundary) — NOT at the top of start(), which the retry
+        // loop re-enters and would reset the counter into an infinite loop.
+        startRetryCount = 0
 
         guard let tapFormat = AVAudioFormat(
             standardFormatWithSampleRate: sampleRate,

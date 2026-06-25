@@ -799,7 +799,8 @@ final class CATapEngine: ObservableObject {
     private func addListener(
         target: AudioObjectID,
         selector: AudioObjectPropertySelector,
-        action: @escaping @Sendable () async -> Void
+        action: @escaping @Sendable () async -> Void,
+        attempt: Int = 0
     ) {
         var address = AudioObjectPropertyAddress(
             mSelector: selector,
@@ -812,9 +813,33 @@ final class CATapEngine: ObservableObject {
         let status = AudioObjectAddPropertyListenerBlock(target, &address, DispatchQueue.main, block)
         if status == noErr {
             installedListeners.append(InstalledListener(target: target, selector: selector, block: block))
-        } else {
-            log.error("Failed to install listener (sel \(selector), target \(target)): \(status)")
+            return
         }
+        // A transient HAL status here (a stale object right after wake)
+        // would otherwise leave us silently deaf to later device / rate
+        // changes — the install isn't on a throwing path, so the tap still
+        // reaches `.running`, and nothing ever re-arms the listener. Retry
+        // with the same backoff the start path uses. (A failed install
+        // registers nothing, so there's no leaked block to remove first.)
+        if Self.transientHALStatuses.contains(status), attempt < Self.maxStartRetries {
+            let delayMS = 200 << attempt   // 200, 400, 800 ms
+            log.info("Listener install failed (sel \(selector), target \(target), status \(status)) — retry \(attempt + 1)/\(Self.maxStartRetries) in \(delayMS) ms")
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(delayMS) * 1_000_000)
+                guard let self else { return }
+                // Bail if the device moved under us (the retry targets the
+                // old device's ID) or a later pass already (re)installed it.
+                let stillRelevant = target == AudioObjectID(kAudioObjectSystemObject)
+                    || target == self.currentOutputDeviceID
+                guard stillRelevant else { return }
+                guard !self.installedListeners.contains(where: {
+                    $0.target == target && $0.selector == selector
+                }) else { return }
+                self.addListener(target: target, selector: selector, action: action, attempt: attempt + 1)
+            }
+            return
+        }
+        log.error("Failed to install listener (sel \(selector), target \(target)): \(status) — giving up after \(attempt + 1) attempt(s)")
     }
 
     private func removeListeners(matching predicate: (InstalledListener) -> Bool) {
