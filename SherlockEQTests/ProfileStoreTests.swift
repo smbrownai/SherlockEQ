@@ -350,7 +350,12 @@ struct ProfileStoreTests {
         undo.groupsByEvent = false   // close each group synchronously for the test
         store.undoManager = undo
 
+        // groupsByEvent == false means registerUndo requires an explicit open
+        // group (in the app, SwiftUI's environment UndoManager auto-groups per
+        // event); open one manually so the synchronous save can register.
+        undo.beginUndoGrouping()
         try store.save(HearingProfile.makeDefault(name: "P"), actionName: "Adjust 1 kHz")
+        undo.endUndoGrouping()
         #expect(undo.canUndo)
         #expect(undo.undoActionName == "Adjust 1 kHz")
     }
@@ -363,7 +368,11 @@ struct ProfileStoreTests {
         undo.groupsByEvent = false
         store.undoManager = undo
 
+        // See saveUsesCustomActionName: open a group explicitly under
+        // groupsByEvent == false so registerUndo has somewhere to land.
+        undo.beginUndoGrouping()
         try store.save(HearingProfile.makeDefault(name: "Custom Mix"))
+        undo.endUndoGrouping()
         #expect(undo.undoActionName == "Create Custom Mix")
     }
 }
