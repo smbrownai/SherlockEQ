@@ -12,6 +12,7 @@ struct AudiogramView: View {
         case right = "Right ear"
     }
     @State private var tab: EarTab = .left
+    @State private var showingApplySheet = false
 
     var body: some View {
         if let profile = audioState.activeProfile(in: profileStore) {
@@ -38,6 +39,10 @@ struct AudiogramView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Audiogram — \(profile.name)")
+        .sheet(isPresented: $showingApplySheet) {
+            ApplyAudiogramSheet(source: profile)
+                .environmentObject(profileStore)
+        }
     }
 
     // MARK: - Sections
@@ -56,6 +61,12 @@ struct AudiogramView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            Button {
+                showingApplySheet = true
+            } label: {
+                Label("Apply to Profiles…", systemImage: "person.2")
+            }
+            .help("Copy this audiogram onto your other profiles")
             HelpContextButton(.audiogramProfiles, label: "audiogram and hearing profiles")
         }
     }
