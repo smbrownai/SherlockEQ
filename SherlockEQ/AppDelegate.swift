@@ -610,7 +610,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(show)
         let analog = NSMenuItem(title: "Analog Control Unit",
                                 action: #selector(showAnalogControlUnitFromMenu(_:)),
-                                keyEquivalent: "")
+                                keyEquivalent: "1")   // ⌘1, pairs with ⌘0 → main window
         analog.target = self
         menu.addItem(analog)
         item.submenu = menu
