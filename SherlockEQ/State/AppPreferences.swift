@@ -111,6 +111,19 @@ final class AppPreferences: ObservableObject {
         }
     }
 
+    /// Whether profile detail pages show the technical "Metadata" footer
+    /// (created/modified timestamps + the profile's UUID). Off by default —
+    /// it's a support/diagnostic surface, not something most users need. Opt
+    /// in from Settings → Diagnostics.
+    @Published var showProfileMetadata: Bool = AppPreferences.loadBool(
+        key: AppPreferences.showProfileMetadataKey,
+        default: false
+    ) {
+        didSet {
+            UserDefaults.standard.set(showProfileMetadata, forKey: Self.showProfileMetadataKey)
+        }
+    }
+
     /// Set once the first-launch onboarding wizard has been completed (or
     /// skipped). Gates whether `AppDelegate.bootstrap()` shows the wizard
     /// instead of immediately firing the system-audio + notification
@@ -134,6 +147,7 @@ final class AppPreferences: ObservableObject {
     private static let hideFromDockKey = "sherlockeq.hideFromDock"
     private static let globalReferenceShortcutKey = "sherlockeq.globalReferenceShortcut"
     private static let showDebugInSidebarKey = "sherlockeq.showDebugInSidebar"
+    private static let showProfileMetadataKey = "sherlockeq.showProfileMetadata"
     private static let hasCompletedOnboardingKey = "sherlockeq.hasCompletedOnboarding"
 
     private static func loadBool(key: String, default defaultValue: Bool) -> Bool {

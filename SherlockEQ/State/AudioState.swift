@@ -121,6 +121,10 @@ final class AudioState: ObservableObject {
         get { preferences.showDebugInSidebar }
         set { preferences.showDebugInSidebar = newValue }
     }
+    var showProfileMetadata: Bool {
+        get { preferences.showProfileMetadata }
+        set { preferences.showProfileMetadata = newValue }
+    }
 
     static let defaultLeftEarColor: Color = AppPreferences.defaultLeftEarColor
     static let defaultRightEarColor: Color = AppPreferences.defaultRightEarColor
