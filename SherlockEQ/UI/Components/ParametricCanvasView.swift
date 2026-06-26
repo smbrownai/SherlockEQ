@@ -723,7 +723,11 @@ struct ParametricCanvasView: View {
             style: StrokeStyle(lineWidth: 1.25, lineCap: .round, lineJoin: .round)
         )
 
-        guard !spectrumPeakHoldDB.isEmpty else { return }
+        // Peak-hold envelope rides with the "Peaks" chip (showPeakCallouts),
+        // not the Output layer itself — so an Output-only view is a clean
+        // silhouette and the faint hold line only appears alongside the peak
+        // callouts (Compare / Loudness lenses, or the Peaks chip on its own).
+        guard showPeakCallouts, !spectrumPeakHoldDB.isEmpty else { return }
         var peakPoints: [CGPoint] = []
         peakPoints.reserveCapacity(spectrumPeakHoldDB.count)
         for b in 0..<spectrumPeakHoldDB.count {
