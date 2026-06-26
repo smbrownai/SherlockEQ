@@ -184,6 +184,27 @@ final class ProfileStore: ObservableObject {
         }
     }
 
+    /// Encode a standalone audiogram (`AudiogramInterchange` — the HealthKit-
+    /// shaped exchange format) to a user-chosen location, independent of any
+    /// profile. The portable counterpart to `exportProfile`, for sharing or
+    /// backing up just the hearing test.
+    func exportAudiogram(_ doc: AudiogramInterchange, to url: URL) throws {
+        try tracking("Export audiogram") {
+            let data = try encoder.encode(doc)
+            try data.write(to: url, options: .atomic)
+            log.info("Exported audiogram to \(url.lastPathComponent, privacy: .public)")
+        }
+    }
+
+    /// Read a standalone audiogram JSON from `url`. Callers apply it onto a
+    /// profile via `HearingProfile.applyingAudiogram(_:modifiedAt:)` and save.
+    func importAudiogram(from url: URL) throws -> AudiogramInterchange {
+        try tracking("Import audiogram") {
+            let data = try Data(contentsOf: url)
+            return try decoder.decode(AudiogramInterchange.self, from: data)
+        }
+    }
+
     private func uniqueName(base: String) -> String {
         let existing = Set(profiles.map(\.name))
         if !existing.contains(base) { return base }
@@ -294,13 +315,27 @@ final class ProfileStore: ObservableObject {
     /// True when `profile` is a factory preset whose current values differ
     /// from its shipped canonical version — drives the "Reset to Factory
     /// Default" button's enabled state.
+    ///
+    /// The band arrays are checked with `audiblyEquivalent` so float noise from
+    /// a save/edit round-trip doesn't read as a change. Everything else (the
+    /// audiogram thresholds + derived correction, tinnitus notch, compensation
+    /// strength, AutoEQ, dynamics, EQ mode, trim, balance, name, …) is compared
+    /// by value via the synthesized `==`, after neutralising the already-checked
+    /// bands and the always-differing timestamps. Comparing the whole struct
+    /// this way means a new editable field is covered automatically instead of
+    /// silently leaving the Reset button disabled.
     func differsFromFactory(_ profile: HearingProfile) -> Bool {
         guard let canonical = HearingProfile.factoryCanonical(forID: profile.id) else { return false }
-        return !profile.leftEar.bands.audiblyEquivalent(to: canonical.leftEar.bands)
-            || !profile.rightEar.bands.audiblyEquivalent(to: canonical.rightEar.bands)
-            || abs(profile.globalTrimDB - canonical.globalTrimDB) > 0.001
-            || profile.name != canonical.name
-            || profile.balance != canonical.balance
+        if !profile.leftEar.bands.audiblyEquivalent(to: canonical.leftEar.bands) { return true }
+        if !profile.rightEar.bands.audiblyEquivalent(to: canonical.rightEar.bands) { return true }
+        var a = profile, b = canonical
+        a.createdAt = b.createdAt
+        a.modifiedAt = b.modifiedAt
+        // Bands already compared with tolerance above — blank them so the
+        // struct compare below can't re-flag the same float noise.
+        a.leftEar.bands = []; b.leftEar.bands = []
+        a.rightEar.bands = []; b.rightEar.bands = []
+        return a != b
     }
 
     // MARK: - Helpers

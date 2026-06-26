@@ -165,6 +165,38 @@ struct ProfileStoreTests {
         #expect(restored.globalTrimDB == canonical.globalTrimDB)
     }
 
+    /// Regression: a factory preset whose audiogram or compensation strength
+    /// was changed must report `differsFromFactory` so "Reset to Factory
+    /// Default" stays enabled. Previously only band/trim/name/balance edits
+    /// were detected, so an audiogram change silently disabled the button.
+    @Test func differsFromFactoryDetectsAudiogramAndCompensationEdits() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+        UserDefaults.standard.set(0, forKey: Self.factoryVersionKey)
+        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
+
+        let store = Self.makeStore(at: dir)
+        store.reconcileFactoryPresets()
+        var vc = try #require(store.profiles.first { $0.name == "Voice Clarity" })
+        let id = vc.id
+        #expect(!store.differsFromFactory(vc))   // pristine
+
+        // Audiogram edit only (bands left alone) — was a false negative before.
+        vc.leftEar.thresholds[0].thresholddBHL = 40
+        try store.save(vc)
+        #expect(store.differsFromFactory(try #require(store.profiles.first { $0.id == id })))
+
+        // Reset clears it again.
+        store.resetProfileToFactory(id)
+        #expect(!store.differsFromFactory(try #require(store.profiles.first { $0.id == id })))
+
+        // A compensation-strength change alone is also detected.
+        var vc2 = try #require(store.profiles.first { $0.id == id })
+        vc2.compensationFactor = 0.9
+        try store.save(vc2)
+        #expect(store.differsFromFactory(try #require(store.profiles.first { $0.id == id })))
+    }
+
     @Test func resetIsNoOpForUserProfiles() throws {
         let dir = Self.makeTempDir()
         defer { Self.cleanup(dir) }

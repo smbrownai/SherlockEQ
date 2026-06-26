@@ -46,7 +46,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let globalReferenceHotKey = GlobalHotKey()
     private var cancellables: Set<AnyCancellable> = []
 
+    /// True when the process was launched by `xcodebuild test` to host the
+    /// XCTest bundle. The host then skips the multi-instance terminate guard
+    /// (a developer's already-running copy would otherwise kill the test host
+    /// before XCTest attaches — the menu-bar app never gets a window to keep it
+    /// alive) and skips `bootstrap()` so unit tests don't start the CATap, open
+    /// the CLI port, fire notification/permission prompts, or churn UserDefaults.
+    static let isRunningUnderXCTest =
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // Under XCTest the host just needs to stay alive for the test bundle;
+        // the multi-instance terminate below would otherwise kill it on a dev
+        // machine where a normal copy is already running.
+        guard !Self.isRunningUnderXCTest else { return }
         // Multi-instance guard: a second SherlockEQ binary would install
         // its own global CATap. Each instance only excludes its own PID
         // from the system tap, so each would capture the other's
@@ -68,6 +81,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // `showMainWindow`; flips back on window close if the user has
         // `hideFromDockEnabled` set.
         NSApp.setActivationPolicy(.accessory)
+        // Under XCTest, leave the host inert: no audio pipeline, CLI port,
+        // notification prompts, menu install, or onboarding — just a live
+        // process for the test bundle to load into.
+        guard !Self.isRunningUnderXCTest else { return }
         // Let `HelpCenter.shared.open(topic:)` (called from menu items and
         // contextual `?` buttons anywhere in the app) bring the help window
         // forward without knowing anything about NSWindow. Window lifecycle

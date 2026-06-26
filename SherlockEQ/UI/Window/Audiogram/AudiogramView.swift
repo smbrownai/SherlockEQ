@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 /// Audiogram section of the main window. Edits the *active* profile's
 /// per-ear audiograms. Derived `EQBand`s are persisted alongside every change
@@ -61,14 +63,57 @@ struct AudiogramView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button {
-                showingApplySheet = true
+            Menu {
+                Button("Import Audiogram…", systemImage: "square.and.arrow.down") { importAudiogram(into: profile) }
+                Button("Export Audiogram…", systemImage: "square.and.arrow.up") { exportAudiogram(profile) }
+                Divider()
+                Button("Apply to Other Profiles…", systemImage: "person.2") { showingApplySheet = true }
             } label: {
-                Label("Apply to Profiles…", systemImage: "person.2")
+                Label("Manage Audiogram", systemImage: "ear")
             }
-            .help("Copy this audiogram onto your other profiles")
+            .fixedSize()
+            .help("Import or export this audiogram, or copy it to your other profiles")
             HelpContextButton(.audiogramProfiles, label: "audiogram and hearing profiles")
         }
+    }
+
+    // MARK: - Import / Export
+
+    /// Write the active profile's audiogram out as a portable
+    /// `AudiogramInterchange` JSON (HealthKit-shaped: Hz + per-ear dB HL).
+    private func exportAudiogram(_ profile: HearingProfile) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "\(profile.name) Audiogram.json"
+        panel.canCreateDirectories = true
+        panel.title = "Export Audiogram"
+        panel.prompt = "Export"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let doc = AudiogramInterchange.from(
+            left: profile.leftEar.thresholds,
+            right: profile.rightEar.thresholds,
+            source: profile.name
+        )
+        // Errors surface via ProfileStore.lastError → NoticeCenter banner.
+        try? profileStore.exportAudiogram(doc, to: url)
+    }
+
+    /// Read an audiogram JSON and apply it onto the active profile — recomputing
+    /// its correction layer while leaving its EQ, notch, and compensation alone.
+    /// Saving the active profile re-applies it to the engine automatically.
+    private func importAudiogram(into profile: HearingProfile) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.title = "Import Audiogram"
+        panel.prompt = "Import"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let doc = try? profileStore.importAudiogram(from: url) else { return }
+        try? profileStore.save(
+            profile.applyingAudiogram(doc, modifiedAt: Date()),
+            actionName: "Import audiogram into \(profile.name)"
+        )
     }
 
     private var earPicker: some View {
