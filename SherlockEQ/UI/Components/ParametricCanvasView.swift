@@ -606,24 +606,23 @@ struct ParametricCanvasView: View {
         return bands + [notchBand]
     }
 
-    /// Vertical marker + label at the notch frequency. Stays visible even
-    /// when the notch isn't rendered as part of the curve (turned off) so
-    /// the user always sees where their pitch is set.
+    /// Vertical marker + label at the notch frequency. Drawn only while the
+    /// notch is actually on — when it's off there's nothing in the curve to
+    /// point at, so a stray marker just reads as phantom UI.
     private func drawNotchMarker(_ context: GraphicsContext, size: CGSize) {
-        guard let notch else { return }
+        guard let notch, notch.enabled else { return }
         let x = xForFreq(notch.frequencyHz, width: size.width)
         var line = Path()
         line.move(to: CGPoint(x: x, y: 0))
         line.addLine(to: CGPoint(x: x, y: size.height))
-        let color: Color = notch.enabled ? .purple : .gray
         context.stroke(
             line,
-            with: .color(color.opacity(notch.enabled ? 0.5 : 0.25)),
+            with: .color(.purple.opacity(0.5)),
             style: StrokeStyle(lineWidth: 1, dash: [3, 3])
         )
         let label = Text("notch \(Int(notch.frequencyHz)) Hz")
             .font(.caption2.monospaced())
-            .foregroundColor(color.opacity(0.75))
+            .foregroundColor(.purple.opacity(0.75))
         context.draw(label, at: CGPoint(x: x + 6, y: 14), anchor: .leading)
     }
 
