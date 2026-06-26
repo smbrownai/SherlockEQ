@@ -122,6 +122,55 @@ final class CATapEngine: ObservableObject {
         var callbackInvocations: Int { stateLock.withLock { $0.callbackInvocations } }
     }
 
+    /// Builds a mono `(L+R)/2` pre-EQ buffer for the input-ghost analyzer out
+    /// of the two independent source-node render blocks. The right block stashes
+    /// its raw channel; the left block averages it with its own and hands the
+    /// result to the pre-EQ side-channel. `(L+R)/2` matches the mono mixing
+    /// `SpectrumAnalyzer.ingest(_:)` applies to the post-EQ output, so the input
+    /// ghost and output overlay share one level basis.
+    ///
+    /// No locking: both source nodes are pulled sequentially on the single
+    /// AVAudioEngine render thread, so the scratch is only ever touched from one
+    /// thread. The left block reads whatever the right block last stashed —
+    /// at most one render slice stale if the graph happens to pull left first,
+    /// which is imperceptible for a time-averaged spectrum. `right` is fully
+    /// initialised, so a left slice longer than the stash (or the very first
+    /// slice, before right has run) just averages against silence.
+    ///
+    /// `nonisolated` for the same reason as `PreSpectrumIngestSlot`: the outer
+    /// engine is `@MainActor` and the render block must touch this legally.
+    nonisolated final class StereoPreMix: @unchecked Sendable {
+        private let capacity: Int
+        private let right: UnsafeMutablePointer<Float>
+        private let summed: UnsafeMutablePointer<Float>
+
+        init(capacity: Int) {
+            self.capacity = capacity
+            right = .allocate(capacity: capacity)
+            right.initialize(repeating: 0, count: capacity)
+            summed = .allocate(capacity: capacity)
+            summed.initialize(repeating: 0, count: capacity)
+        }
+        deinit {
+            right.deinitialize(count: capacity); right.deallocate()
+            summed.deinitialize(count: capacity); summed.deallocate()
+        }
+
+        /// Right render block: stash this slice's raw right-channel pre-EQ
+        /// samples (called before the EQ cascade mutates them in place).
+        func stashRight(_ ptr: UnsafePointer<Float>, count: Int) {
+            right.update(from: ptr, count: min(count, capacity))
+        }
+
+        /// Left render block: average left with the stashed right and return
+        /// the mono pointer + frame count for the pre-EQ analyzer.
+        func mixedMono(left: UnsafePointer<Float>, count: Int) -> (UnsafePointer<Float>, Int) {
+            let n = min(count, capacity)
+            for i in 0..<n { summed[i] = (left[i] + right[i]) * 0.5 }
+            return (UnsafePointer(summed), n)
+        }
+    }
+
     /// Diagnostic counters. Sampled from the UI; updated from realtime threads.
     let tapFramesIn = AudioCounter()
     let leftSourceFramesOut = AudioCounter()
@@ -522,6 +571,10 @@ final class CATapEngine: ObservableObject {
 
         let sourceSR = stereoFormat.sampleRate
         let preIngest = self.preIngest    // strong capture — bare class, no actor
+        // Scratch for the stereo (L+R)/2 pre-EQ input ghost. Both render blocks
+        // capture it strongly; it lives as long as the source nodes. Sized to
+        // the ring capacity, which already bounds any render slice.
+        let preMix = StereoPreMix(capacity: ringCapacity)
 
         // Capture cascades strongly so the render block reads them
         // without an isolation hop. They live for the engine's lifetime;
@@ -545,11 +598,23 @@ final class CATapEngine: ObservableObject {
                 abl: audioBufferList,
                 frameCount: frameCount
             )
-            // EQ on the L channel only (R is held at 0 by the fill).
-            // Pre-EQ spectrum side-channel reads the *post-EQ* signal
-            // because that's what the user actually hears, matching the
-            // post-EQ tap on the other side of the chain.
             let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+            // Pre-EQ input spectrum side-channel: average this slice's RAW left
+            // samples with the right block's stashed raw samples — BEFORE the EQ
+            // cascade mutates them in place — so the canvas "input" ghost shows
+            // the unprocessed stereo program and diverges from the post-EQ
+            // output (the mainMixer tap) by the EQ curve. (L+R)/2 matches the
+            // output overlay's mono mixing, keeping both on one level basis.
+            // Snapshot under the lock (bumps the entry counter atomically with
+            // the read), then invoke OUTSIDE the lock so main-thread writers
+            // don't get stalled waiting for the callback to run.
+            if let callback = preIngest.snapshotCallbackForRender(),
+               let lPtr = buffers[0].mData?.assumingMemoryBound(to: Float.self) {
+                let (mono, n) = preMix.mixedMono(left: lPtr, count: Int(frameCount))
+                callback(mono, n, sourceSR)
+                preIngest.recordCallbackInvocation()
+            }
+            // EQ on the L channel only (R is held at 0 by the fill).
             if buffers.count > 0,
                let lPtr = buffers[0].mData?.assumingMemoryBound(to: Float.self) {
                 lEQ.process(samples: lPtr, count: Int(frameCount))
@@ -557,14 +622,6 @@ final class CATapEngine: ObservableObject {
             }
             leftCounter.add(Int(frameCount))
             Self.recordPeak(abl: audioBufferList, frameCount: frameCount, into: outPeak)
-            // Snapshot under the lock (bumps the entry counter atomically
-            // with the read), then invoke OUTSIDE the lock so main-thread
-            // writers don't get stalled waiting for the callback to run.
-            if let callback = preIngest.snapshotCallbackForRender(),
-               let lPtr = buffers[0].mData?.assumingMemoryBound(to: Float.self) {
-                callback(lPtr, Int(frameCount), sourceSR)
-                preIngest.recordCallbackInvocation()
-            }
             return status
         }
         rightSourceNode = AVAudioSourceNode(format: stereoFormat) { [weak rightRing] _, _, frameCount, audioBufferList -> OSStatus in
@@ -574,8 +631,14 @@ final class CATapEngine: ObservableObject {
                 abl: audioBufferList,
                 frameCount: frameCount
             )
-            // EQ on the R channel only (L is held at 0 by the fill).
             let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+            // Stash the RAW right-channel pre-EQ samples for the left block's
+            // (L+R)/2 input ghost, BEFORE the EQ cascade mutates them in place.
+            if buffers.count >= 2,
+               let rPtr = buffers[1].mData?.assumingMemoryBound(to: Float.self) {
+                preMix.stashRight(rPtr, count: Int(frameCount))
+            }
+            // EQ on the R channel only (L is held at 0 by the fill).
             if buffers.count >= 2,
                let rPtr = buffers[1].mData?.assumingMemoryBound(to: Float.self) {
                 rEQ.process(samples: rPtr, count: Int(frameCount))
