@@ -17,20 +17,33 @@ struct ProfileDetailView: View {
     /// updates its own selection to the new copy's ID.
     var onDuplicatedToCopy: ((HearingProfile) -> Void)? = nil
 
-    private static let availableSymbols: [String] = [
-        "person.fill",
-        "ear",
-        "headphones",
-        "airpodspro",
-        "speaker.wave.2.fill",
-        "music.note",
-        "waveform.badge.mic",
-        "moon.fill",
-        "sun.max.fill",
-        "briefcase.fill",
-        "house.fill",
-        "figure.walk",
+    /// A pickable profile icon: the SF Symbol plus a plain-English name shown
+    /// in the UI (users shouldn't have to read "speaker.wave.2.fill").
+    private struct ProfileIcon: Hashable {
+        let symbol: String
+        let name: String
+    }
+
+    private static let availableSymbols: [ProfileIcon] = [
+        .init(symbol: "person.fill",          name: "Person"),
+        .init(symbol: "ear",                  name: "Ear"),
+        .init(symbol: "headphones",           name: "Headphones"),
+        .init(symbol: "airpodspro",           name: "AirPods Pro"),
+        .init(symbol: "speaker.wave.2.fill",  name: "Speaker"),
+        .init(symbol: "music.note",           name: "Music"),
+        .init(symbol: "waveform.badge.mic",   name: "Voice"),
+        .init(symbol: "moon.fill",            name: "Night"),
+        .init(symbol: "sun.max.fill",         name: "Day"),
+        .init(symbol: "briefcase.fill",       name: "Work"),
+        .init(symbol: "house.fill",           name: "Home"),
+        .init(symbol: "figure.walk",          name: "On the Go"),
     ]
+
+    /// Friendly name for a stored symbol, falling back to the raw symbol for
+    /// any profile whose icon predates this list.
+    private static func iconName(for symbol: String) -> String {
+        availableSymbols.first { $0.symbol == symbol }?.name ?? symbol
+    }
 
     var body: some View {
         if let profile = profile {
@@ -52,7 +65,9 @@ struct ProfileDetailView: View {
                     autoEQSection(profile)
                     tuningSection(profile)
                     safetySection(profile)
-                    metadataSection(profile)
+                    if audioState.showProfileMetadata {
+                        metadataSection(profile)
+                    }
                 }
                 .padding(28)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -652,19 +667,19 @@ struct ProfileDetailView: View {
 
     @ViewBuilder private func symbolPicker(_ profile: HearingProfile) -> some View {
         Menu {
-            ForEach(Self.availableSymbols, id: \.self) { symbol in
+            ForEach(Self.availableSymbols, id: \.self) { icon in
                 Button {
-                    update(profile) { $0.symbol = symbol }
+                    update(profile) { $0.symbol = icon.symbol }
                 } label: {
-                    Label(symbol, systemImage: symbol)
+                    Label(icon.name, systemImage: icon.symbol)
                 }
             }
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: profile.symbol)
                     .font(.system(size: 14))
-                Text(profile.symbol)
-                    .font(.callout.monospaced())
+                Text(Self.iconName(for: profile.symbol))
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                 Image(systemName: "chevron.up.chevron.down").font(.caption2)
             }

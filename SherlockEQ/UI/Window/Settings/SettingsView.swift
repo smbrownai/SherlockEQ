@@ -333,6 +333,17 @@ struct SettingsView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 4)
+                Divider()
+                HStack {
+                    Toggle("Show metadata on profiles", isOn: $audioState.showProfileMetadata)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                    Spacer()
+                }
+                Text("Shows a Metadata footer on each profile's detail page with its created/modified timestamps and unique ID. Off by default — useful for support and troubleshooting.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
             }
         }
     }
