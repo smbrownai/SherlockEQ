@@ -3,7 +3,7 @@ import Foundation
 
 /// CLI version. Kept in step with the app's marketing version by
 /// dist/build-cli.sh (which rewrites this line at build time).
-let cliVersion = "0.6.6"
+let cliVersion = "0.6.7"
 
 // MARK: - Root
 

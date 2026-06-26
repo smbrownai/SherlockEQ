@@ -20,6 +20,33 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.6.7
+
+This release adds a short intro video to the first-launch welcome screen and makes your audiogram much easier to reuse — copy it onto your other profiles in one step, or save it to a file and load it back later. The spectrum analyzer, the Profiles screen, and a couple of keyboard niceties also got some polish. Nothing changes in how EQ or safe-listening work.
+
+**New**
+
+- **A welcome video on first launch.** The onboarding screen now opens with a brief intro video that plays once and settles on its final frame. It's purely a welcome — onboarding works exactly as before on builds without it.
+- **Apply one audiogram to several profiles at once.** The Audiogram screen's new *Manage Audiogram → Apply to Other Profiles…* lets you copy the active profile's hearing thresholds onto any profiles you pick. Each profile's EQ, tinnitus notch, and compensation strength are left untouched — only the audiogram and its correction update.
+- **Import and export audiograms.** *Manage Audiogram → Import…/Export…* saves your audiogram to a file or loads one back into the active profile, so you can back it up or move it between Macs without copying a whole profile.
+
+**Improvements**
+
+- **The analyzer's input and output now show the real difference.** The input overlay reflects the true unprocessed signal (both channels) instead of mirroring the output, so the gap between the two curves is exactly what the EQ is doing.
+- **A cleaner Output view.** The faint peak-hold line in the spectrum now appears only when the Peaks layer is on, so an Output-only view is a clean silhouette.
+- **⌘1 opens the Analog Control Unit.** Pairs with ⌘0 for the main window.
+- **Profile icons have plain-English names.** The icon picker now reads Person, Headphones, AirPods Pro, Speaker, Voice, Night, Day, Work, Home, and so on, instead of technical symbol names.
+- **A tidier profile page.** The technical metadata footer (timestamps and ID) is hidden by default; turn it back on under Settings → Diagnostics if you need it for support.
+
+**Fixes**
+
+- **"Reset to Factory Default" now enables after any change.** Editing a factory preset's audiogram, tinnitus notch, compensation strength, or headphone correction now correctly enables Reset — previously it only noticed tone, output-trim, name, and balance edits.
+- **The notch marker no longer lingers.** The dashed marker and label in the visualizer now appear only while the tinnitus notch is on, instead of pointing at a curve feature that isn't there.
+
+**Under the hood**
+
+- **The automated test suite runs again.** A startup guard kept the test bundle from launching; the suite now runs in full, so regressions get caught before they ship. No user-facing change.
+
 ## 0.6.6
 
 A reliability release. The main fix is for audio that didn't come back cleanly after your Mac woke from sleep — most often after sitting overnight. In that state the audio engine or the system-audio tap could fail to start, leaving SherlockEQ silent until you toggled it off and on or relaunched. This release detects those momentary start-up failures and retries them on its own, so sound returns without you having to do anything. Nothing changes in how EQ, profiles, or safe-listening work.
