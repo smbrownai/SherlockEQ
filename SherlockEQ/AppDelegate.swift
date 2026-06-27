@@ -491,22 +491,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Standard About panel with custom credit lines under the version: the
-    /// tagline, copyright, and license. Plain text, no links.
+    /// tagline, copyright, "Free and Open Source", and a clickable Website link.
     @objc private func showAboutPanel(_ sender: Any?) {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
-        let credits = NSAttributedString(
+        let baseAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+            .foregroundColor: NSColor.secondaryLabelColor,
+            .paragraphStyle: paragraph,
+        ]
+        let credits = NSMutableAttributedString(
             string: """
             Find your sound.
+
             Copyright 2026 Shawn M. Brown
-            Distributed under the Open Source Initiative MIT License.
+
+            Free and Open Source
+
             """,
-            attributes: [
-                .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
-                .foregroundColor: NSColor.secondaryLabelColor,
-                .paragraphStyle: paragraph,
-            ]
+            attributes: baseAttributes
         )
+        let website = NSAttributedString(
+            string: "Website",
+            attributes: baseAttributes.merging([
+                .link: URL(string: "https://www.snxt.ai/SherlockEQ/index.html")!,
+            ]) { _, new in new }
+        )
+        credits.append(website)
         NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
     }
 
