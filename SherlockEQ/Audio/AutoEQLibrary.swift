@@ -1,7 +1,7 @@
 import Foundation
 
 /// Lists AutoEQ-format `.txt` files in the user's configured library
-/// folder. `AudioState.autoEQLibraryFolder` holds the directory; when
+/// folder. `AudioState.autoEQPreferences.libraryFolder` holds the directory; when
 /// it's set, Profile Detail's Headphone-correction picker shows these
 /// entries directly so users don't have to NSOpenPanel a file every time.
 enum AutoEQLibrary {
