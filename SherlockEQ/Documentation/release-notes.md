@@ -20,6 +20,18 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.6.9
+
+This release brings the Safe Listening screen's 7-day history to life: your daily listening dose is now saved and charted, so you can see how this week's exposure compares day to day. The About window also got a small refresh. Nothing changes in how EQ or dose tracking work.
+
+**New**
+
+- **A real 7-day listening history.** The Safe Listening screen now charts each day's peak dose for the past week, coloured green, amber, or red against the same 80 % / 100 % thresholds as the live dose card. Today's bar reflects your exposure so far; past days are captured automatically at the midnight rollover and saved between launches — including when SherlockEQ was closed overnight. A day with no listening simply doesn't appear.
+
+**Improvements**
+
+- **A tidier About window.** The credits now read "Free and Open Source", with a little more spacing and a link to the SherlockEQ website.
+
 ## 0.6.8
 
 A small maintenance release. It refreshes the first-launch welcome video and fixes a case where re-opening SherlockEQ wouldn't bring the existing window forward. The rest is internal cleanup. Nothing changes in how EQ or safe-listening work.
