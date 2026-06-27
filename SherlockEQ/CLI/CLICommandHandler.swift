@@ -101,8 +101,8 @@ final class CLICommandHandler {
             "running": true,
             "processing": isProcessing,
             "tapState": tapStateString,
-            "bypass": audioState.referenceMode,
-            "gainDB": audioState.masterGainDB,
+            "bypass": audioState.eqChain.referenceMode,
+            "gainDB": audioState.engineParameters.masterGainDB,
             "outputDevice": [
                 "name": audioState.tap.currentOutputDeviceName,
                 "id": Int(audioState.tap.currentOutputDeviceID),
@@ -141,7 +141,7 @@ final class CLICommandHandler {
     // MARK: - Bypass (reference mode)
 
     private func bypassGet() -> Data {
-        Self.ok(["bypass": audioState.referenceMode])
+        Self.ok(["bypass": audioState.eqChain.referenceMode])
     }
 
     private func bypassSet(_ request: [String: Any]) -> Data {
@@ -315,7 +315,7 @@ final class CLICommandHandler {
     // MARK: - Gain
 
     private func gainGet() -> Data {
-        Self.ok(["gainDB": audioState.masterGainDB])
+        Self.ok(["gainDB": audioState.engineParameters.masterGainDB])
     }
 
     private func gainSet(_ request: [String: Any]) -> Data {

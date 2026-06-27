@@ -68,7 +68,7 @@ struct EQPreviewView: View {
                     y: .value("Gain dB", p.dB),
                     series: .value("Ear", p.ear)
                 )
-                .foregroundStyle(audioState.leftEarColor)
+                .foregroundStyle(audioState.preferences.leftEarColor)
             }
             ForEach(rightSamples, id: \.self) { p in
                 LineMark(
@@ -76,7 +76,7 @@ struct EQPreviewView: View {
                     y: .value("Gain dB", p.dB),
                     series: .value("Ear", p.ear)
                 )
-                .foregroundStyle(audioState.rightEarColor)
+                .foregroundStyle(audioState.preferences.rightEarColor)
             }
         }
         .chartXScale(domain: minHz...maxHz, type: .log)
@@ -109,8 +109,8 @@ struct EQPreviewView: View {
 
     private var footnote: some View {
         HStack(spacing: 14) {
-            legendDot(audioState.leftEarColor, label: "Left")
-            legendDot(audioState.rightEarColor, label: "Right")
+            legendDot(audioState.preferences.leftEarColor, label: "Left")
+            legendDot(audioState.preferences.rightEarColor, label: "Right")
             Spacer()
             Text("Per-band ceiling: \(Int(AudiogramConversion.perBandCeilingDB)) dB")
                 .font(.caption)

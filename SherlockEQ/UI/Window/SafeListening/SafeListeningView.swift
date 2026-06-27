@@ -34,8 +34,8 @@ struct SafeListeningView: View {
         // playing, kill it so they don't return to find a 1 kHz tone still
         // looping. Toggling the same flag is cheap if it's already off.
         .onDisappear {
-            if state.calibrationToneEnabled {
-                state.calibrationToneEnabled = false
+            if state.eqChain.calibrationToneEnabled {
+                state.eqChain.calibrationToneEnabled = false
             }
         }
     }
@@ -187,15 +187,15 @@ struct SafeListeningView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 Button {
-                    state.calibrationToneEnabled.toggle()
+                    state.eqChain.calibrationToneEnabled.toggle()
                 } label: {
                     Label(
-                        state.calibrationToneEnabled ? "Stop 1 kHz tone" : "Play 1 kHz tone",
-                        systemImage: state.calibrationToneEnabled ? "stop.fill" : "play.fill"
+                        state.eqChain.calibrationToneEnabled ? "Stop 1 kHz tone" : "Play 1 kHz tone",
+                        systemImage: state.eqChain.calibrationToneEnabled ? "stop.fill" : "play.fill"
                     )
                 }
                 .buttonStyle(.bordered)
-                .tint(state.calibrationToneEnabled ? .red : .accentColor)
+                .tint(state.eqChain.calibrationToneEnabled ? .red : .accentColor)
 
                 Text(String(format: "Tone level: %.0f dBFS",
                             Double(state.calibrationToneLevelDBFS)))

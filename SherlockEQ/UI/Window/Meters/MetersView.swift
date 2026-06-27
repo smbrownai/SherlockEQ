@@ -145,8 +145,8 @@ struct MetersView: View {
         VStack(alignment: .leading, spacing: 10) {
             WaveformView(
                 monitor: audioState.stereoMonitor,
-                earColor: audioState.leftEarColor,
-                rightColor: audioState.rightEarColor
+                earColor: audioState.preferences.leftEarColor,
+                rightColor: audioState.preferences.rightEarColor
             )
             .frame(maxWidth: 620)
             Text("For fun. Triggered on a positive zero-cross in L so the trace appears to stand still during steady-state material.")

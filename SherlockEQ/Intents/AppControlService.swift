@@ -100,36 +100,36 @@ struct AppControlService {
 
     // MARK: - Reference mode (bypass)
 
-    var bypass: Bool { audioState.referenceMode }
+    var bypass: Bool { audioState.eqChain.referenceMode }
 
     @discardableResult
     func setBypass(_ mode: BypassMode) -> Bool {
         switch mode {
-        case .on:     audioState.referenceMode = true
-        case .off:    audioState.referenceMode = false
-        case .toggle: audioState.referenceMode.toggle()
+        case .on:     audioState.eqChain.referenceMode = true
+        case .off:    audioState.eqChain.referenceMode = false
+        case .toggle: audioState.eqChain.referenceMode.toggle()
         }
-        return audioState.referenceMode
+        return audioState.eqChain.referenceMode
     }
 
     // MARK: - Master gain
 
-    var gainDB: Double { audioState.masterGainDB }
+    var gainDB: Double { audioState.engineParameters.masterGainDB }
 
     @discardableResult
     func setGain(_ db: Double) throws -> Double {
         guard Self.gainRange.contains(db) else {
             throw ControlError(code: "out_of_range", "Gain must be between -60 and +12 dB.")
         }
-        audioState.masterGainDB = db
-        return audioState.masterGainDB
+        audioState.engineParameters.masterGainDB = db
+        return audioState.engineParameters.masterGainDB
     }
 
     /// Nudge gain by a relative amount, clamped into the valid range.
     @discardableResult
     func adjustGain(by delta: Double) -> Double {
-        let next = min(max(audioState.masterGainDB + delta, Self.gainRange.lowerBound), Self.gainRange.upperBound)
-        audioState.masterGainDB = next
+        let next = min(max(audioState.engineParameters.masterGainDB + delta, Self.gainRange.lowerBound), Self.gainRange.upperBound)
+        audioState.engineParameters.masterGainDB = next
         return next
     }
 

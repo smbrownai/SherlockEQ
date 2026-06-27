@@ -174,7 +174,7 @@ struct AudiogramView: View {
         )
     }
 
-    private var earColor: Color { tab == .left ? audioState.leftEarColor : audioState.rightEarColor }
+    private var earColor: Color { tab == .left ? audioState.preferences.leftEarColor : audioState.preferences.rightEarColor }
 
     /// Binding that reads/writes the active-tab ear's audiogram thresholds and
     /// rebuilds the matching EQ bands on every mutation so the derived curve

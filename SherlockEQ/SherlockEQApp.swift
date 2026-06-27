@@ -8,6 +8,7 @@ struct SherlockEQApp: App {
         MenuBarExtra {
             MainPopoverView()
                 .environmentObject(appDelegate.audioState)
+                .environmentObject(appDelegate.audioState.preferences)
                 .environmentObject(appDelegate.profileStore)
                 .environmentObject(appDelegate.autoEQRemote)
                 .environmentObject(appDelegate.autoEQSavedProfiles)

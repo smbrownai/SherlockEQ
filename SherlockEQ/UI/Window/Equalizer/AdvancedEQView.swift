@@ -65,7 +65,7 @@ struct AdvancedEQView: View {
                     showDynamics: .constant(false),
                     hasAudiogram: hasAudiogram,
                     hasDynamics: false,
-                    earColor: audioState.leftEarColor
+                    earColor: audioState.preferences.leftEarColor
                 )
                 previewCanvas(profile, leftCorrection: leftCorrection, rightCorrection: rightCorrection)
                 slidersRow(profile)
@@ -158,8 +158,8 @@ struct AdvancedEQView: View {
             shadowTargetBands: rightCorrection,
             notch: profile.leftNotch,
             spectrumSampleRate: audioState.audio.outputSampleRate ?? 48_000,
-            earColor: audioState.leftEarColor,
-            shadowColor: audioState.rightEarColor,
+            earColor: audioState.preferences.leftEarColor,
+            shadowColor: audioState.preferences.rightEarColor,
             readOnly: true,
             selectedBandID: $dummySelection,
             showInputSpectrum: showInputLayer,
@@ -204,7 +204,7 @@ struct AdvancedEQView: View {
                     VerticalGainSlider(
                         value: gainBinding(profile: profile, frequency: frequency, ear: .left),
                         range: -12...12,
-                        tint: audioState.leftEarColor,
+                        tint: audioState.preferences.leftEarColor,
                         accessibilityLabel: "\(formatFreq(frequency)) hertz, both ears"
                     )
                     .frame(width: 40)
@@ -212,14 +212,14 @@ struct AdvancedEQView: View {
                     VerticalGainSlider(
                         value: gainBinding(profile: profile, frequency: frequency, ear: .left),
                         range: -12...12,
-                        tint: audioState.leftEarColor,
+                        tint: audioState.preferences.leftEarColor,
                         accessibilityLabel: "\(formatFreq(frequency)) hertz, left ear"
                     )
                     .frame(width: 26)
                     VerticalGainSlider(
                         value: gainBinding(profile: profile, frequency: frequency, ear: .right),
                         range: -12...12,
-                        tint: audioState.rightEarColor,
+                        tint: audioState.preferences.rightEarColor,
                         accessibilityLabel: "\(formatFreq(frequency)) hertz, right ear"
                     )
                     .frame(width: 26)
@@ -242,7 +242,7 @@ struct AdvancedEQView: View {
                 EQGainChip(
                     value: gainBinding(profile: profile, frequency: frequency, ear: .left),
                     range: -12...12,
-                    tint: audioState.leftEarColor,
+                    tint: audioState.preferences.leftEarColor,
                     accessibilityLabel: "\(formatFreq(frequency)) hertz, both ears, gain"
                 )
                 .frame(width: 40)
@@ -250,14 +250,14 @@ struct AdvancedEQView: View {
                 EQGainChip(
                     value: gainBinding(profile: profile, frequency: frequency, ear: .left),
                     range: -12...12,
-                    tint: audioState.leftEarColor,
+                    tint: audioState.preferences.leftEarColor,
                     accessibilityLabel: "\(formatFreq(frequency)) hertz, left ear, gain"
                 )
                 .frame(width: 26)
                 EQGainChip(
                     value: gainBinding(profile: profile, frequency: frequency, ear: .right),
                     range: -12...12,
-                    tint: audioState.rightEarColor,
+                    tint: audioState.preferences.rightEarColor,
                     accessibilityLabel: "\(formatFreq(frequency)) hertz, right ear, gain"
                 )
                 .frame(width: 26)
