@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Lightweight, dismissible status banner shown at the top of the main
 /// window for save failures, permission revocations, and other
-/// transient surfaces. Fed by `AudioState.userVisibleNotice`.
+/// transient surfaces. Fed by `AudioState.noticeCenter.userVisibleNotice`.
 ///
 /// Warnings auto-dismiss after their `autoDismissAfter` duration so
 /// the banner doesn't permanently take a row of window real estate

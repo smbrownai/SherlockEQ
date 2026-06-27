@@ -91,7 +91,36 @@ final class SafeListeningTracker: ObservableObject {
         static let peak = "sherlockeq.dose.peakDose"
         static let crossedAmber = "sherlockeq.dose.crossedAmber"
         static let crossedRed = "sherlockeq.dose.crossedRed"
+        /// Legacy: local-midnight as an absolute epoch. Re-interpreting it via
+        /// `startOfDay` in a different time zone could shift the day, so the
+        /// day identity is now `dayKey` (below). Still read as a migration
+        /// fallback for installs that persisted before the switch.
         static let resetDayEpoch = "sherlockeq.dose.resetDayEpoch"
+        /// Time-zone-stable calendar-day identity ("yyyy-MM-dd") of the current
+        /// dose day. Comparing day keys (not epochs) makes same-day detection
+        /// and the closed-across-midnight recovery correct when the user changes
+        /// time zone between sessions.
+        static let dayKey = "sherlockeq.dose.dayKey"
+    }
+
+    /// Time-zone-stable "yyyy-MM-dd" key for the local calendar day containing
+    /// `date`. Derived from `Calendar.current` components so it captures the
+    /// day the user actually listened, independent of any later time-zone move.
+    /// Internal (not private) so the day-identity round-trip can be unit-tested.
+    static func dayKey(for date: Date) -> String {
+        let c = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+    }
+
+    /// Inverse of `dayKey(for:)` — the local start-of-day for a "yyyy-MM-dd"
+    /// key. `DoseHistoryStore.record` re-normalises via `startOfDay`, so this
+    /// only needs to land anywhere inside that calendar day.
+    static func date(fromDayKey key: String) -> Date? {
+        let parts = key.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        var comps = DateComponents()
+        comps.year = parts[0]; comps.month = parts[1]; comps.day = parts[2]
+        return Calendar.current.date(from: comps)
     }
     /// Only true once `beginDailyTracking()` runs (the real app at launch).
     /// Gates restore + persist so unit tests that construct a bare tracker
@@ -330,20 +359,31 @@ final class SafeListeningTracker: ObservableObject {
     }
 
     private func restoreState() {
-        guard let storedDayEpoch = defaults.object(forKey: DefaultsKey.resetDayEpoch) as? Double else {
+        // Resolve the persisted day as a time-zone-stable key. Prefer the new
+        // `dayKey`; fall back to deriving one from the legacy epoch for installs
+        // that persisted before the switch (one-time migration).
+        let storedDayKey: String
+        if let key = defaults.string(forKey: DefaultsKey.dayKey) {
+            storedDayKey = key
+        } else if let epoch = defaults.object(forKey: DefaultsKey.resetDayEpoch) as? Double {
+            storedDayKey = Self.dayKey(for: Date(timeIntervalSince1970: epoch))
+        } else {
             return  // nothing persisted yet
         }
+
         // The persisted peak is newer than the day's `dose` (which a quiet
         // period may have zeroed); fall back to `dose` for installs that
         // predate the peak key.
         let storedPeak = min(1.0, max(0, (defaults.object(forKey: DefaultsKey.peak) as? Double)
             ?? defaults.double(forKey: DefaultsKey.dose)))
 
-        guard storedDayEpoch == currentResetDay.timeIntervalSince1970 else {
-            // Persisted state belongs to a previous day — the app was closed
-            // across midnight. Bank that day's peak into history before the
-            // daily counters start fresh, then clear.
-            finalizeDay(dayStart: Date(timeIntervalSince1970: storedDayEpoch), peak: storedPeak)
+        guard storedDayKey == Self.dayKey(for: currentResetDay) else {
+            // Persisted state belongs to a previous calendar day — the app was
+            // closed across midnight (or the user changed time zone). Bank that
+            // day's peak into history before the daily counters start fresh.
+            if let bankedDay = Self.date(fromDayKey: storedDayKey) {
+                finalizeDay(dayStart: bankedDay, peak: storedPeak)
+            }
             clearPersistedState()
             return
         }
@@ -362,7 +402,7 @@ final class SafeListeningTracker: ObservableObject {
         defaults.set(peakDoseToday, forKey: DefaultsKey.peak)
         defaults.set(didCrossAmberToday, forKey: DefaultsKey.crossedAmber)
         defaults.set(didCrossRedToday, forKey: DefaultsKey.crossedRed)
-        defaults.set(currentResetDay.timeIntervalSince1970, forKey: DefaultsKey.resetDayEpoch)
+        defaults.set(Self.dayKey(for: currentResetDay), forKey: DefaultsKey.dayKey)
         lastPersist = Date()
     }
 
@@ -371,7 +411,8 @@ final class SafeListeningTracker: ObservableObject {
         defaults.removeObject(forKey: DefaultsKey.peak)
         defaults.removeObject(forKey: DefaultsKey.crossedAmber)
         defaults.removeObject(forKey: DefaultsKey.crossedRed)
-        defaults.removeObject(forKey: DefaultsKey.resetDayEpoch)
+        defaults.removeObject(forKey: DefaultsKey.dayKey)
+        defaults.removeObject(forKey: DefaultsKey.resetDayEpoch)  // legacy
     }
 
     /// Spec §5.4 dose tinting band. Single source of truth for any UI

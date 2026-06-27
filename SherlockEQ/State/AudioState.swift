@@ -448,8 +448,8 @@ final class AudioState: ObservableObject {
         audioObserver = audio.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }
-        // Rebroadcast so views still observing `audioState.userVisibleNotice`
-        // (via the proxy above) re-evaluate when the banner state changes.
+        // Rebroadcast so views observing AudioState re-evaluate when the
+        // banner state (`noticeCenter.userVisibleNotice`) changes.
         // NoticeCenter publishes infrequently — one shot per banner — so
         // this doesn't suffer the high-rate issue that excludes the
         // analyzers / monitor below.

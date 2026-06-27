@@ -159,4 +159,48 @@ struct SafeListeningTrackerTests {
         tracker.forceForTesting(dose: 0.3)
         #expect(tracker.peakDoseToday == 0.7)
     }
+
+    // MARK: - Time-zone-stable day identity (dose-history key)
+
+    @Test func dayKeyIsStableAcrossTimesWithinADay() {
+        // Two instants on the same calendar day → identical key, so a record
+        // can't be split across two bars or mis-detected as a new day.
+        let cal = Calendar.current
+        let base = cal.startOfDay(for: Date())
+        let morning = base.addingTimeInterval(8 * 3600)
+        let night = base.addingTimeInterval(23 * 3600)
+        #expect(SafeListeningTracker.dayKey(for: morning) == SafeListeningTracker.dayKey(for: night))
+    }
+
+    @Test func differentDaysHaveDifferentKeys() {
+        let today = Calendar.current.startOfDay(for: Date())
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: today)!
+        #expect(SafeListeningTracker.dayKey(for: today) != SafeListeningTracker.dayKey(for: yesterday))
+    }
+
+    @Test func dayKeyRoundTripsToSameDay() {
+        // date(fromDayKey: dayKey(d)) must land on the same calendar day, so a
+        // banked record re-normalises (via startOfDay) back to its own bar.
+        let cal = Calendar.current
+        let d = cal.date(byAdding: .day, value: -3, to: Date())!
+        let key = SafeListeningTracker.dayKey(for: d)
+        let restored = SafeListeningTracker.date(fromDayKey: key)
+        #expect(restored != nil)
+        #expect(cal.isDate(restored!, inSameDayAs: d))
+        #expect(SafeListeningTracker.dayKey(for: restored!) == key)
+    }
+
+    @Test func dayKeyFormatIsZeroPaddedISO() {
+        // Guards against e.g. "2026-6-1" which would break date(fromDayKey:)
+        // ordering and any external reader.
+        var comps = DateComponents()
+        comps.year = 2026; comps.month = 1; comps.day = 5
+        let d = Calendar.current.date(from: comps)!
+        #expect(SafeListeningTracker.dayKey(for: d) == "2026-01-05")
+    }
+
+    @Test func malformedDayKeyReturnsNil() {
+        #expect(SafeListeningTracker.date(fromDayKey: "not-a-date") == nil)
+        #expect(SafeListeningTracker.date(fromDayKey: "2026-06") == nil)
+    }
 }

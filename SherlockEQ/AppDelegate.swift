@@ -491,7 +491,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Standard About panel with custom credit lines under the version: the
-    /// tagline, copyright, "Free and Open Source", and a clickable Website link.
+    /// tagline, copyright, and a "Free and Open Source • Website" line where
+    /// "Website" is a clickable link.
     @objc private func showAboutPanel(_ sender: Any?) {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
@@ -506,18 +507,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             Copyright 2026 Shawn M. Brown
 
-            Free and Open Source
-
+            Free and Open Source • Website
             """,
             attributes: baseAttributes
         )
-        let website = NSAttributedString(
-            string: "Website",
-            attributes: baseAttributes.merging([
-                .link: URL(string: "https://www.snxt.ai/SherlockEQ/index.html")!,
-            ]) { _, new in new }
-        )
-        credits.append(website)
+        // Make just the trailing "Website" word a clickable link.
+        let websiteRange = (credits.string as NSString).range(of: "Website", options: .backwards)
+        if websiteRange.location != NSNotFound {
+            credits.addAttribute(
+                .link,
+                value: URL(string: "https://www.snxt.ai/SherlockEQ/index.html")!,
+                range: websiteRange
+            )
+        }
         NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
     }
 
