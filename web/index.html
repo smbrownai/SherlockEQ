@@ -252,7 +252,7 @@
     /* ---- Screenshots -------------------------------------------------- */
     .shots {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: 1fr;
       gap: var(--s-9);
       align-items: start;
     }
@@ -271,6 +271,7 @@
       box-shadow: var(--shadow-1);
       background: var(--bg-2);
     }
+    .shot--narrow img { max-width: 480px; }
     .shot .cap {
       display: flex;
       align-items: baseline;
@@ -644,49 +645,33 @@
 
       <div class="shots">
         <figure class="shot">
-          <img src="assets/shot-notch.png" alt="Tinnitus Notch view — a frequency sweep at 4,000 Hz with ±1/10/100 Hz fine-tune controls and a per-ear notch filter below." loading="lazy" />
+          <img src="assets/shot-audiogram.png" alt="Audiogram editor — a left-ear threshold chart with draggable points, a numeric entry table by frequency with per-band severity bars, and a live EQ preview of the compensation curve." loading="lazy" />
           <figcaption class="cap">
-            <span class="key">01 · LOCATE</span>
-            <span class="label">Sweep the sine, set the notch — per ear or linked.</span>
-          </figcaption>
-        </figure>
-
-        <figure class="shot">
-          <img src="assets/shot-audiogram.png" alt="Audiogram editor — left-ear threshold chart with draggable points and a numeric entry table by frequency." loading="lazy" />
-          <figcaption class="cap">
-            <span class="key">02 · INTERPRET</span>
+            <span class="key">01 · INTERPRET</span>
             <span class="label">Enter audiogram thresholds; SherlockEQ shapes the curve.</span>
           </figcaption>
         </figure>
 
         <figure class="shot">
-          <img src="assets/shot-eq.png" alt="Equalizer view — a parametric EQ curve over a live spectrum with selectable Output, Input, EQ, Audiogram, Safety, Peaks, and Dynamics lenses, plus an output-level meter sidebar." loading="lazy" />
+          <img src="assets/shot-eq.png" alt="Equalizer view — bands over a live spectrum with selectable Output, Input, Result, EQ, Correction, Safety, and Peaks lenses." loading="lazy" />
           <figcaption class="cap">
-            <span class="key">03 · REFINE</span>
-            <span class="label">Parametric bands over a live spectrum. Stack the lenses you need.</span>
+            <span class="key">02 · REFINE</span>
+            <span class="label">Shape every band over a live spectrum. Stack the lenses you need.</span>
           </figcaption>
         </figure>
 
         <figure class="shot">
-          <img src="assets/shot-comfort.png" alt="Listening Comfort view — Speech Presence, Harshness Control, and Sibilance Tamer processors, each with Strength and Sensitivity sliders and a live activity meter." loading="lazy" />
+          <img src="assets/shot-eq-bands.png" alt="Equalizer view — draggable parametric bands on a frequency-response curve over a live spectrum, with octave band spacing and the Result lens active." loading="lazy" />
           <figcaption class="cap">
-            <span class="key">04 · COMFORT</span>
-            <span class="label">Ease sibilance, harshness, and shouty mids — only while they spike.</span>
+            <span class="key">03 · TUNE</span>
+            <span class="label">Drag parametric bands across the spectrum — per ear, your way.</span>
           </figcaption>
         </figure>
 
-        <figure class="shot">
-          <img src="assets/shot-safe.png" alt="Safe Listening dashboard — a live SPL meter reading 71 dBA, today's NIOSH dose at 0.1 percent, and settings for ceiling, quiet threshold, and playback calibration." loading="lazy" />
-          <figcaption class="cap">
-            <span class="key">05 · PROTECT</span>
-            <span class="label">Live SPL and NIOSH dose, with a calibration-aware safety ceiling.</span>
-          </figcaption>
-        </figure>
-
-        <figure class="shot">
+        <figure class="shot shot--narrow">
           <img src="assets/shot-popover.png" alt="Menu-bar popover — today's dose, left/right level meters, master gain and balance sliders, profile picker, compensation slider, tinnitus notch toggle, a reference-mode bypass, and a quit button." loading="lazy" />
           <figcaption class="cap">
-            <span class="key">06 · MENU BAR</span>
+            <span class="key">04 · MENU BAR</span>
             <span class="label">Live levels, dose, gain, balance, and the notch toggle — without opening the app.</span>
           </figcaption>
         </figure>
