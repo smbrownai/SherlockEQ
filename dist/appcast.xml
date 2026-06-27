@@ -21,6 +21,75 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 0.6.8</title>
+      <pubDate>Sat, 27 Jun 2026 11:39:31 +0000</pubDate>
+      <sparkle:version>00608</sparkle:version>
+      <sparkle:shortVersionString>0.6.8</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<h2>SherlockEQ 0.6.8</h2>
+
+<p>
+  A small maintenance release. It refreshes the first-launch welcome video and
+  fixes a case where re-opening SherlockEQ wouldn't bring the existing window
+  forward. The rest is internal cleanup. Nothing changes in how EQ or
+  safe-listening work.
+</p>
+
+<h3>Improvements</h3>
+
+<ul>
+  <li>
+    <strong>An updated welcome video.</strong>
+    The first-launch onboarding screen now plays a refreshed intro clip.
+  </li>
+</ul>
+
+<h3>Fixes</h3>
+
+<ul>
+  <li>
+    <strong>Re-launching brings the running app forward.</strong>
+    When SherlockEQ was already running, opening it again now reliably activates
+    the existing instance and brings its window to the front instead of
+    occasionally leaving it in the background.
+  </li>
+</ul>
+
+<h3>Under the hood</h3>
+
+<ul>
+  <li>
+    <strong>Cleaner internal state wiring.</strong>
+    The app's audio-state object was split so each screen depends only on the
+    settings it actually uses, and an unused parameter was removed from the
+    spectrum analyzer. No user-facing change.
+  </li>
+</ul>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not diagnose,
+  treat, measure, or monitor any hearing condition, tinnitus, or disability.
+  For concerns about your hearing, consult a doctor, audiologist, or licensed
+  healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.6.7">0.6.7 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v0.6.8/SherlockEQ-0.6.8.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="7m4Wrsn6M5KsrqI3Cqxc07rVmKzszAykpAxtMB/CJdJGscYzbKq+JG0ENkI62Zt9jS9oeuQphX2p/ECB4no5Cw==" length="10493981" />
+    </item>
+
+    <item>
       <title>SherlockEQ 0.6.7</title>
       <pubDate>Fri, 26 Jun 2026 19:24:52 +0000</pubDate>
       <sparkle:version>00607</sparkle:version>
