@@ -20,6 +20,22 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.6.8
+
+A small maintenance release. It refreshes the first-launch welcome video and fixes a case where re-opening SherlockEQ wouldn't bring the existing window forward. The rest is internal cleanup. Nothing changes in how EQ or safe-listening work.
+
+**Improvements**
+
+- **An updated welcome video.** The first-launch onboarding screen now plays a refreshed intro clip.
+
+**Fixes**
+
+- **Re-launching brings the running app forward.** When SherlockEQ was already running, opening it again now reliably activates the existing instance and brings its window to the front instead of occasionally leaving it in the background.
+
+**Under the hood**
+
+- **Cleaner internal state wiring.** The app's audio-state object was split so each screen depends only on the settings it actually uses, and an unused parameter was removed from the spectrum analyzer. No user-facing change.
+
 ## 0.6.7
 
 This release adds a short intro video to the first-launch welcome screen and makes your audiogram much easier to reuse — copy it onto your other profiles in one step, or save it to a file and load it back later. The spectrum analyzer, the Profiles screen, and a couple of keyboard niceties also got some polish. Nothing changes in how EQ or safe-listening work.
