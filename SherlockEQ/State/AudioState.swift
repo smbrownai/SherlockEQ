@@ -22,6 +22,13 @@ final class AudioState: ObservableObject {
     @Published private(set) var stereoMonitor: StereoMonitor
     @Published private(set) var safeListening: SafeListeningTracker
 
+    /// 7-day (well, 90-day retained) daily dose-peak history. The tracker
+    /// finalizes each day into this at the midnight rollover; the Safe
+    /// Listening chart reads it. A plain `let` — views that need it observe it
+    /// directly via `@ObservedObject` rather than through AudioState, since
+    /// records change at most once a day and don't warrant a rebroadcast.
+    let doseHistory = DoseHistoryStore()
+
     /// EQ-chain control surface — see `EQChainState`. AudioState
     /// sinks each `$value` publisher (in init) and pushes the result
     /// into the engine. The four per-stage toggles also kick
@@ -374,6 +381,15 @@ final class AudioState: ObservableObject {
         self.preSpectrum = preSpectrum
         self.stereoMonitor = stereoMonitor
         self.safeListening = tracker
+        // Load persisted history and route the tracker's day-finalize callback
+        // into it BEFORE beginDailyTracking() — its restore step may finalize a
+        // prior day immediately (app closed across midnight), and the callback
+        // must already be wired to catch it.
+        let history = doseHistory
+        history.loadAll()
+        tracker.onDayFinalized = { [weak history] dayStart, peak in
+            history?.record(dayStart: dayStart, peakDose: peak)
+        }
         // Restore today's accumulated dose from the previous run and start the
         // midnight-rollover timer. Kept here (not in the tracker's init) so
         // bare trackers built in unit tests don't touch the shared defaults.

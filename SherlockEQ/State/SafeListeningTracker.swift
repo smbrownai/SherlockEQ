@@ -15,6 +15,12 @@ final class SafeListeningTracker: ObservableObject {
 
     /// 0…1. 1.0 means "at safe daily limit"; bar goes red in the UI.
     @Published private(set) var sessionDose: Double = 0
+    /// Highest `sessionDose` reached since the last midnight rollover. Unlike
+    /// `sessionDose` (which a sustained-quiet period or manual reset zeroes
+    /// mid-day), this is the day's high-water mark — the figure the 7-day
+    /// history records when the day finalizes. The Safe Listening chart reads
+    /// it for "today" (no store record exists for today until midnight).
+    @Published private(set) var peakDoseToday: Double = 0
     /// Estimate of how many more minutes are safe at the current level.
     /// `nil` when below quietThreshold (effectively unlimited).
     @Published private(set) var remainingMinutes: Double?
@@ -82,6 +88,7 @@ final class SafeListeningTracker: ObservableObject {
     private let defaults = UserDefaults.standard
     private enum DefaultsKey {
         static let dose = "sherlockeq.dose.sessionDose"
+        static let peak = "sherlockeq.dose.peakDose"
         static let crossedAmber = "sherlockeq.dose.crossedAmber"
         static let crossedRed = "sherlockeq.dose.crossedRed"
         static let resetDayEpoch = "sherlockeq.dose.resetDayEpoch"
@@ -91,6 +98,13 @@ final class SafeListeningTracker: ObservableObject {
     /// stay pristine and never read or write the shared defaults domain
     /// (which hosted tests share with production — see memory note).
     private var trackingActive = false
+
+    /// Invoked when a calendar day finalizes — at the midnight rollover while
+    /// running, or at launch when the app was closed across midnight. Receives
+    /// the finished day's start-of-day and its peak dose (0…1). `AudioState`
+    /// wires this to `DoseHistoryStore.record(dayStart:peakDose:)`. Left nil in
+    /// unit tests (a bare tracker), so they never write the history file.
+    var onDayFinalized: ((Date, Double) -> Void)?
     /// Throttle for the periodic dose write; crossings + resets persist eagerly.
     private var lastPersist: Date?
     private let persistInterval: TimeInterval = 15
@@ -148,6 +162,11 @@ final class SafeListeningTracker: ObservableObject {
                 sessionDose = min(1.0, sessionDose + chunk / perm)
             }
         }
+
+        // Track the day's high-water mark for the 7-day history. Climbs only;
+        // sustained-quiet / manual resets leave it (the day's exposure already
+        // happened), and the midnight rollover clears it after recording.
+        if sessionDose > peakDoseToday { peakDoseToday = sessionDose }
 
         // Power-domain rolling average of A-weighted level. Update on
         // every sample so the average stays current; we still gate the
@@ -230,6 +249,7 @@ final class SafeListeningTracker: ObservableObject {
         let target = max(0, min(1, dose))
         let prior = sessionDose
         sessionDose = target
+        if sessionDose > peakDoseToday { peakDoseToday = sessionDose }
         if !didCrossAmberToday, prior < 0.8, target >= 0.8 {
             didCrossAmberToday = true
             NotificationManager.shared.send(
@@ -284,8 +304,20 @@ final class SafeListeningTracker: ObservableObject {
     private func checkDayRollover(now: Date = Date()) {
         let today = Calendar.current.startOfDay(for: now)
         guard today != currentResetDay else { return }
+        // Record the day that's ending (its peak, not the current dose, which a
+        // late-evening quiet period may already have zeroed) before resetting.
+        finalizeDay(dayStart: currentResetDay, peak: peakDoseToday)
         currentResetDay = today
+        peakDoseToday = 0
         resetDose(reason: "midnight rollover")
+    }
+
+    /// Hand a finished day's peak to whoever's listening (the history store, in
+    /// the real app). Days with no exposure aren't reported — an absent record
+    /// reads as "no listening" in the chart, not "zero dose".
+    private func finalizeDay(dayStart: Date, peak: Double) {
+        guard peak > 0 else { return }
+        onDayFinalized?(dayStart, peak)
     }
 
     private func startRolloverTimer() {
@@ -298,14 +330,25 @@ final class SafeListeningTracker: ObservableObject {
     }
 
     private func restoreState() {
-        // Restore only when the persisted dose belongs to *today*; otherwise
-        // it's a previous day's figure and the daily counter starts fresh.
-        guard let storedDayEpoch = defaults.object(forKey: DefaultsKey.resetDayEpoch) as? Double,
-              storedDayEpoch == currentResetDay.timeIntervalSince1970 else {
+        guard let storedDayEpoch = defaults.object(forKey: DefaultsKey.resetDayEpoch) as? Double else {
+            return  // nothing persisted yet
+        }
+        // The persisted peak is newer than the day's `dose` (which a quiet
+        // period may have zeroed); fall back to `dose` for installs that
+        // predate the peak key.
+        let storedPeak = min(1.0, max(0, (defaults.object(forKey: DefaultsKey.peak) as? Double)
+            ?? defaults.double(forKey: DefaultsKey.dose)))
+
+        guard storedDayEpoch == currentResetDay.timeIntervalSince1970 else {
+            // Persisted state belongs to a previous day — the app was closed
+            // across midnight. Bank that day's peak into history before the
+            // daily counters start fresh, then clear.
+            finalizeDay(dayStart: Date(timeIntervalSince1970: storedDayEpoch), peak: storedPeak)
             clearPersistedState()
             return
         }
         sessionDose = min(1.0, max(0, defaults.double(forKey: DefaultsKey.dose)))
+        peakDoseToday = max(storedPeak, sessionDose)
         didCrossAmberToday = defaults.bool(forKey: DefaultsKey.crossedAmber)
         didCrossRedToday = defaults.bool(forKey: DefaultsKey.crossedRed)
         if sessionDose > 0 {
@@ -316,6 +359,7 @@ final class SafeListeningTracker: ObservableObject {
     private func persistState() {
         guard trackingActive else { return }
         defaults.set(sessionDose, forKey: DefaultsKey.dose)
+        defaults.set(peakDoseToday, forKey: DefaultsKey.peak)
         defaults.set(didCrossAmberToday, forKey: DefaultsKey.crossedAmber)
         defaults.set(didCrossRedToday, forKey: DefaultsKey.crossedRed)
         defaults.set(currentResetDay.timeIntervalSince1970, forKey: DefaultsKey.resetDayEpoch)
@@ -324,6 +368,7 @@ final class SafeListeningTracker: ObservableObject {
 
     private func clearPersistedState() {
         defaults.removeObject(forKey: DefaultsKey.dose)
+        defaults.removeObject(forKey: DefaultsKey.peak)
         defaults.removeObject(forKey: DefaultsKey.crossedAmber)
         defaults.removeObject(forKey: DefaultsKey.crossedRed)
         defaults.removeObject(forKey: DefaultsKey.resetDayEpoch)
