@@ -22,7 +22,7 @@ struct MainPopoverView: View {
             // denials, and the safety warnings here too. Both mounts
             // read from the same `AudioState.noticeCenter`, so dismiss
             // from either clears both.
-            if let notice = audioState.userVisibleNotice {
+            if let notice = audioState.noticeCenter.userVisibleNotice {
                 NoticeBannerView(notice: notice) {
                     audioState.dismissNotice()
                 }
@@ -133,18 +133,18 @@ struct MainPopoverView: View {
                 .frame(width: 80, alignment: .leading)
             Slider(
                 value: Binding(
-                    get: { audioState.masterGainDB },
-                    set: { audioState.masterGainDB = $0 }
+                    get: { audioState.engineParameters.masterGainDB },
+                    set: { audioState.engineParameters.masterGainDB = $0 }
                 ),
                 in: -60...12
             )
             .controlSize(.small)
-            Text(formatGain(audioState.masterGainDB))
+            Text(formatGain(audioState.engineParameters.masterGainDB))
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .frame(width: 56, alignment: .trailing)
-            Button { audioState.masterGainDB = 0 } label: {
+            Button { audioState.engineParameters.masterGainDB = 0 } label: {
                 Image(systemName: "arrow.counterclockwise")
                     .font(.caption2.weight(.semibold))
             }

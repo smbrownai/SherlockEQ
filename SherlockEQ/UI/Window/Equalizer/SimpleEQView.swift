@@ -78,8 +78,8 @@ struct SimpleEQView: View {
                     bandColumn(for: profile, ear: .left, color: .accentColor, title: "Both ears")
                 } else {
                     HStack(alignment: .top, spacing: 16) {
-                        bandColumn(for: profile, ear: .left, color: audioState.leftEarColor, title: "Left ear")
-                        bandColumn(for: profile, ear: .right, color: audioState.rightEarColor, title: "Right ear")
+                        bandColumn(for: profile, ear: .left, color: audioState.preferences.leftEarColor, title: "Left ear")
+                        bandColumn(for: profile, ear: .right, color: audioState.preferences.rightEarColor, title: "Right ear")
                     }
                 }
                 resetButton(profile)
@@ -172,8 +172,8 @@ struct SimpleEQView: View {
             shadowTargetBands: profile.rightEar.correctionBands,
             notch: profile.leftNotch,
             spectrumSampleRate: audioState.audio.outputSampleRate ?? 48_000,
-            earColor: audioState.leftEarColor,
-            shadowColor: audioState.rightEarColor,
+            earColor: audioState.preferences.leftEarColor,
+            shadowColor: audioState.preferences.rightEarColor,
             readOnly: true,
             selectedBandID: $dummySelection,
             // This toggle-less preview shows the Result ("what you hear") line:

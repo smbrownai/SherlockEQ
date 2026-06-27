@@ -65,7 +65,7 @@ struct ProfileDetailView: View {
                     autoEQSection(profile)
                     tuningSection(profile)
                     safetySection(profile)
-                    if audioState.showProfileMetadata {
+                    if audioState.preferences.showProfileMetadata {
                         metadataSection(profile)
                     }
                 }
@@ -245,10 +245,10 @@ struct ProfileDetailView: View {
                 AutoEQSavedProfilesList(profile: profile) { saved in
                     applySavedAutoEQ(saved, to: profile)
                 }
-                if !audioState.autoEQEnabled {
+                if !audioState.eqChain.autoEQEnabled {
                     autoEQDisabledHint
                 }
-                if AutoEQLibrary.entries(in: audioState.autoEQLibraryFolder).isEmpty == false ||
+                if AutoEQLibrary.entries(in: audioState.autoEQPreferences.libraryFolder).isEmpty == false ||
                     profile.autoEQName == nil {
                     legacyImportRow(for: profile)
                 }
@@ -277,8 +277,8 @@ struct ProfileDetailView: View {
                 }
                 Spacer()
                 Toggle("On", isOn: Binding(
-                    get: { audioState.autoEQEnabled },
-                    set: { audioState.autoEQEnabled = $0 }
+                    get: { audioState.eqChain.autoEQEnabled },
+                    set: { audioState.eqChain.autoEQEnabled = $0 }
                 ))
                 .toggleStyle(.switch)
                 .controlSize(.small)
@@ -311,7 +311,7 @@ struct ProfileDetailView: View {
     @ViewBuilder
     private func conflictBanner(for profile: HearingProfile) -> some View {
         let conflicts: [AutoEQConflictDetector.Conflict] = {
-            guard audioState.autoEQEnabled, audioState.notchFilterEnabled else { return [] }
+            guard audioState.eqChain.autoEQEnabled, audioState.eqChain.notchFilterEnabled else { return [] }
             return AutoEQConflictDetector.detect(in: profile)
         }()
         if !conflicts.isEmpty {
@@ -407,7 +407,7 @@ struct ProfileDetailView: View {
     /// plus a "From file…" escape hatch. The library entries shortcut
     /// the NSOpenPanel for users who curate a folder of corrections.
     @ViewBuilder private func autoEQImportControl(for profile: HearingProfile, label: String) -> some View {
-        let entries = AutoEQLibrary.entries(in: audioState.autoEQLibraryFolder)
+        let entries = AutoEQLibrary.entries(in: audioState.autoEQPreferences.libraryFolder)
         if entries.isEmpty {
             Button(label) { importAutoEQ(into: profile) }
                 .buttonStyle(.bordered)

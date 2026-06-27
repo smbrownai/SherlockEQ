@@ -104,8 +104,8 @@ struct MonitorSidebar: View {
             case .waveform:
                 WaveformView(
                     monitor: audioState.stereoMonitor,
-                    earColor: audioState.leftEarColor,
-                    rightColor: audioState.rightEarColor
+                    earColor: audioState.preferences.leftEarColor,
+                    rightColor: audioState.preferences.rightEarColor
                 )
                 .frame(height: 180)
             }
@@ -120,21 +120,21 @@ struct MonitorSidebar: View {
                 Text("Master Gain")
                     .font(.caption.weight(.semibold))
                 Spacer()
-                Text(formatGain(audioState.masterGainDB))
+                Text(formatGain(audioState.engineParameters.masterGainDB))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
             HStack(spacing: 6) {
                 Slider(
                     value: Binding(
-                        get: { audioState.masterGainDB },
-                        set: { audioState.masterGainDB = $0 }
+                        get: { audioState.engineParameters.masterGainDB },
+                        set: { audioState.engineParameters.masterGainDB = $0 }
                     ),
                     in: -60...12
                 )
                 .controlSize(.small)
                 Button {
-                    audioState.masterGainDB = 0
+                    audioState.engineParameters.masterGainDB = 0
                 } label: {
                     Image(systemName: "arrow.counterclockwise")
                         .font(.caption2.weight(.semibold))

@@ -5,6 +5,7 @@ import SwiftUI
 /// backup location, Reference Mode global shortcut, About.
 struct SettingsView: View {
     @EnvironmentObject private var audioState: AudioState
+    @EnvironmentObject private var preferences: AppPreferences
     @EnvironmentObject private var profileStore: ProfileStore
     @State private var acknowledgmentsShown = false
     @State private var relocationAlert: RelocationPrompt?
@@ -69,7 +70,7 @@ struct SettingsView: View {
             Text("Startup").font(.headline)
             sectionBox {
                 HStack {
-                    Toggle("Launch at login", isOn: $audioState.launchAtLoginEnabled)
+                    Toggle("Launch at login", isOn: $preferences.launchAtLoginEnabled)
                         .toggleStyle(.switch)
                         .controlSize(.small)
                     Spacer()
@@ -80,7 +81,7 @@ struct SettingsView: View {
                     .padding(.vertical, 4)
                 Divider()
                 HStack {
-                    Toggle("Hide from Dock when window is closed", isOn: $audioState.hideFromDockEnabled)
+                    Toggle("Hide from Dock when window is closed", isOn: $preferences.hideFromDockEnabled)
                         .toggleStyle(.switch)
                         .controlSize(.small)
                     Spacer()
@@ -108,25 +109,25 @@ struct SettingsView: View {
     }
 
     private var masterGainRow: some View {
-        let isZero = abs(audioState.masterGainDB) < 0.05
+        let isZero = abs(audioState.engineParameters.masterGainDB) < 0.05
         return HStack {
             Text("Master gain")
                 .foregroundStyle(.secondary)
                 .frame(minWidth: 120, alignment: .leading).layoutPriority(1)
             Slider(
                 value: Binding(
-                    get: { audioState.masterGainDB },
-                    set: { audioState.masterGainDB = $0 }
+                    get: { audioState.engineParameters.masterGainDB },
+                    set: { audioState.engineParameters.masterGainDB = $0 }
                 ),
                 in: -60...12
             )
             .controlSize(.small)
-            Text(gainLabel(audioState.masterGainDB))
+            Text(gainLabel(audioState.engineParameters.masterGainDB))
                 .font(.callout.monospaced())
                 .foregroundStyle(.primary)
                 .frame(width: 72, alignment: .trailing)
             Button {
-                audioState.masterGainDB = 0
+                audioState.engineParameters.masterGainDB = 0
             } label: {
                 Image(systemName: "arrow.counterclockwise")
                     .font(.system(size: 11, weight: .semibold))
@@ -150,29 +151,29 @@ struct SettingsView: View {
             sectionBox {
                 limiterParamRow(
                     label: "Attack",
-                    value: audioState.limiterAttackMs,
+                    value: audioState.engineParameters.limiterAttackMs,
                     range: 1.0...30.0,
                     defaultValue: 12.0,
                     format: { String(format: "%.1f ms", $0) },
-                    set: { audioState.limiterAttackMs = $0 }
+                    set: { audioState.engineParameters.limiterAttackMs = $0 }
                 )
                 Divider()
                 limiterParamRow(
                     label: "Decay",
-                    value: audioState.limiterDecayMs,
+                    value: audioState.engineParameters.limiterDecayMs,
                     range: 1.0...60.0,
                     defaultValue: 24.0,
                     format: { String(format: "%.1f ms", $0) },
-                    set: { audioState.limiterDecayMs = $0 }
+                    set: { audioState.engineParameters.limiterDecayMs = $0 }
                 )
                 Divider()
                 limiterParamRow(
                     label: "Pre-gain",
-                    value: audioState.limiterPreGainDB,
+                    value: audioState.engineParameters.limiterPreGainDB,
                     range: -40...40,
                     defaultValue: 0,
                     format: { String(format: "%+.1f dB", $0) },
-                    set: { audioState.limiterPreGainDB = $0 }
+                    set: { audioState.engineParameters.limiterPreGainDB = $0 }
                 )
                 Divider()
                 Text("Shorter attack catches sharp transients but adds distortion. Longer decay smooths out sustained signals at the cost of pumping. Pre-gain pushes the signal harder into the limiter before it triggers.")
@@ -221,14 +222,14 @@ struct SettingsView: View {
             sectionBox {
                 colorRow(
                     label: "Left ear",
-                    binding: $audioState.leftEarColor,
-                    defaultColor: AudioState.defaultLeftEarColor
+                    binding: $preferences.leftEarColor,
+                    defaultColor: AppPreferences.defaultLeftEarColor
                 )
                 Divider()
                 colorRow(
                     label: "Right ear",
-                    binding: $audioState.rightEarColor,
-                    defaultColor: AudioState.defaultRightEarColor
+                    binding: $preferences.rightEarColor,
+                    defaultColor: AppPreferences.defaultRightEarColor
                 )
                 Divider()
                 Text("Colors used for the left/right curves, audiogram thresholds, and EQ band sliders. Helpful for users who can't distinguish the default blue/red.")
@@ -304,7 +305,7 @@ struct SettingsView: View {
             Text("Reference Mode").font(.headline)
             sectionBox {
                 HStack {
-                    Toggle("Global ⌘⇧B toggles Reference Mode", isOn: $audioState.globalReferenceShortcutEnabled)
+                    Toggle("Global ⌘⇧B toggles Reference Mode", isOn: $preferences.globalReferenceShortcutEnabled)
                         .toggleStyle(.switch)
                         .controlSize(.small)
                     Spacer()
@@ -324,7 +325,7 @@ struct SettingsView: View {
             Text("Diagnostics").font(.headline)
             sectionBox {
                 HStack {
-                    Toggle("Show Debug in sidebar", isOn: $audioState.showDebugInSidebar)
+                    Toggle("Show Debug in sidebar", isOn: $preferences.showDebugInSidebar)
                         .toggleStyle(.switch)
                         .controlSize(.small)
                     Spacer()
@@ -335,7 +336,7 @@ struct SettingsView: View {
                     .padding(.vertical, 4)
                 Divider()
                 HStack {
-                    Toggle("Show metadata on profiles", isOn: $audioState.showProfileMetadata)
+                    Toggle("Show metadata on profiles", isOn: $preferences.showProfileMetadata)
                         .toggleStyle(.switch)
                         .controlSize(.small)
                     Spacer()
@@ -358,7 +359,7 @@ struct SettingsView: View {
                     Image(systemName: "folder")
                         .foregroundStyle(.tint)
                     VStack(alignment: .leading, spacing: 2) {
-                        if let folder = audioState.autoEQLibraryFolder {
+                        if let folder = audioState.autoEQPreferences.libraryFolder {
                             Text(folder.path)
                                 .font(.callout.monospaced())
                                 .lineLimit(1)
@@ -379,8 +380,8 @@ struct SettingsView: View {
                     Button("Choose…") { chooseAutoEQLibrary() }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-                    if audioState.autoEQLibraryFolder != nil {
-                        Button(role: .destructive) { audioState.autoEQLibraryFolder = nil } label: {
+                    if audioState.autoEQPreferences.libraryFolder != nil {
+                        Button(role: .destructive) { audioState.autoEQPreferences.libraryFolder = nil } label: {
                             Image(systemName: "xmark.circle")
                         }
                         .buttonStyle(.borderless)
@@ -402,11 +403,11 @@ struct SettingsView: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        if let current = audioState.autoEQLibraryFolder {
+        if let current = audioState.autoEQPreferences.libraryFolder {
             panel.directoryURL = current
         }
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        audioState.autoEQLibraryFolder = url
+        audioState.autoEQPreferences.libraryFolder = url
     }
 
     // MARK: - Profiles folder

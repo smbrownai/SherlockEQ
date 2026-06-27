@@ -39,7 +39,7 @@ struct MainWindowView: View {
                 .toolbar(removing: .sidebarToggle)
         } detail: {
             VStack(spacing: 0) {
-                if let notice = audioState.userVisibleNotice {
+                if let notice = audioState.noticeCenter.userVisibleNotice {
                     NoticeBannerView(notice: notice) {
                         audioState.dismissNotice()
                     }
@@ -71,7 +71,7 @@ struct MainWindowView: View {
             // vestibular triggers can disable transitions like the
             // sidebar slide and the banner drop-in.
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: monitorSidebarVisible)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: audioState.userVisibleNotice)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: audioState.noticeCenter.userVisibleNotice)
             // Soft scroll-edge fade where detail content (the EQ screens'
             // ScrollViews) passes under the Liquid Glass toolbar (Tahoe+).
             .softTopScrollEdge()

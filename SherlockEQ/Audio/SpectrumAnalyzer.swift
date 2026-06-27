@@ -195,10 +195,8 @@ final class SpectrumAnalyzer: ObservableObject {
             for ch in 0..<chCount {
                 vDSP_vsma(channels[ch], 1, &weight, base, 1, base, 1, vDSP_Length(frames))
             }
-            let captureSampleRate = buffer.format.sampleRate
             appendToAccumulatorAndDispatch(
-                source: UnsafeBufferPointer(start: base, count: frames),
-                captureSampleRate: captureSampleRate
+                source: UnsafeBufferPointer(start: base, count: frames)
             )
         }
     }
@@ -206,7 +204,7 @@ final class SpectrumAnalyzer: ObservableObject {
     /// Raw-mono ingest path used by the pre-EQ side-channel from
     /// `CATapEngine` — the source-node render block delivers freshly-
     /// filled L samples here, bypassing the buffer-list mixing step.
-    func ingest(monoSamples: UnsafePointer<Float>, frameCount: Int, sampleRate captureSR: Double) {
+    func ingest(monoSamples: UnsafePointer<Float>, frameCount: Int) {
         guard frameCount > 0 else { return }
 
         // Cheap always-on level pass — same shape as the AVAudioPCMBuffer
@@ -224,8 +222,7 @@ final class SpectrumAnalyzer: ObservableObject {
         // caller's pointer. The accumulator's reserved capacity (set at
         // init) keeps the append from reallocating in steady state.
         appendToAccumulatorAndDispatch(
-            source: UnsafeBufferPointer(start: monoSamples, count: frameCount),
-            captureSampleRate: captureSR
+            source: UnsafeBufferPointer(start: monoSamples, count: frameCount)
         )
     }
 
@@ -233,10 +230,7 @@ final class SpectrumAnalyzer: ObservableObject {
     /// trim to the high-water mark, and dispatch an FFT if due. Shared
     /// tail between the two ingest paths so the accumulator's hot path
     /// has one definition.
-    private func appendToAccumulatorAndDispatch(
-        source: UnsafeBufferPointer<Float>,
-        captureSampleRate: Double
-    ) {
+    private func appendToAccumulatorAndDispatch(source: UnsafeBufferPointer<Float>) {
         accumulatorLock.lock()
         accumulator.append(contentsOf: source)
         if accumulator.count > Self.maxAccumulatorSamples {
@@ -247,7 +241,7 @@ final class SpectrumAnalyzer: ObservableObject {
 
         if shouldDispatch {
             processingQueue.async { [weak self] in
-                self?.drainAndProcess(sampleRate: captureSampleRate)
+                self?.drainAndProcess()
             }
         }
     }
@@ -360,7 +354,7 @@ final class SpectrumAnalyzer: ObservableObject {
 
     // MARK: - Background FFT
 
-    private func drainAndProcess(sampleRate: Double) {
+    private func drainAndProcess() {
         accumulatorLock.lock()
         guard accumulator.count >= Self.fftSize else {
             accumulatorLock.unlock()

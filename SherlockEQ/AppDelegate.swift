@@ -70,7 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let others = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
             .filter { $0.processIdentifier != me.processIdentifier }
         if let existing = others.first {
-            existing.activate()
+            existing.activate(options: [.activateAllWindows])
             NSApp.terminate(nil)
         }
     }
@@ -176,7 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 keyCode: kVK_ANSI_B,
                 modifiers: cmdKey | shiftKey
             ) { [weak self] in
-                self?.audioState.referenceMode.toggle()
+                self?.audioState.eqChain.referenceMode.toggle()
             }
         } else {
             globalReferenceHotKey.unregister()
@@ -222,6 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func createMainWindow() -> NSWindow {
         let root = MainWindowView()
             .environmentObject(audioState)
+            .environmentObject(audioState.preferences)
             .environmentObject(profileStore)
             .environmentObject(autoEQRemote)
             .environmentObject(autoEQSavedProfiles)
@@ -269,6 +270,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func createAnalogControlWindow() -> NSWindow {
         let root = AnalogControlUnitView()
             .environmentObject(audioState)
+            .environmentObject(audioState.preferences)
             .environmentObject(profileStore)
             .environmentObject(autoEQRemote)
             .environmentObject(autoEQSavedProfiles)
@@ -378,6 +380,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.finishOnboarding(deepLink: section)
         })
         .environmentObject(audioState)
+        .environmentObject(audioState.preferences)
         .environmentObject(profileStore)
         .environmentObject(autoEQRemote)
         .environmentObject(autoEQSavedProfiles)
@@ -619,7 +622,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleReferenceMode(_ sender: Any?) {
-        audioState.referenceMode.toggle()
+        audioState.eqChain.referenceMode.toggle()
     }
 
     @objc private func showMainWindowFromMenu(_ sender: Any?) {
@@ -657,7 +660,7 @@ extension AppDelegate: NSWindowDelegate {
         // drop back to accessory when the *last* managed window closes —
         // otherwise closing the Analog Control Unit while the main window
         // is open (or vice versa) would wrongly hide the Dock icon.
-        guard audioState.hideFromDockEnabled else { return }
+        guard audioState.preferences.hideFromDockEnabled else { return }
         let stillOpen = [mainWindow, analogWindow, helpWindow, onboardingWindow]
             .compactMap { $0 }
             .contains { $0 !== closing && $0.isVisible }

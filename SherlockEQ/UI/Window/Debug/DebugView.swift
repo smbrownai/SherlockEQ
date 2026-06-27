@@ -97,7 +97,7 @@ struct DebugView: View {
 
     @ViewBuilder private var dynamicsSection: some View {
         Text("Dynamics — live gain (dB, − = cut)").font(.subheadline).foregroundStyle(.secondary)
-        if state.dynamicsEnabled {
+        if state.eqChain.dynamicsEnabled {
             ForEach(DynamicFeatureKind.allCases) { kind in
                 labeled(kind.displayName, value: String(
                     format: "L %+.2f    R %+.2f",
@@ -240,12 +240,11 @@ struct DebugView: View {
     }
 
     /// Switch toggle bound to a writable Bool on `AudioState` (its proxy
-    /// properties forward to EQChainState). Keeps the signal-chain panel
-    /// from repeating the same get/set Binding boilerplate per row.
-    private func chainToggle(_ title: String, _ keyPath: ReferenceWritableKeyPath<AudioState, Bool>) -> some View {
+    /// Keeps the signal-chain panel from repeating the same get/set Binding boilerplate per row.
+    private func chainToggle(_ title: String, _ keyPath: ReferenceWritableKeyPath<EQChainState, Bool>) -> some View {
         Toggle(title, isOn: Binding(
-            get: { state[keyPath: keyPath] },
-            set: { state[keyPath: keyPath] = $0 }
+            get: { state.eqChain[keyPath: keyPath] },
+            set: { state.eqChain[keyPath: keyPath] = $0 }
         ))
         .toggleStyle(.switch)
     }

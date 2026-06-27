@@ -35,26 +35,6 @@ final class AudioState: ObservableObject {
     /// wired in `init` once `tap` exists.
     let dynamicActivity = DynamicActivityMonitor()
 
-    /// Proxy bindings — view code that reads
-    /// `audioState.referenceMode`, `.testCurveEnabled`, etc. keeps
-    /// working. New code should depend on EQChainState directly.
-    var referenceMode: Bool {
-        get { eqChain.referenceMode }
-        set { eqChain.referenceMode = newValue }
-    }
-    var testCurveEnabled: Bool {
-        get { eqChain.testCurveEnabled }
-        set { eqChain.testCurveEnabled = newValue }
-    }
-    var testToneEnabled: Bool {
-        get { eqChain.testToneEnabled }
-        set { eqChain.testToneEnabled = newValue }
-    }
-    var calibrationToneEnabled: Bool {
-        get { eqChain.calibrationToneEnabled }
-        set { eqChain.calibrationToneEnabled = newValue }
-    }
-
     /// dBFS level of the calibration tone, exposed so the UI can compute
     /// the offset between the meter reading and the slider value. Always
     /// matches `SherlockEQAudioEngine.calibrationToneDBFS`.
@@ -66,113 +46,12 @@ final class AudioState: ObservableObject {
     /// nothing about the engine.
     let engineParameters = EngineParameters()
 
-    /// Proxy bindings — existing call sites that read
-    /// `audioState.masterGainDB` / `audioState.limiterAttackMs` etc.
-    /// keep working. New code should depend on EngineParameters.
-    var masterGainDB: Double {
-        get { engineParameters.masterGainDB }
-        set { engineParameters.masterGainDB = newValue }
-    }
-    var limiterAttackMs: Double {
-        get { engineParameters.limiterAttackMs }
-        set { engineParameters.limiterAttackMs = newValue }
-    }
-    var limiterDecayMs: Double {
-        get { engineParameters.limiterDecayMs }
-        set { engineParameters.limiterDecayMs = newValue }
-    }
-    var limiterPreGainDB: Double {
-        get { engineParameters.limiterPreGainDB }
-        set { engineParameters.limiterPreGainDB = newValue }
-    }
-
     /// App-wide UI / shell preferences (per-ear colors, dock,
     /// launch-at-login, global reference shortcut) — see `AppPreferences`.
-    /// Held as a property here so existing call sites keep working via
-    /// the proxy bindings below; new code should depend on
-    /// `AppPreferences` directly.
     let preferences = AppPreferences()
 
-    /// Proxy bindings so view code that still goes through AudioState
-    /// keeps compiling. SwiftUI views observing AudioState re-evaluate
-    /// when these change because AudioState republishes
-    /// preferences.objectWillChange (wired in init).
-    var leftEarColor: Color {
-        get { preferences.leftEarColor }
-        set { preferences.leftEarColor = newValue }
-    }
-    var rightEarColor: Color {
-        get { preferences.rightEarColor }
-        set { preferences.rightEarColor = newValue }
-    }
-    var hideFromDockEnabled: Bool {
-        get { preferences.hideFromDockEnabled }
-        set { preferences.hideFromDockEnabled = newValue }
-    }
-    var launchAtLoginEnabled: Bool {
-        get { preferences.launchAtLoginEnabled }
-        set { preferences.launchAtLoginEnabled = newValue }
-    }
-    var globalReferenceShortcutEnabled: Bool {
-        get { preferences.globalReferenceShortcutEnabled }
-        set { preferences.globalReferenceShortcutEnabled = newValue }
-    }
-    var showDebugInSidebar: Bool {
-        get { preferences.showDebugInSidebar }
-        set { preferences.showDebugInSidebar = newValue }
-    }
-    var showProfileMetadata: Bool {
-        get { preferences.showProfileMetadata }
-        set { preferences.showProfileMetadata = newValue }
-    }
-
-    static let defaultLeftEarColor: Color = AppPreferences.defaultLeftEarColor
-    static let defaultRightEarColor: Color = AppPreferences.defaultRightEarColor
-
-    /// User-selected library folder containing AutoEQ correction `.txt`
-    /// files. When set, the Headphone-correction picker on Profile Detail
-    /// offers a menu listing every `.txt` in this folder in addition to
-    /// the "From file…" import. Nil means library disabled; user only sees
-    /// the file picker. Stored as a plain path string in UserDefaults
-    /// (sandbox is OFF, so we don't need security-scoped bookmarks).
     /// AutoEQ-specific preferences (library folder) — see `AutoEQPreferences`.
     let autoEQPreferences = AutoEQPreferences()
-
-    /// Proxy through to `autoEQPreferences.libraryFolder`. Existing
-    /// call sites that read `audioState.autoEQLibraryFolder` keep
-    /// working; new code should depend on AutoEQPreferences directly.
-    var autoEQLibraryFolder: URL? {
-        get { autoEQPreferences.libraryFolder }
-        set { autoEQPreferences.libraryFolder = newValue }
-    }
-
-    /// Proxy bindings for the per-stage chain toggles. Existing
-    /// surfaces (popover power toggle, Settings chain toggles, the
-    /// notch-off reminder check) keep working.
-    var eqMasterEnabled: Bool {
-        get { eqChain.eqMasterEnabled }
-        set { eqChain.eqMasterEnabled = newValue }
-    }
-    var autoEQEnabled: Bool {
-        get { eqChain.autoEQEnabled }
-        set { eqChain.autoEQEnabled = newValue }
-    }
-    var notchFilterEnabled: Bool {
-        get { eqChain.notchFilterEnabled }
-        set { eqChain.notchFilterEnabled = newValue }
-    }
-    var manualEQEnabled: Bool {
-        get { eqChain.manualEQEnabled }
-        set { eqChain.manualEQEnabled = newValue }
-    }
-    var dynamicsEnabled: Bool {
-        get { eqChain.dynamicsEnabled }
-        set { eqChain.dynamicsEnabled = newValue }
-    }
-    var hasShownNotchOffReminder: Bool {
-        get { eqChain.hasShownNotchOffReminder }
-        set { eqChain.hasShownNotchOffReminder = newValue }
-    }
 
     private static func loadDouble(key: String, default defaultValue: Double) -> Double {
         let raw = UserDefaults.standard.object(forKey: key) as? Double
@@ -222,19 +101,9 @@ final class AudioState: ObservableObject {
     @Published var sessionDosePercent: Double = 0
     @Published var remainingMinutes: Double?
 
-    /// Banner state lives on a dedicated `NoticeCenter` so view code
-    /// that only cares about notices doesn't pull in the whole audio
-    /// pipeline as a dependency. AudioState exposes the same surface
-    /// (`userVisibleNotice` / `showNotice` / `dismissNotice`) via
-    /// thin proxies below so existing call sites keep working until
-    /// they migrate to reading from `noticeCenter` directly.
+    /// Banner state — see `NoticeCenter`. Views access it via
+    /// `audioState.noticeCenter.userVisibleNotice`.
     let noticeCenter = NoticeCenter()
-
-    /// Proxy: `AudioState.userVisibleNotice` reads through to the
-    /// center. SwiftUI views that have AudioState as their
-    /// environment object still see changes because AudioState
-    /// republishes the center's `objectWillChange` (wired in init).
-    var userVisibleNotice: TransientNotice? { noticeCenter.userVisibleNotice }
 
     /// SPL calibration in dB: the dB SPL the user actually hears when a
     /// 0 dBFS signal plays through the current output device at their
@@ -417,7 +286,7 @@ final class AudioState: ObservableObject {
     /// a local copy so flipping a stage back on restores immediately
     /// without re-reading anything from disk.
     private func applyActiveProfile() {
-        guard !testCurveEnabled else { return }
+        guard !eqChain.testCurveEnabled else { return }
         // The Analog Control Unit overrides the applied profile while open;
         // the store's active profile is left untouched and resumes on close.
         if let override = analogOverrideProfile {
@@ -439,7 +308,7 @@ final class AudioState: ObservableObject {
     /// stage so other stages keep working.
     private func applyBypassMask(to profile: HearingProfile) -> HearingProfile {
         var copy = profile
-        if !eqMasterEnabled {
+        if !eqChain.eqMasterEnabled {
             copy.autoEQBands = nil
             copy.autoEQPreampDB = nil
             copy.leftNotch.enabled = false
@@ -456,19 +325,19 @@ final class AudioState: ObservableObject {
             copy.dynamics = DynamicProcessingSettings()
             return copy
         }
-        if !autoEQEnabled {
+        if !eqChain.autoEQEnabled {
             copy.autoEQBands = nil
             copy.autoEQPreampDB = nil
         }
-        if !notchFilterEnabled {
+        if !eqChain.notchFilterEnabled {
             copy.leftNotch.enabled = false
             copy.rightNotch.enabled = false
         }
-        if !manualEQEnabled {
+        if !eqChain.manualEQEnabled {
             copy.leftEar.bands = []
             copy.rightEar.bands = []
         }
-        if !dynamicsEnabled {
+        if !eqChain.dynamicsEnabled {
             copy.dynamics = DynamicProcessingSettings()
         }
         return copy
@@ -650,8 +519,8 @@ final class AudioState: ObservableObject {
         // which restores the profile and applies the new mask immediately.
         let applyOnFlip: (Bool) -> Void = { [weak self] _ in
             guard let self else { return }
-            if self.testCurveEnabled {
-                self.testCurveEnabled = false
+            if self.eqChain.testCurveEnabled {
+                self.eqChain.testCurveEnabled = false
             } else {
                 self.applyActiveProfile()
             }
@@ -929,10 +798,10 @@ final class AudioState: ObservableObject {
             return
         }
         audio.start()
-        audio.setMasterGain(dB: masterGainDB)
-        audio.setLimiterAttack(seconds: limiterAttackMs / 1000.0)
-        audio.setLimiterDecay(seconds: limiterDecayMs / 1000.0)
-        audio.setLimiterPreGain(dB: limiterPreGainDB)
+        audio.setMasterGain(dB: engineParameters.masterGainDB)
+        audio.setLimiterAttack(seconds: engineParameters.limiterAttackMs / 1000.0)
+        audio.setLimiterDecay(seconds: engineParameters.limiterDecayMs / 1000.0)
+        audio.setLimiterPreGain(dB: engineParameters.limiterPreGainDB)
         applyActiveProfile()
         installSpectrumTap()
         installPreSpectrumTap(tapSR: format.sampleRate)
@@ -956,8 +825,8 @@ final class AudioState: ObservableObject {
     private func installPreSpectrumTap(tapSR: Double) {
         preSpectrum.configureForSampleRate(tapSR)
         let preSpectrum = self.preSpectrum
-        tap.preIngest.setCallback { ptr, frames, sr in
-            preSpectrum.ingest(monoSamples: ptr, frameCount: frames, sampleRate: sr)
+        tap.preIngest.setCallback { ptr, frames, _ in
+            preSpectrum.ingest(monoSamples: ptr, frameCount: frames)
         }
     }
 
@@ -975,30 +844,30 @@ final class AudioState: ObservableObject {
     /// system-/user-scoped choices, not transient app preferences.
     func resetSettingsToDefaults() {
         // Engine / output
-        masterGainDB = 0
-        limiterAttackMs = 12
-        limiterDecayMs = 24
-        limiterPreGainDB = 0
+        engineParameters.masterGainDB = 0
+        engineParameters.limiterAttackMs = 12
+        engineParameters.limiterDecayMs = 24
+        engineParameters.limiterPreGainDB = 0
         calibrationOffsetDBA = 100
 
         // Transient EQ-chain toggles
-        referenceMode = false
-        testCurveEnabled = false
-        testToneEnabled = false
-        calibrationToneEnabled = false
+        eqChain.referenceMode = false
+        eqChain.testCurveEnabled = false
+        eqChain.testToneEnabled = false
+        eqChain.calibrationToneEnabled = false
 
         // Per-stage bypass mask — all stages on
-        eqMasterEnabled = true
-        autoEQEnabled = true
-        notchFilterEnabled = true
-        manualEQEnabled = true
-        dynamicsEnabled = true
+        eqChain.eqMasterEnabled = true
+        eqChain.autoEQEnabled = true
+        eqChain.notchFilterEnabled = true
+        eqChain.manualEQEnabled = true
+        eqChain.dynamicsEnabled = true
 
         // UI / shell preferences
-        leftEarColor = AppPreferences.defaultLeftEarColor
-        rightEarColor = AppPreferences.defaultRightEarColor
-        hideFromDockEnabled = true
-        globalReferenceShortcutEnabled = false
-        showDebugInSidebar = false
+        preferences.leftEarColor = AppPreferences.defaultLeftEarColor
+        preferences.rightEarColor = AppPreferences.defaultRightEarColor
+        preferences.hideFromDockEnabled = true
+        preferences.globalReferenceShortcutEnabled = false
+        preferences.showDebugInSidebar = false
     }
 }

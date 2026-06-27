@@ -58,7 +58,7 @@ struct ClarityView: View {
                         settings: settingsBinding(profile, kind: kind, ear: .left, linked: false),
                         ear: .left,
                         earLabel: "Left ear",
-                        tint: audioState.leftEarColor,
+                        tint: audioState.preferences.leftEarColor,
                         showHelp: true,
                         activity: audioState.dynamicActivity
                     )
@@ -67,7 +67,7 @@ struct ClarityView: View {
                         settings: settingsBinding(profile, kind: kind, ear: .right, linked: false),
                         ear: .right,
                         earLabel: "Right ear",
-                        tint: audioState.rightEarColor,
+                        tint: audioState.preferences.rightEarColor,
                         showHelp: false,
                         activity: audioState.dynamicActivity
                     )

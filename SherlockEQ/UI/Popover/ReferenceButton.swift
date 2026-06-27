@@ -7,12 +7,12 @@ struct ReferenceButton: View {
     @EnvironmentObject private var audioState: AudioState
 
     var body: some View {
-        Button(action: { audioState.referenceMode.toggle() }) {
+        Button(action: { audioState.eqChain.referenceMode.toggle() }) {
             HStack(spacing: 8) {
-                Image(systemName: audioState.referenceMode ? "circle.fill" : "circle")
-                    .foregroundStyle(audioState.referenceMode ? .red : .secondary)
+                Image(systemName: audioState.eqChain.referenceMode ? "circle.fill" : "circle")
+                    .foregroundStyle(audioState.eqChain.referenceMode ? .red : .secondary)
                     .font(.system(size: 10))
-                Text(audioState.referenceMode ? "Reference Mode — ON" : "Reference Mode")
+                Text(audioState.eqChain.referenceMode ? "Reference Mode — ON" : "Reference Mode")
                     .font(.callout.weight(.medium))
                 Spacer()
             }
@@ -21,11 +21,11 @@ struct ReferenceButton: View {
             .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(audioState.referenceMode ? Color.red.opacity(0.12) : Color.secondary.opacity(0.08))
+                    .fill(audioState.eqChain.referenceMode ? Color.red.opacity(0.12) : Color.secondary.opacity(0.08))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(audioState.referenceMode ? Color.red.opacity(0.5) : Color.secondary.opacity(0.2))
+                    .strokeBorder(audioState.eqChain.referenceMode ? Color.red.opacity(0.5) : Color.secondary.opacity(0.2))
             )
         }
         .buttonStyle(.plain)
