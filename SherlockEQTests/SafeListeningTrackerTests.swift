@@ -130,4 +130,33 @@ struct SafeListeningTrackerTests {
         #expect(tracker.doseSeverity == .safe)
         #expect(!tracker.didCrossAmberToday)
     }
+
+    // MARK: - Daily peak (drives the 7-day history)
+
+    @Test func peakTracksHighestDose() {
+        let tracker = SafeListeningTracker()
+        tracker.notificationsEnabled = false
+        tracker.forceForTesting(dose: 0.6)
+        #expect(tracker.peakDoseToday == 0.6)
+    }
+
+    @Test func peakSurvivesManualReset() {
+        // A manual / sustained-quiet reset zeroes the live dose but must leave
+        // the day's high-water mark — that exposure still happened, and the
+        // midnight rollover is the only thing that banks + clears it.
+        let tracker = SafeListeningTracker()
+        tracker.notificationsEnabled = false
+        tracker.forceForTesting(dose: 0.9)
+        tracker.resetDose(reason: "sustained quiet")
+        #expect(tracker.sessionDose == 0)
+        #expect(tracker.peakDoseToday == 0.9)
+    }
+
+    @Test func peakDoesNotLowerOnSmallerForce() {
+        let tracker = SafeListeningTracker()
+        tracker.notificationsEnabled = false
+        tracker.forceForTesting(dose: 0.7)
+        tracker.forceForTesting(dose: 0.3)
+        #expect(tracker.peakDoseToday == 0.7)
+    }
 }

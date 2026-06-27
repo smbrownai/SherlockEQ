@@ -172,6 +172,29 @@ struct DebugView: View {
                 state.safeListening.forceForTesting(dose: 1.0)
             }
         }
+        HStack(spacing: 12) {
+            Button("Seed 7-day history") { seedDoseHistory() }
+            Button("Clear dose history (last 7 days)") { clearRecentDoseHistory() }
+        }
+        labeled("History records", value: "\(state.doseHistory.records.count)")
+    }
+
+    /// Populate the 7-day chart with sample peaks for the six days before today
+    /// (today's bar is driven live by the tracker). Uses the store's public
+    /// `record` API — same path the midnight rollover takes.
+    private func seedDoseHistory() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let samples: [Double] = [0.35, 0.62, 0.95, 0.48, 1.0, 0.18]  // days −1…−6
+        for (i, value) in samples.enumerated() {
+            if let day = cal.date(byAdding: .day, value: -(i + 1), to: today) {
+                state.doseHistory.record(dayStart: day, peakDose: value)
+            }
+        }
+    }
+
+    private func clearRecentDoseHistory() {
+        state.doseHistory.removeRecent(days: 7)
     }
 
     /// Stage-isolation panel: the global Reference bypass, the two test

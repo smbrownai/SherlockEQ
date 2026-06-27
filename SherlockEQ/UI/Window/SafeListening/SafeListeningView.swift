@@ -255,15 +255,11 @@ struct SafeListeningView: View {
     @ViewBuilder private var historyCard: some View {
         card {
             cardHeader("7-day history", systemImage: "calendar")
-            HStack {
-                Text("Daily dose history is captured at the midnight rollover.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-            Text("Persistence + chart wiring lands in a focused follow-up. Today's dose is shown above.")
+            Text("Each day's peak dose, captured at the midnight rollover. Today reflects your exposure so far.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
+            DoseHistoryChart(history: state.doseHistory, tracker: state.safeListening)
+                .padding(.top, 4)
         }
     }
 
