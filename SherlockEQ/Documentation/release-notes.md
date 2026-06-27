@@ -20,6 +20,18 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.7.0
+
+A small stability-and-polish release that rounds out the 0.6 series. It corrects how the new listening-history chart labels days when you travel, and tidies the About window. Nothing changes in how EQ or dose tracking work.
+
+**Fixes**
+
+- **Listening history stays on the right day when you change time zones.** Each day's entry in the 7-day history is now tied to the calendar day it happened on, so traveling between time zones no longer shifts a day's bar or resets the current day's dose early.
+
+**Improvements**
+
+- **A cleaner About window.** "Free and Open Source" and the website link now share one line.
+
 ## 0.6.9
 
 This release brings the Safe Listening screen's 7-day history to life: your daily listening dose is now saved and charted, so you can see how this week's exposure compares day to day. The About window also got a small refresh. Nothing changes in how EQ or dose tracking work.
