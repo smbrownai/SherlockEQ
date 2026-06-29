@@ -21,6 +21,56 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 0.7.1</title>
+      <pubDate>Mon, 29 Jun 2026 13:03:39 +0000</pubDate>
+      <sparkle:version>00701</sparkle:version>
+      <sparkle:shortVersionString>0.7.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<h2>SherlockEQ 0.7.1</h2>
+
+<p>
+  A focused bug-fix release. It resolves a problem where switching to another
+  macOS user account could leave that account with no sound. Nothing changes in
+  how EQ or dose tracking work.
+</p>
+
+<h3>Fixes</h3>
+
+<ul>
+  <li>
+    <strong>Other accounts keep their sound during fast user switching.</strong>
+    Because SherlockEQ taps the system audio at a level shared across all login
+    sessions, switching to another user used to leave that account silent until
+    SherlockEQ was quit. SherlockEQ now releases the audio tap when its account
+    is switched out and restores it when you switch back, so other users hear
+    sound normally.
+  </li>
+</ul>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not diagnose,
+  treat, measure, or monitor any hearing condition, tinnitus, or disability.
+  For concerns about your hearing, consult a doctor, audiologist, or licensed
+  healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.7.0">0.7.0 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v0.7.1/SherlockEQ-0.7.1.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="4o32rnFYYiOaItnsMjAGae8+6RNphSZIgT25v27jhG7QAwhNWGoFerte9A64W/i3j7p+rpXfu2LCE+SQYZONDw==" length="10551449" />
+    </item>
+
+    <item>
       <title>SherlockEQ 0.7.0</title>
       <pubDate>Sat, 27 Jun 2026 13:32:07 +0000</pubDate>
       <sparkle:version>00700</sparkle:version>
