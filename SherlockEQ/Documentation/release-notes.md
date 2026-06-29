@@ -20,6 +20,14 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.7.1
+
+A focused bug-fix release. It resolves a problem where switching to another macOS user account could leave that account with no sound. Nothing changes in how EQ or dose tracking work.
+
+**Fixes**
+
+- **Other accounts keep their sound during fast user switching.** Because SherlockEQ taps the system audio at a level shared across all login sessions, switching to another user used to leave that account silent until SherlockEQ was quit. SherlockEQ now releases the audio tap when its account is switched out and restores it when you switch back, so other users hear sound normally.
+
 ## 0.7.0
 
 A small stability-and-polish release that rounds out the 0.6 series. It corrects how the new listening-history chart labels days when you travel, and tidies the About window. Nothing changes in how EQ or dose tracking work.
