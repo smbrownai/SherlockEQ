@@ -365,7 +365,10 @@ final class AudioState: ObservableObject {
     private var sleepObserverToken: NSObjectProtocol?
     private var wakeObserverToken: NSObjectProtocol?
     private var didBecomeActiveObserverToken: NSObjectProtocol?
+    private var sessionResignObserverToken: NSObjectProtocol?
+    private var sessionActiveObserverToken: NSObjectProtocol?
     private var wasRunningBeforeSleep = false
+    private var wasRunningBeforeSessionResign = false
     private let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "AudioState")
 
     init() {
@@ -590,6 +593,12 @@ final class AudioState: ObservableObject {
         if let t = didBecomeActiveObserverToken {
             NotificationCenter.default.removeObserver(t)
         }
+        if let t = sessionResignObserverToken {
+            NSWorkspace.shared.notificationCenter.removeObserver(t)
+        }
+        if let t = sessionActiveObserverToken {
+            NSWorkspace.shared.notificationCenter.removeObserver(t)
+        }
     }
 
     /// On sleep the CATap usually keeps its IOProc alive, but the AVAudioEngine
@@ -633,6 +642,58 @@ final class AudioState: ObservableObject {
                 await NotificationManager.shared.refreshAuthorizationStatus()
             }
         }
+
+        // Fast user switching. The CATap and its aggregate live in
+        // `coreaudiod`, which is system-wide — not per-session — and our tap
+        // is created with `mutedWhenTapped`, so it keeps muting the hardware
+        // output for whoever is now in front while our session is switched
+        // out. Worse, our AVAudioEngine playback belongs to the inactive
+        // session and isn't re-injecting the processed signal, so the other
+        // user just gets silence until we quit. Tear the whole chain down on
+        // `sessionDidResignActive` (releasing the global mute) and rebuild it
+        // on `sessionDidBecomeActive`.
+        let center2 = NSWorkspace.shared.notificationCenter
+        sessionResignObserverToken = center2.addObserver(
+            forName: NSWorkspace.sessionDidResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.handleSessionDidResignActive() }
+        }
+        sessionActiveObserverToken = center2.addObserver(
+            forName: NSWorkspace.sessionDidBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.handleSessionDidBecomeActive() }
+        }
+    }
+
+    /// Our macOS login session was switched out (another user came to the
+    /// foreground via fast user switching). Release the system-wide tap so its
+    /// `mutedWhenTapped` mute stops silencing the now-foreground user's audio.
+    /// Mirror `handleWillSleep`'s busy/up check so a switch landing mid-startup
+    /// still resumes when we return.
+    private func handleSessionDidResignActive() {
+        let tapBusyOrUp: Bool = {
+            switch tap.state {
+            case .running, .starting: return true
+            default:                  return false
+            }
+        }()
+        wasRunningBeforeSessionResign = audio.isRunning || tapBusyOrUp
+        guard wasRunningBeforeSessionResign else { return }
+        log.info("Session switched out — tearing down audio chain to release tap mute")
+        Task { await stopAll() }
+    }
+
+    /// Our session is in the foreground again. Rebuild the chain if we tore it
+    /// down on the way out.
+    private func handleSessionDidBecomeActive() {
+        guard wasRunningBeforeSessionResign else { return }
+        wasRunningBeforeSessionResign = false
+        log.info("Session active again — restarting audio chain")
+        Task { await startAll() }
     }
 
     /// Recovery on app activation — the natural moment something the
