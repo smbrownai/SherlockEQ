@@ -20,6 +20,25 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.7.2
+
+A code-quality and security-hardening release. It fixes a crash on importing certain audiogram files, closes several findings from a focused security review — including a case where a downloaded headphone-correction file could push the volume to unpredictable levels — and stops your tinnitus and profile settings from being written to the system's debug logs. Nothing changes in how EQ, profiles, or safe-listening work.
+
+**Fixes**
+
+- **Importing a damaged audiogram file no longer crashes SherlockEQ.** A corrupted or hand-edited audiogram file with an invalid measurement could crash the app on import. SherlockEQ now skips the bad measurement and imports the rest of the file normally.
+
+**Security**
+
+- **Headphone-correction files can no longer set an unsafe volume.** A malformed or tampered `ParametricEQ.txt` file — whether picked manually or downloaded from the online AutoEQ catalog — could contain a preamp value extreme enough to drive the volume far beyond a safe level. That value is now kept within the same safe range as every other EQ setting.
+- **Your tinnitus and profile settings stay out of the system logs.** Applying a profile used to write your tinnitus notch frequency and profile name to the system's unified log in plain text, where they could end up in a diagnostic report. That detail is now redacted from the log.
+- **Your hearing profiles and listening history are excluded from backups.** Profiles and your listening-dose history are now marked so Time Machine and similar tools skip them, and each file is readable only by your account — so this data doesn't linger in old backups you have no way to clean up from within the app.
+- **The audio engine is more resilient to unusual buffer sizes.** During a device switch or sleep/wake, the audio engine could momentarily receive an unexpected buffer size. It's now validated before use, closing a theoretical memory-safety gap in that path.
+
+**Under the hood**
+
+- **Smoother real-time spectrum analysis.** The spectrum analyzer's internal buffering was tightened to reduce the chance of a stall on the audio thread. No user-facing change.
+
 ## 0.7.1
 
 A focused bug-fix release. It resolves a problem where switching to another macOS user account could leave that account with no sound. Nothing changes in how EQ or dose tracking work.
