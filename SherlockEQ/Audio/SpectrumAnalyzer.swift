@@ -76,9 +76,25 @@ final class SpectrumAnalyzer: ObservableObject {
     private var hannWindow: [Float]
     private var sampleRate: Double = 48000
 
-    // Sample accumulation across multiple tap callbacks.
-    private var accumulator: [Float] = []
-    private let accumulatorLock = NSLock()
+    /// Render-thread-shared state, guarded by `accumulatorState`'s unfair
+    /// lock rather than `NSLock` — matches `publishPending` below and every
+    /// other cross-thread structure in the Audio module. `NSLock` is a
+    /// pthread_mutex under the hood: it can put the calling thread to sleep
+    /// and require a kernel round-trip under contention, unlike
+    /// `os_unfair_lock`'s lightweight spin/wait tuned for realtime threads.
+    /// Both audio-thread `ingest` overloads take this lock on every buffer.
+    private struct AccumulatorState {
+        // Sample accumulation across multiple tap callbacks.
+        var accumulator: [Float] = []
+        /// Number of attached observers. When zero, `ingest` returns
+        /// immediately — no sample accumulation, no FFT, no publish, no
+        /// allocation. The pre-EQ analyzer in particular sits dormant unless
+        /// the Input layer is visible.
+        var subscriberCount: Int = 0
+        /// Wall-clock stamp of the last FFT dispatch.
+        var lastDispatchTime: CFTimeInterval = 0
+    }
+    private let accumulatorState = OSAllocatedUnfairLock<AccumulatorState>(initialState: AccumulatorState())
 
     /// Hard cap on the accumulator so a slow main thread can't grow it
     /// unboundedly. ~150 ms of audio at 48 kHz. When we exceed this we
@@ -94,13 +110,6 @@ final class SpectrumAnalyzer: ObservableObject {
     /// inside `Task { @MainActor in ... }` blocks.
     private let publishPending = OSAllocatedUnfairLock<Bool>(initialState: false)
 
-    /// Number of attached observers. When zero, `ingest` returns immediately
-    /// — no sample accumulation, no FFT, no publish, no allocation. The
-    /// pre-EQ analyzer in particular sits dormant unless the Input layer is
-    /// visible. Guarded by `accumulatorLock` so it can be checked alongside
-    /// the sample-count gate without a second lock acquire.
-    private var subscriberCount: Int = 0
-
     /// Minimum interval between FFT dispatches. The CATap callback at
     /// 48 kHz delivers fresh samples every ~5 ms, so without throttling
     /// we'd run an FFT every time the accumulator hit 2048 samples
@@ -109,10 +118,6 @@ final class SpectrumAnalyzer: ObservableObject {
     /// the eye can resolve on a spectrum display and matches what the
     /// dose tracker explicitly tolerates ("Call rate ~10 Hz is plenty").
     private static let minDispatchInterval: CFTimeInterval = 1.0 / 20.0
-    /// Wall-clock stamp of the last dispatch — guarded by `accumulatorLock`
-    /// since the gating decision is made there alongside the sample-count
-    /// check.
-    private var lastDispatchTime: CFTimeInterval = 0
 
     /// Cheap level-emit cadence. The dose tracker needs roughly 20 Hz; this
     /// path fires `onLevelUpdate` directly from `ingest` so dose accounting
@@ -122,12 +127,24 @@ final class SpectrumAnalyzer: ObservableObject {
     /// one audio thread, so no lock is needed here.
     private var lastLevelEmitTime: CFTimeInterval = 0
 
+    /// Fixed capacity for the mono mixdown scratch buffer below — 16x the
+    /// requested tap buffer size (1024 frames; see
+    /// `SherlockEQAudioEngine.installSpectrumTap`) and 4x the previous
+    /// grow-on-demand ceiling. `AVAudioEngine` doesn't document a hard
+    /// maximum for the size a tap callback can actually deliver, but no
+    /// realistic buffer-size renegotiation should approach this — it's a
+    /// safety margin, not a measured bound.
+    private static let monoScratchCapacity = 16_384
+
     /// Pre-allocated mono mixdown buffer for the channel-mix ingest path.
-    /// Sized to comfortably hold any audio buffer we'll see (fftSize · 2
-    /// = 4096 frames); grown on the off chance a buffer arrives larger.
-    /// Touched only from the single audio-thread caller (same invariant as
-    /// `lastLevelEmitTime`), so it doesn't need synchronisation.
-    private var monoScratch: [Float] = Array(repeating: 0, count: fftSize * 2)
+    /// Fixed size, never reallocated — the render thread must never
+    /// allocate, matching `BiquadCascade`'s delay buffer and
+    /// `TapRingBuffer`'s storage. If a delivered buffer somehow exceeds
+    /// `monoScratchCapacity` (violating the assumption above), `ingest`
+    /// processes only the leading frames that fit rather than growing this
+    /// array. Touched only from the single audio-thread caller (same
+    /// invariant as `lastLevelEmitTime`), so it doesn't need synchronisation.
+    private var monoScratch: [Float] = Array(repeating: 0, count: monoScratchCapacity)
 
     /// Callback for downstream consumers (SafeListeningTracker). Fires once
     /// per FFT frame with the most recent A-weighted level.
@@ -153,7 +170,7 @@ final class SpectrumAnalyzer: ObservableObject {
         self.hannWindow = window
         // Reserve once so subsequent `append(contentsOf:)` calls on the
         // audio thread don't reallocate when the array grows.
-        accumulator.reserveCapacity(Self.maxAccumulatorSamples)
+        accumulatorState.withLock { $0.accumulator.reserveCapacity(Self.maxAccumulatorSamples) }
     }
 
     /// Feed a freshly-captured buffer. Realtime-safe — does no allocation
@@ -176,27 +193,24 @@ final class SpectrumAnalyzer: ObservableObject {
         // FFT + smoothing + main-actor publish only run when someone is
         // looking at the spectrum. The accumulator stays empty while
         // dormant so a fresh subscribe doesn't FFT stale audio.
-        accumulatorLock.lock()
-        let active = subscriberCount > 0
-        accumulatorLock.unlock()
-        guard active else { return }
+        guard accumulatorState.withLock({ $0.subscriberCount > 0 }) else { return }
 
         // Mix to mono — average of available channels. Write into the
         // pre-allocated scratch buffer rather than allocating fresh on
         // every ingest. vDSP_vsma does (src * w) + dst → dst per channel,
-        // so we zero the scratch first and then accumulate.
-        if monoScratch.count < frames {
-            monoScratch = Array(repeating: 0, count: frames)
-        }
+        // so we zero the scratch first and then accumulate. Clamp to the
+        // scratch's fixed capacity rather than growing it — see
+        // `monoScratchCapacity`'s doc comment.
+        let mixFrames = min(frames, monoScratch.count)
         var weight: Float = 1.0 / Float(chCount)
         monoScratch.withUnsafeMutableBufferPointer { mPtr in
             guard let base = mPtr.baseAddress else { return }
-            memset(base, 0, frames * MemoryLayout<Float>.size)
+            memset(base, 0, mixFrames * MemoryLayout<Float>.size)
             for ch in 0..<chCount {
-                vDSP_vsma(channels[ch], 1, &weight, base, 1, base, 1, vDSP_Length(frames))
+                vDSP_vsma(channels[ch], 1, &weight, base, 1, base, 1, vDSP_Length(mixFrames))
             }
             appendToAccumulatorAndDispatch(
-                source: UnsafeBufferPointer(start: base, count: frames)
+                source: UnsafeBufferPointer(start: base, count: mixFrames)
             )
         }
     }
@@ -213,10 +227,7 @@ final class SpectrumAnalyzer: ObservableObject {
         vDSP_measqv(monoSamples, 1, &rawMS, vDSP_Length(frameCount))
         emitLevelIfDue(meanSquared: rawMS)
 
-        accumulatorLock.lock()
-        let active = subscriberCount > 0
-        accumulatorLock.unlock()
-        guard active else { return }
+        guard accumulatorState.withLock({ $0.subscriberCount > 0 }) else { return }
 
         // Already mono — no scratch needed. Append straight from the
         // caller's pointer. The accumulator's reserved capacity (set at
@@ -231,13 +242,13 @@ final class SpectrumAnalyzer: ObservableObject {
     /// tail between the two ingest paths so the accumulator's hot path
     /// has one definition.
     private func appendToAccumulatorAndDispatch(source: UnsafeBufferPointer<Float>) {
-        accumulatorLock.lock()
-        accumulator.append(contentsOf: source)
-        if accumulator.count > Self.maxAccumulatorSamples {
-            accumulator.removeFirst(accumulator.count - Self.maxAccumulatorSamples)
+        let shouldDispatch = accumulatorState.withLock { state -> Bool in
+            state.accumulator.append(contentsOf: source)
+            if state.accumulator.count > Self.maxAccumulatorSamples {
+                state.accumulator.removeFirst(state.accumulator.count - Self.maxAccumulatorSamples)
+            }
+            return Self.shouldDispatch(&state)
         }
-        let shouldDispatch = shouldDispatchLocked()
-        accumulatorLock.unlock()
 
         if shouldDispatch {
             processingQueue.async { [weak self] in
@@ -247,14 +258,14 @@ final class SpectrumAnalyzer: ObservableObject {
     }
 
     /// Combined gate: only dispatch a fresh FFT if we have enough samples
-    /// AND we're outside the throttle window. Caller MUST hold
-    /// `accumulatorLock` — both checks share it so no two callbacks race
-    /// past the gate. Stamps `lastDispatchTime` on success.
-    private func shouldDispatchLocked() -> Bool {
-        guard accumulator.count >= Self.fftSize else { return false }
+    /// AND we're outside the throttle window. Caller must already hold
+    /// `accumulatorState`'s lock — both checks share it so no two callbacks
+    /// race past the gate. Stamps `lastDispatchTime` on success.
+    private nonisolated static func shouldDispatch(_ state: inout AccumulatorState) -> Bool {
+        guard state.accumulator.count >= Self.fftSize else { return false }
         let now = CACurrentMediaTime()
-        guard (now - lastDispatchTime) >= Self.minDispatchInterval else { return false }
-        lastDispatchTime = now
+        guard (now - state.lastDispatchTime) >= Self.minDispatchInterval else { return false }
+        state.lastDispatchTime = now
         return true
     }
 
@@ -278,20 +289,20 @@ final class SpectrumAnalyzer: ObservableObject {
     /// SwiftUI lifecycle (main thread); the lock keeps the audio-thread
     /// gate consistent.
     func subscribe() {
-        accumulatorLock.lock()
-        subscriberCount += 1
-        accumulatorLock.unlock()
+        accumulatorState.withLock { $0.subscriberCount += 1 }
     }
 
     /// Remove one observer. Idempotent at the floor (never goes negative).
     func unsubscribe() {
-        accumulatorLock.lock()
-        if subscriberCount > 0 { subscriberCount -= 1 }
-        let nowIdle = subscriberCount == 0
-        // Drop accumulated samples so a fresh subscribe doesn't immediately
-        // FFT a frame of stale audio from before the unsubscribe.
-        if nowIdle { accumulator.removeAll(keepingCapacity: true) }
-        accumulatorLock.unlock()
+        accumulatorState.withLock { state in
+            if state.subscriberCount > 0 { state.subscriberCount -= 1 }
+            // Drop accumulated samples so a fresh subscribe doesn't
+            // immediately FFT a frame of stale audio from before the
+            // unsubscribe.
+            if state.subscriberCount == 0 {
+                state.accumulator.removeAll(keepingCapacity: true)
+            }
+        }
     }
 
     /// Configure tap-installation. The engine wrapper calls back with the
@@ -299,18 +310,14 @@ final class SpectrumAnalyzer: ObservableObject {
     func configureForSampleRate(_ sr: Double) {
         sampleRate = sr
         rebuildLogBucketMap()
-        accumulatorLock.lock()
-        accumulator.removeAll(keepingCapacity: true)
-        accumulatorLock.unlock()
+        accumulatorState.withLock { $0.accumulator.removeAll(keepingCapacity: true) }
         resetSmoothing()
         isAttached = true
     }
 
     func detached() {
         isAttached = false
-        accumulatorLock.lock()
-        accumulator.removeAll(keepingCapacity: true)
-        accumulatorLock.unlock()
+        accumulatorState.withLock { $0.accumulator.removeAll(keepingCapacity: true) }
         resetSmoothing()
     }
 
@@ -355,14 +362,12 @@ final class SpectrumAnalyzer: ObservableObject {
     // MARK: - Background FFT
 
     private func drainAndProcess() {
-        accumulatorLock.lock()
-        guard accumulator.count >= Self.fftSize else {
-            accumulatorLock.unlock()
-            return
-        }
-        let frame = Array(accumulator.prefix(Self.fftSize))
-        accumulator.removeFirst(Self.fftSize)
-        accumulatorLock.unlock()
+        guard let frame = accumulatorState.withLock({ state -> [Float]? in
+            guard state.accumulator.count >= Self.fftSize else { return nil }
+            let frame = Array(state.accumulator.prefix(Self.fftSize))
+            state.accumulator.removeFirst(Self.fftSize)
+            return frame
+        }) else { return }
 
         // === Level: time-domain RMS over the raw frame ===
         // Unambiguous and accurate regardless of FFT/window choices. NIOSH
