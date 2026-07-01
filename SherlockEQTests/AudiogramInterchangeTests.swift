@@ -61,6 +61,45 @@ struct AudiogramInterchangeTests {
         #expect(left.first { $0.frequencyHz == 1000 }!.thresholddBHL == 35)
     }
 
+    @Test func extremeThresholdIsClampedToAudiometricRange() {
+        // Matches the 0...110 dB HL bound the interactive ThresholdEditor
+        // already enforces — an imported file shouldn't be able to carry an
+        // implausible threshold past it.
+        let doc = AudiogramInterchange(points: [
+            Self.point(1000, l: 500, r: -30),
+        ])
+        let (left, right) = doc.perEarThresholds()
+        #expect(left.first { $0.frequencyHz == 1000 }!.thresholddBHL == 110)
+        #expect(right.first { $0.frequencyHz == 1000 }!.thresholddBHL == 0)
+    }
+
+    @Test func nonFiniteThresholdPointIsSkipped() {
+        let doc = AudiogramInterchange(points: [
+            Self.point(1000, l: .nan, r: 30),
+        ])
+        let (left, right) = doc.perEarThresholds()
+        #expect(left.first { $0.frequencyHz == 1000 }!.thresholddBHL == 0)
+        #expect(right.first { $0.frequencyHz == 1000 }!.thresholddBHL == 30)
+    }
+
+    @Test func nonFiniteOrOutOfRangeFrequencyPointIsSkippedNotCrashed() {
+        // A corrupted/hand-edited import can carry NaN, infinite, or absurd
+        // frequency values. Int(Double) traps on those — perEarThresholds()
+        // must filter them out before converting, not crash the app.
+        let doc = AudiogramInterchange(points: [
+            Self.point(.nan, l: 40, r: 40),
+            Self.point(.infinity, l: 45, r: 45),
+            Self.point(1e26, l: 50, r: 50),
+            Self.point(1000, l: 30, r: 30),
+        ])
+        let (left, right) = doc.perEarThresholds()
+        #expect(left.first { $0.frequencyHz == 1000 }!.thresholddBHL == 30)
+        #expect(right.first { $0.frequencyHz == 1000 }!.thresholddBHL == 30)
+        // No malformed point should have landed on any other slot.
+        #expect(left.allSatisfy { $0.frequencyHz == 1000 || $0.thresholddBHL == 0 })
+        #expect(right.allSatisfy { $0.frequencyHz == 1000 || $0.thresholddBHL == 0 })
+    }
+
     // MARK: Round-trip through the interchange
 
     @Test func perEarRoundTripPreservesMeasuredThresholds() {

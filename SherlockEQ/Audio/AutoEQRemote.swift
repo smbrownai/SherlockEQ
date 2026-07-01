@@ -196,8 +196,8 @@ enum AutoEQRemoteParser {
 
             let lower = line.lowercased()
             if lower.hasPrefix("preamp:") {
-                if let value = numericToken(after: "Preamp:", in: line) {
-                    preamp = value
+                if let value = numericToken(after: "Preamp:", in: line), value.isFinite {
+                    preamp = max(-BiquadCoefficients.gainClampDB, min(BiquadCoefficients.gainClampDB, value))
                     sawPreamp = true
                 } else {
                     log.warning("Could not parse Preamp value in \(entry.path, privacy: .public)")

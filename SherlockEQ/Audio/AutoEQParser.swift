@@ -27,8 +27,8 @@ enum AutoEQParser {
 
             let lower = line.lowercased()
             if lower.hasPrefix("preamp:") {
-                if let v = numericToken(in: line, after: "Preamp:") {
-                    preamp = v
+                if let v = numericToken(in: line, after: "Preamp:"), v.isFinite {
+                    preamp = max(-BiquadCoefficients.gainClampDB, min(BiquadCoefficients.gainClampDB, v))
                 }
                 continue
             }
@@ -72,8 +72,10 @@ enum AutoEQParser {
               let gain = doubleAfter("Gain", in: tokens) else { return nil }
         // Q is optional — EqualizerAPO / oratory1990 exports omit it for
         // default-Q rows. Fall back to 0.707 (Butterworth) instead of dropping
-        // the band, which silently yielded a partial correction.
-        let q = doubleAfter("Q", in: tokens) ?? 0.707
+        // the band, which silently yielded a partial correction. Clamped the
+        // same way AutoEQRemoteParser already clamps it, so a hand-edited or
+        // corrupted file can't push Q outside a sane range on this entry point.
+        let q = max(0.1, min(16.0, doubleAfter("Q", in: tokens) ?? 0.707))
 
         return EQBand(
             frequencyHz: fc,

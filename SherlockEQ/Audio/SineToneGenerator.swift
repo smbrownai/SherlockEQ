@@ -104,7 +104,14 @@ final class SineToneGenerator: ObservableObject {
 
         let node = AVAudioSourceNode(format: format) { _, _, frameCount, abl -> OSStatus in
             let buffers = UnsafeMutableAudioBufferListPointer(abl)
-            let frames = Int(frameCount)
+            // Never trust frameCount alone — clamp to the smallest byte-size-
+            // derived capacity among the delivered buffers, matching the same
+            // guard CATapEngine's render blocks use, so a mismatched/stale
+            // AudioBufferList can't drive an overrun in the loop/memcpy below.
+            var frames = Int(frameCount)
+            for buf in buffers {
+                frames = min(frames, Int(buf.mDataByteSize) / MemoryLayout<Float>.size)
+            }
 
             // Single atomic snapshot of all cross-thread fields. The
             // sample loop below runs purely on the locals.

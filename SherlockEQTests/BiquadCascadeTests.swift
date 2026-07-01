@@ -151,6 +151,30 @@ struct BiquadCascadeTests {
         #expect(buf.allSatisfy { abs($0 - expected) < 1e-6 })
     }
 
+    @Test func extremePreampIsClampedInCascade() {
+        // Defense-in-depth: even if an unclamped value ever reached setBands
+        // directly (bypassing the parser-level clamp), the cascade itself
+        // must not let it through as an unbounded raw-sample multiplier.
+        let cascade = BiquadCascade()
+        cascade.setBands([], preampDB: 1000, sampleRate: Self.sampleRate)
+        var buf: [Float] = [1, 1, 1, 1]
+        buf.withUnsafeMutableBufferPointer { p in
+            cascade.process(samples: p.baseAddress!, count: p.count)
+        }
+        let expected = Float(pow(10.0, BiquadCoefficients.gainClampDB / 20.0))
+        #expect(buf.allSatisfy { abs($0 - expected) < 1e-3 })
+    }
+
+    @Test func nonFinitePreampInCascadeFallsBackToUnityGain() {
+        let cascade = BiquadCascade()
+        cascade.setBands([], preampDB: .nan, sampleRate: Self.sampleRate)
+        var buf: [Float] = [1, 1, 1, 1]
+        buf.withUnsafeMutableBufferPointer { p in
+            cascade.process(samples: p.baseAddress!, count: p.count)
+        }
+        #expect(buf.allSatisfy { $0 == 1 })
+    }
+
     @Test func bypassPassesThrough() {
         let cascade = BiquadCascade()
         cascade.setBands(Self.representativeBands, preampDB: -3, sampleRate: Self.sampleRate)

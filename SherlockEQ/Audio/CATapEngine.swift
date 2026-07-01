@@ -592,13 +592,20 @@ final class CATapEngine: ObservableObject {
         rDyn.setSampleRate(sourceSR)
 
         leftSourceNode = AVAudioSourceNode(format: stereoFormat) { [weak leftRing] _, _, frameCount, audioBufferList -> OSStatus in
+            let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+            // Never trust the render block's frameCount argument alone — some
+            // transient HAL conditions (sample-rate change, device switch,
+            // post-sleep wedge; see CATapEngine's IOProc comments) can hand us
+            // a stale/mismatched AudioBufferList. Clamp once, up front, and
+            // use this value for every read/write against these buffers in
+            // this callback, not just the ring fill.
+            let safeFrames = Self.safeFrameCount(frameCount, in: buffers)
             let status = Self.fillFromMonoRing(
                 ring: leftRing,
                 channelIndex: 0,
                 abl: audioBufferList,
-                frameCount: frameCount
+                frameCount: safeFrames
             )
-            let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
             // Pre-EQ input spectrum side-channel: average this slice's RAW left
             // samples with the right block's stashed raw samples — BEFORE the EQ
             // cascade mutates them in place — so the canvas "input" ghost shows
@@ -610,44 +617,62 @@ final class CATapEngine: ObservableObject {
             // don't get stalled waiting for the callback to run.
             if let callback = preIngest.snapshotCallbackForRender(),
                let lPtr = buffers[0].mData?.assumingMemoryBound(to: Float.self) {
-                let (mono, n) = preMix.mixedMono(left: lPtr, count: Int(frameCount))
+                let (mono, n) = preMix.mixedMono(left: lPtr, count: safeFrames)
                 callback(mono, n, sourceSR)
                 preIngest.recordCallbackInvocation()
             }
             // EQ on the L channel only (R is held at 0 by the fill).
             if buffers.count > 0,
                let lPtr = buffers[0].mData?.assumingMemoryBound(to: Float.self) {
-                lEQ.process(samples: lPtr, count: Int(frameCount))
-                lDyn.process(samples: lPtr, count: Int(frameCount))
+                lEQ.process(samples: lPtr, count: safeFrames)
+                lDyn.process(samples: lPtr, count: safeFrames)
             }
-            leftCounter.add(Int(frameCount))
+            leftCounter.add(safeFrames)
             Self.recordPeak(abl: audioBufferList, frameCount: frameCount, into: outPeak)
             return status
         }
         rightSourceNode = AVAudioSourceNode(format: stereoFormat) { [weak rightRing] _, _, frameCount, audioBufferList -> OSStatus in
+            let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+            let safeFrames = Self.safeFrameCount(frameCount, in: buffers)
             let status = Self.fillFromMonoRing(
                 ring: rightRing,
                 channelIndex: 1,
                 abl: audioBufferList,
-                frameCount: frameCount
+                frameCount: safeFrames
             )
-            let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
             // Stash the RAW right-channel pre-EQ samples for the left block's
             // (L+R)/2 input ghost, BEFORE the EQ cascade mutates them in place.
             if buffers.count >= 2,
                let rPtr = buffers[1].mData?.assumingMemoryBound(to: Float.self) {
-                preMix.stashRight(rPtr, count: Int(frameCount))
+                preMix.stashRight(rPtr, count: safeFrames)
             }
             // EQ on the R channel only (L is held at 0 by the fill).
             if buffers.count >= 2,
                let rPtr = buffers[1].mData?.assumingMemoryBound(to: Float.self) {
-                rEQ.process(samples: rPtr, count: Int(frameCount))
-                rDyn.process(samples: rPtr, count: Int(frameCount))
+                rEQ.process(samples: rPtr, count: safeFrames)
+                rDyn.process(samples: rPtr, count: safeFrames)
             }
-            rightCounter.add(Int(frameCount))
+            rightCounter.add(safeFrames)
             Self.recordPeak(abl: audioBufferList, frameCount: frameCount, into: outPeak)
             return status
         }
+    }
+
+    /// Clamp a render block's `frameCount` argument to the smallest byte-size-
+    /// derived capacity among the delivered buffers, so a mismatched/stale
+    /// `AudioBufferList` can't drive an overrun in any of the processing that
+    /// follows in the same callback. Under `AVAudioSourceNode`'s normal
+    /// contract this is a no-op (frameCount always fits); it only clamps
+    /// during the abnormal transient conditions noted above. No allocation —
+    /// a fixed-size scan over (typically 2) buffers.
+    private static func safeFrameCount(
+        _ frameCount: AVAudioFrameCount, in buffers: UnsafeMutableAudioBufferListPointer
+    ) -> Int {
+        var frames = Int(frameCount)
+        for buf in buffers {
+            frames = min(frames, Int(buf.mDataByteSize) / MemoryLayout<Float>.size)
+        }
+        return frames
     }
 
     /// Render-thread helper: scan the just-filled abl and store the max abs sample
@@ -672,11 +697,14 @@ final class CATapEngine: ObservableObject {
 
     /// Render-thread helper: read mono samples from `ring` into one channel of the
     /// stereo `abl`, zero the other channel. Pad short reads with silence.
+    /// `frameCount` must already be clamped to the buffers' actual capacity —
+    /// see `safeFrameCount(_:in:)`, computed once by the caller for the whole
+    /// render callback.
     private static func fillFromMonoRing(
         ring: TapRingBuffer?,
         channelIndex: Int,
         abl: UnsafeMutablePointer<AudioBufferList>,
-        frameCount: AVAudioFrameCount
+        frameCount: Int
     ) -> OSStatus {
         let buffers = UnsafeMutableAudioBufferListPointer(abl)
         guard buffers.count >= 2 else { return noErr }
@@ -690,7 +718,7 @@ final class CATapEngine: ObservableObject {
         guard let activePtr = buffers[channelIndex].mData?.assumingMemoryBound(to: Float.self) else {
             return noErr
         }
-        let totalFrames = Int(frameCount)
+        let totalFrames = frameCount
         let filled = ring?.read(into: activePtr, frameCount: totalFrames) ?? 0
         if filled < totalFrames {
             let tailBytes = (totalFrames - filled) * bytesPerFrame

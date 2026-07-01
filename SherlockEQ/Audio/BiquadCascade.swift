@@ -124,7 +124,14 @@ final class BiquadCascade {
         let filter = sectionCount > 0
             ? Filter(coefficients: coefficients, sectionCount: sectionCount)
             : nil
-        let preGain = Float(pow(10.0, preampDB / 20.0))
+        // Defense-in-depth: callers (parsers, profile decode) are expected to
+        // have already clamped preampDB, but this is the last stop before the
+        // render thread multiplies raw samples by preGain — an unclamped or
+        // non-finite value here would reach the audio output directly.
+        let clampedPreampDB = preampDB.isFinite
+            ? max(-BiquadCoefficients.gainClampDB, min(BiquadCoefficients.gainClampDB, preampDB))
+            : 0
+        let preGain = Float(pow(10.0, clampedPreampDB / 20.0))
         stateLock.withLock { state in
             state.filter = filter
             state.preGain = preGain

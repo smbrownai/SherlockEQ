@@ -121,6 +121,39 @@ struct AutoEQParserTests {
         #expect(parsed.preampDB == 0)
     }
 
+    @Test func extremePreampIsClampedToGainCeiling() throws {
+        // A corrupted or malicious ParametricEQ.txt shouldn't be able to
+        // drive raw samples by orders of magnitude — clamp at the same
+        // ceiling the per-band gain uses.
+        let text = """
+        Preamp: 200 dB
+        Filter 1: ON PK Fc 1000 Hz Gain 3 dB Q 1.0
+        """
+        let parsed = try #require(AutoEQParser.parse(text))
+        #expect(parsed.preampDB == BiquadCoefficients.gainClampDB)
+    }
+
+    @Test func negativeExtremePreampIsClampedToGainFloor() throws {
+        let text = """
+        Preamp: -200 dB
+        Filter 1: ON PK Fc 1000 Hz Gain 3 dB Q 1.0
+        """
+        let parsed = try #require(AutoEQParser.parse(text))
+        #expect(parsed.preampDB == -BiquadCoefficients.gainClampDB)
+    }
+
+    @Test func nonFinitePreampFallsBackToZero() throws {
+        // Double("nan") parses successfully to NaN — must not reach the
+        // render path unfiltered; falls back to the same 0 dB default as a
+        // missing Preamp line.
+        let text = """
+        Preamp: nan dB
+        Filter 1: ON PK Fc 1000 Hz Gain 3 dB Q 1.0
+        """
+        let parsed = try #require(AutoEQParser.parse(text))
+        #expect(parsed.preampDB == 0)
+    }
+
     // MARK: - Malformed input
 
     @Test func emptyInputReturnsNil() {
@@ -159,6 +192,18 @@ struct AutoEQParserTests {
         let parsed = try #require(AutoEQParser.parse(text))
         #expect(parsed.bands.count == 1)
         #expect(parsed.bands[0].frequencyHz == 1000)
+    }
+
+    @Test func extremeQIsClamped() throws {
+        // A hand-edited or corrupted file shouldn't be able to push Q outside
+        // the same [0.1, 16.0] range AutoEQRemoteParser already enforces.
+        let text = """
+        Filter 1: ON PK Fc 1000 Hz Gain 3 dB Q 1e10
+        Filter 2: ON PK Fc 4000 Hz Gain -3 dB Q -5
+        """
+        let parsed = try #require(AutoEQParser.parse(text))
+        #expect(parsed.bands[0].bandwidth == 16.0)
+        #expect(parsed.bands[1].bandwidth == 0.1)
     }
 
     @Test func missingFcReturnsNil() throws {

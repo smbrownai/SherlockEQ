@@ -50,11 +50,20 @@ extension AudiogramInterchange {
                 uniqueKeysWithValues: AudiogramPoint.standardFrequencies.map { ($0, 0.0) }
             )
             for p in points {
-                guard let value = pick(p) else { continue }
+                guard let value = pick(p), value.isFinite else { continue }
+                // Reject non-finite or wildly out-of-range frequencies (e.g. from a
+                // corrupted or hand-edited import) before the Int conversion below —
+                // Int(Double) traps on NaN/infinite/out-of-Int-range values, which
+                // would otherwise crash the app on a single bad row.
+                guard p.frequencyHz.isFinite, (20...20_000).contains(p.frequencyHz) else { continue }
                 let target = Int(p.frequencyHz.rounded())
                 let slot = AudiogramPoint.standardFrequencies
                     .min { abs($0 - target) < abs($1 - target) }!
-                byFreq[slot] = value
+                // Same 0...110 dB HL bound the interactive ThresholdEditor already
+                // enforces (ThresholdEditor.swift:49) — an imported file shouldn't
+                // be able to carry an implausible threshold past that bound into
+                // storage or a chart axis.
+                byFreq[slot] = max(0, min(110, value))
             }
             return AudiogramPoint.standardFrequencies.map {
                 AudiogramPoint(frequencyHz: $0, thresholddBHL: byFreq[$0] ?? 0)
