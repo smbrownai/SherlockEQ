@@ -21,6 +21,100 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 0.7.2</title>
+      <pubDate>Wed, 01 Jul 2026 20:57:16 +0000</pubDate>
+      <sparkle:version>00702</sparkle:version>
+      <sparkle:shortVersionString>0.7.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<h2>SherlockEQ 0.7.2</h2>
+
+<p>
+  A code-quality and security-hardening release. It fixes a crash on importing
+  certain audiogram files, closes several findings from a focused security
+  review — including a case where a downloaded headphone-correction file could
+  push the volume to unpredictable levels — and stops your tinnitus and profile
+  settings from being written to the system's debug logs. Nothing changes in
+  how EQ, profiles, or safe-listening work.
+</p>
+
+<h3>Fixes</h3>
+
+<ul>
+  <li>
+    <strong>Importing a damaged audiogram file no longer crashes SherlockEQ.</strong>
+    A corrupted or hand-edited audiogram file with an invalid measurement could
+    crash the app on import. SherlockEQ now skips the bad measurement and
+    imports the rest of the file normally.
+  </li>
+</ul>
+
+<h3>Security</h3>
+
+<ul>
+  <li>
+    <strong>Headphone-correction files can no longer set an unsafe volume.</strong>
+    A malformed or tampered <code>ParametricEQ.txt</code> file — whether picked
+    manually or downloaded from the online AutoEQ catalog — could contain a
+    preamp value extreme enough to drive the volume far beyond a safe level.
+    That value is now kept within the same safe range as every other EQ
+    setting.
+  </li>
+  <li>
+    <strong>Your tinnitus and profile settings stay out of the system logs.</strong>
+    Applying a profile used to write your tinnitus notch frequency and profile
+    name to the system's unified log in plain text, where they could end up in
+    a diagnostic report. That detail is now redacted from the log.
+  </li>
+  <li>
+    <strong>Your hearing profiles and listening history are excluded from
+    backups.</strong>
+    Profiles and your listening-dose history are now marked so Time Machine and
+    similar tools skip them, and each file is readable only by your account —
+    so this data doesn't linger in old backups you have no way to clean up from
+    within the app.
+  </li>
+  <li>
+    <strong>The audio engine is more resilient to unusual buffer sizes.</strong>
+    During a device switch or sleep/wake, the audio engine could momentarily
+    receive an unexpected buffer size. It's now validated before use, closing a
+    theoretical memory-safety gap in that path.
+  </li>
+</ul>
+
+<h3>Under the hood</h3>
+
+<ul>
+  <li>
+    <strong>Smoother real-time spectrum analysis.</strong>
+    The spectrum analyzer's internal buffering was tightened to reduce the
+    chance of a stall on the audio thread. No user-facing change.
+  </li>
+</ul>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not diagnose,
+  treat, measure, or monitor any hearing condition, tinnitus, or disability.
+  For concerns about your hearing, consult a doctor, audiologist, or licensed
+  healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.7.1">0.7.1 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v0.7.2/SherlockEQ-0.7.2.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="vx911cM0j26nnlyuakugrwcGZ7RVPO27jRwWAfZ5h5ox6mh7x351OybSzIJyaAXOqsmOvYmMTyLS+Xkt5+eSAQ==" length="10549381" />
+    </item>
+
+    <item>
       <title>SherlockEQ 0.7.1</title>
       <pubDate>Mon, 29 Jun 2026 13:03:39 +0000</pubDate>
       <sparkle:version>00701</sparkle:version>
