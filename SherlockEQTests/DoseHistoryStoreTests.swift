@@ -39,6 +39,26 @@ struct DoseHistoryStoreTests {
         #expect(reloaded.records.first?.peakDose == 0.5)
     }
 
+    @Test func savedFileHasOwnerOnlyPermissions() throws {
+        let url = Self.makeTempURL()
+        let store = DoseHistoryStore(fileURL: url)
+        store.record(dayStart: day(-1), peakDose: 0.5)
+
+        let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+        let posix = attrs[.posixPermissions] as? NSNumber
+        #expect(posix?.intValue == 0o600)
+    }
+
+    @Test func directoryIsExcludedFromBackup() throws {
+        let url = Self.makeTempURL()
+        let store = DoseHistoryStore(fileURL: url)
+        store.record(dayStart: day(-1), peakDose: 0.5)
+
+        let directory = url.deletingLastPathComponent()
+        let values = try directory.resourceValues(forKeys: [.isExcludedFromBackupKey])
+        #expect(values.isExcludedFromBackup == true)
+    }
+
     @Test func missingFileLoadsEmptyWithoutError() {
         let store = DoseHistoryStore(fileURL: Self.makeTempURL())
         store.loadAll()

@@ -51,6 +51,31 @@ struct ProfileStoreTests {
         #expect(loaded[0].name == "Round-trip")
     }
 
+    @Test func savedProfileFileHasOwnerOnlyPermissions() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+
+        let store = Self.makeStore(at: dir)
+        let profile = HearingProfile.makeDefault(name: "Perm check")
+        try store.save(profile)
+
+        let url = dir.appendingPathComponent("\(profile.id.uuidString).json")
+        let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+        let posix = attrs[.posixPermissions] as? NSNumber
+        #expect(posix?.intValue == 0o600)
+    }
+
+    @Test func profilesDirectoryIsExcludedFromBackup() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+
+        let store = Self.makeStore(at: dir)
+        try store.save(HearingProfile.makeDefault(name: "Backup check"))
+
+        let values = try dir.resourceValues(forKeys: [.isExcludedFromBackupKey])
+        #expect(values.isExcludedFromBackup == true)
+    }
+
     @Test func loadingDirectoryWithoutProfilesReturnsEmpty() {
         let dir = Self.makeTempDir()
         defer { Self.cleanup(dir) }

@@ -30,7 +30,6 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     var dynamics: DynamicProcessingSettings
     var globalTrimDB: Double                    // -12 to +12 — guards against post-boost clipping
     var balance: Double                         // -1 (full L) … 0 (centered) … +1 (full R)
-    var autoEQCurveURL: URL?                    // legacy — kept for decoder compat, no longer read
     var autoEQName: String?                     // display label for the loaded AutoEQ correction
     var autoEQBands: [EQBand]?                  // parsed AutoEQ bands; applied per-ear upstream of profile EQ
     var autoEQPreampDB: Double?                 // headroom adjustment baked into the AutoEQ file
@@ -108,7 +107,6 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.dynamics               = try c.decodeIfPresent(DynamicProcessingSettings.self, forKey: .dynamics) ?? .init()
         self.globalTrimDB           = try c.decode(Double.self, forKey: .globalTrimDB)
         self.balance                = try c.decodeIfPresent(Double.self, forKey: .balance) ?? 0
-        self.autoEQCurveURL         = try c.decodeIfPresent(URL.self, forKey: .autoEQCurveURL)
         self.autoEQName             = try c.decodeIfPresent(String.self, forKey: .autoEQName)
         self.autoEQBands            = try c.decodeIfPresent([EQBand].self, forKey: .autoEQBands)
         self.autoEQPreampDB         = try c.decodeIfPresent(Double.self, forKey: .autoEQPreampDB)
@@ -153,7 +151,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         leftEar: EarProfile, rightEar: EarProfile,
         leftNotch: TinnitusNotch, rightNotch: TinnitusNotch, separateNotch: Bool = false,
         dynamics: DynamicProcessingSettings = .init(),
-        globalTrimDB: Double, balance: Double = 0, autoEQCurveURL: URL?,
+        globalTrimDB: Double, balance: Double = 0,
         autoEQName: String? = nil, autoEQBands: [EQBand]? = nil, autoEQPreampDB: Double? = nil,
         autoEQSourcePath: String? = nil,
         safeListeningCeilingDB: Double, compensationFactor: Double,
@@ -171,7 +169,6 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.separateNotch = separateNotch
         self.dynamics = dynamics
         self.globalTrimDB = globalTrimDB; self.balance = balance
-        self.autoEQCurveURL = autoEQCurveURL
         self.autoEQName = autoEQName
         self.autoEQBands = autoEQBands
         self.autoEQPreampDB = autoEQPreampDB
@@ -221,7 +218,6 @@ extension HearingProfile {
             leftNotch: .disabled,
             rightNotch: .disabled,
             globalTrimDB: 0,
-            autoEQCurveURL: nil,
             safeListeningCeilingDB: 85.0,
             compensationFactor: 0.5,
             isBuiltIn: isBuiltIn,
@@ -289,7 +285,6 @@ extension HearingProfile {
             leftNotch: .disabled,
             rightNotch: .disabled,
             globalTrimDB: outputGainDB,
-            autoEQCurveURL: nil,
             safeListeningCeilingDB: 85.0,
             compensationFactor: 0.5,
             eqMode: .advanced,

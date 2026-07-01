@@ -581,7 +581,13 @@ final class SherlockEQAudioEngine: ObservableObject {
                     : "L \(Int(profile.leftNotch.frequencyHz)) Hz, R \(Int(profile.rightNotch.frequencyHz)) Hz"
             }
         }()
-        log.debug("Applied profile \(profile.name, privacy: .public) — L:\(combinedLeftBands.count) bands, R:\(combinedRightBands.count) bands, preamp+trim:\(combinedPreampDB) dB, balance:\(profile.balance, format: .fixed(precision: 2)), notch:\(notchDescription, privacy: .public), autoEQ:\(profile.autoEQName ?? "none", privacy: .public), dynamics:\(Self.dynamicsSummary(profile.dynamics), privacy: .public)")
+        // Profile name, notch description, and the dynamics summary are all
+        // either user-authored or derived from the hearing profile — mark
+        // .private so they're redacted from sysdiagnose/support-shared logs
+        // and any `log show` capture, while staying inspectable locally via
+        // Console.app with private data enabled. autoEQ is just a headphone
+        // model name (not health data) and stays .public.
+        log.debug("Applied profile \(profile.name, privacy: .private) — L:\(combinedLeftBands.count) bands, R:\(combinedRightBands.count) bands, preamp+trim:\(combinedPreampDB) dB, balance:\(profile.balance, format: .fixed(precision: 2)), notch:\(notchDescription, privacy: .private), autoEQ:\(profile.autoEQName ?? "none", privacy: .public), dynamics:\(Self.dynamicsSummary(profile.dynamics), privacy: .private)")
     }
 
     /// Map a profile's dynamic settings for one ear into the processor's

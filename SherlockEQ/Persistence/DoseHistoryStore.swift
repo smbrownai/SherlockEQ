@@ -103,13 +103,25 @@ final class DoseHistoryStore: ObservableObject {
 
     private func save() {
         do {
+            let directory = fileURL.deletingLastPathComponent()
             try FileManager.default.createDirectory(
-                at: fileURL.deletingLastPathComponent(),
+                at: directory,
                 withIntermediateDirectories: true,
                 attributes: [.posixPermissions: 0o700]
             )
+            // Exclude from Time Machine and other backup tools — dose
+            // history is a log of the user's daily noise exposure and
+            // shouldn't accumulate in historical backups with no way to
+            // purge it from within the app. Best-effort and idempotent.
+            var backupTarget = directory
+            var resourceValues = URLResourceValues()
+            resourceValues.isExcludedFromBackup = true
+            try? backupTarget.setResourceValues(resourceValues)
+
             let data = try Self.makeEncoder().encode(records)
             try data.write(to: fileURL, options: .atomic)
+            // Owner-only, independent of the containing directory's mode.
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
             lastError = nil
         } catch {
             lastError = "Couldn't save dose history: \(error.localizedDescription)"

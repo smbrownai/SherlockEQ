@@ -124,6 +124,11 @@ final class ProfileStore: ObservableObject {
             let data = try encoder.encode(p)
             let url = directory.appendingPathComponent("\(p.id.uuidString).json")
             try data.write(to: url, options: .atomic)
+            // Owner-only, independent of the containing directory's mode —
+            // profiles encode a user's hearing thresholds. Best-effort: a
+            // failure here still leaves the directory-level 0700 from
+            // `ensureDirectory()` in place.
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
             if let idx = profiles.firstIndex(where: { $0.id == p.id }) {
                 profiles[idx] = p
             } else {
@@ -366,6 +371,20 @@ final class ProfileStore: ObservableObject {
             // created it with the umask default (typically 0755). Best-effort.
             try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
         }
+        excludeFromBackup(directory)
+    }
+
+    /// Exclude a directory (and, per Time Machine's documented behavior,
+    /// everything under it) from Time Machine and other backup tools that
+    /// honor the same resource value. Profiles encode audiogram thresholds
+    /// and tinnitus settings — health data that shouldn't accumulate in
+    /// historical backups a user has no way to purge from within the app.
+    /// Best-effort and idempotent — safe to call on every launch.
+    private func excludeFromBackup(_ url: URL) {
+        var target = url
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? target.setResourceValues(values)
     }
 
     static func defaultDirectory() -> URL {
