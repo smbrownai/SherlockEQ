@@ -823,6 +823,15 @@ final class AudioState: ObservableObject {
     private var rebuildTask: Task<Void, Never>?
     private var rebuildPending = false
 
+    /// Counts consecutive `.sampleRateMismatch` outcomes from `audio.attach`
+    /// across rebuild attempts, so a genuinely persistent mismatch surfaces
+    /// the error banner instead of retrying forever. Reset to 0 on any
+    /// successful attach. Mirrors `SherlockEQAudioEngine.startRetryCount`'s
+    /// escalating-backoff shape (200/400/800 ms) for the same class of
+    /// post-wake HAL flakiness.
+    private var srMismatchRetryCount = 0
+    private static let maxSRMismatchRetries = 3
+
     /// Coalesce + serialize every audio-graph rebuild. A single physical
     /// output-device switch emits a burst of CoreAudio notifications —
     /// default-output change, per-device stream/sample-rate topology changes,
@@ -861,8 +870,8 @@ final class AudioState: ObservableObject {
             return
         }
         // Engine surfaces the specific reason via `lastError` on failure
-        // (format build / SR mismatch). Starting anyway would mask it.
-        guard audio.attach(
+        // (format build). Starting anyway would mask it.
+        switch audio.attach(
             leftSource: leftSource,
             rightSource: rightSource,
             leftEQCascade: tap.leftEQCascade,
@@ -870,7 +879,31 @@ final class AudioState: ObservableObject {
             leftDynamics: tap.leftDynamics,
             rightDynamics: tap.rightDynamics,
             sampleRate: format.sampleRate
-        ) else {
+        ) {
+        case .success:
+            srMismatchRetryCount = 0
+        case .sampleRateMismatch(let sourceHz, let outputHz):
+            // tap.sourceFormat can momentarily lag the output device's real
+            // rate right after a sleep/wake or route change — see
+            // SherlockEQAudioEngine.attach's doc comment. Retry with the
+            // same escalating backoff start()'s transient-HAL-failure path
+            // uses, giving the tap's own async device-change handling a
+            // window to refresh sourceFormat before the next attempt.
+            guard srMismatchRetryCount < Self.maxSRMismatchRetries else {
+                log.error("audio.attach: SR mismatch persisted after \(Self.maxSRMismatchRetries) retries — giving up")
+                audio.reportPersistentSampleRateMismatch(sourceHz: sourceHz, outputHz: outputHz)
+                srMismatchRetryCount = 0
+                return
+            }
+            srMismatchRetryCount += 1
+            let delayMS = 200 << (srMismatchRetryCount - 1)   // 200, 400, 800 ms
+            log.info("audio.attach: SR mismatch (source \(sourceHz) Hz vs output \(outputHz) Hz) — retry \(self.srMismatchRetryCount)/\(Self.maxSRMismatchRetries) in \(delayMS) ms")
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(delayMS) * 1_000_000)
+                self?.scheduleRebuild()
+            }
+            return
+        case .failed:
             log.error("audio.attach failed — skipping start; lastError preserved")
             return
         }
