@@ -20,6 +20,14 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.7.3
+
+A small bug-fix release. It resolves a case where waking your Mac — or coming back to it after it's been asleep overnight — could leave SherlockEQ stuck showing an audio-engine error banner instead of resuming normally. Nothing changes in how EQ or dose tracking work.
+
+**Fixes**
+
+- **Waking from sleep no longer gets stuck on an audio engine error.** Right after your Mac wakes, or after it's been asleep overnight, SherlockEQ's audio engine could briefly disagree with itself about the current sample rate and show a stuck "Audio engine: Unexpected SR mismatch" banner until you relaunched the app. SherlockEQ now recognizes this as a momentary hiccup and retries automatically, so it resolves itself within a second or two instead of getting stuck.
+
 ## 0.7.2
 
 A code-quality and security-hardening release. It fixes a crash on importing certain audiogram files, closes several findings from a focused security review — including a case where a downloaded headphone-correction file could push the volume to unpredictable levels — and stops your tinnitus and profile settings from being written to the system's debug logs. Nothing changes in how EQ, profiles, or safe-listening work.
