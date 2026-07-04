@@ -101,18 +101,41 @@ final class SherlockEQAudioEngine: ObservableObject {
         }
     }
 
+    /// Outcome of `attach(...)`. `.sampleRateMismatch` is distinguished from
+    /// `.failed` because it's the one case a caller may want to retry: it
+    /// can reflect a momentarily-stale `sourceFormat` snapshot on the tap
+    /// (see `attach`'s doc comment) rather than a real, persistent problem.
+    enum AttachOutcome {
+        case success
+        case sampleRateMismatch(sourceHz: Int, outputHz: Int)
+        case failed
+    }
+
     /// Wires up the graph with the L/R source nodes from the tap.
     /// Tears down any prior graph first; safe to call on device change.
     ///
-    /// Returns `true` on success. On failure `lastError` is set with the
+    /// Returns `.success` on success. On failure `lastError` is set with the
     /// specific reason and the caller MUST NOT call `start()` — doing so
     /// would mask the real error with a generic "no sources" message.
+    /// `.sampleRateMismatch` does NOT set `lastError` — see below.
     ///
     /// Sample-rate handling: the `sampleRate` passed in is the output
     /// device's nominal rate (which is also the rate the aggregate's
     /// drift-compensated IOProc delivers). The engine's outputNode rate
     /// matches, so the graph is uniform end-to-end and no bridge / SRC
     /// node is required. See memory `audio-engine-sr-mismatch`.
+    ///
+    /// In practice the two rates can briefly disagree right after a sleep/
+    /// wake or output-route change: `sampleRate` here comes from
+    /// `CATapEngine.sourceFormat`, a snapshot cached the last time the tap
+    /// finished its own (async) rebuild, while `outRate` below is read live
+    /// from the engine. Two independent triggers can both schedule a graph
+    /// rebuild (the tap's own device-change handling, and AVAudioEngine's
+    /// own configuration-change notification) and the second can win the
+    /// race before the tap has refreshed its cached format. Rather than
+    /// treat every mismatch as a hard failure, this returns
+    /// `.sampleRateMismatch` without setting `lastError`, so the caller can
+    /// retry — see `AudioState.rebuildAudioGraph()`.
     @discardableResult
     func attach(
         leftSource: AVAudioSourceNode,
@@ -122,7 +145,7 @@ final class SherlockEQAudioEngine: ObservableObject {
         leftDynamics: DynamicBandProcessor,
         rightDynamics: DynamicBandProcessor,
         sampleRate: Double
-    ) -> Bool {
+    ) -> AttachOutcome {
         teardownGraph()
         // A fresh graph build is a clean slate for the start() backoff
         // budget. Without this, a wake that burned all retries overnight
@@ -137,8 +160,19 @@ final class SherlockEQAudioEngine: ObservableObject {
             channels: 2
         ) else {
             lastError = "Could not build stereo format @ \(sampleRate) Hz"
-            return false
+            return .failed
         }
+
+        // Checked before attaching anything: a mismatch here means we bail
+        // out entirely without touching the engine's node graph, so a
+        // retried `attach()` call never has to clean up a partially wired
+        // graph from an earlier failed attempt.
+        let outRate = engine.outputNode.outputFormat(forBus: 0).sampleRate
+        if outRate > 0 && Int(outRate.rounded()) != Int(sampleRate.rounded()) {
+            log.error("SR mismatch: source \(Int(sampleRate)) Hz vs output \(Int(outRate)) Hz — deferring to caller's retry")
+            return .sampleRateMismatch(sourceHz: Int(sampleRate.rounded()), outputHz: Int(outRate.rounded()))
+        }
+
         self.tapSampleRate = sampleRate
         self.leftEQCascade = leftEQCascade
         self.rightEQCascade = rightEQCascade
@@ -157,7 +191,6 @@ final class SherlockEQAudioEngine: ObservableObject {
             toneSourceNode = toneNode
         }
 
-        let outRate = engine.outputNode.outputFormat(forBus: 0).sampleRate
         let mixer = engine.mainMixerNode
 
         // Output limiter — Apple's AUPeakLimiter. Catches peaks past 0 dBFS
@@ -179,20 +212,6 @@ final class SherlockEQAudioEngine: ObservableObject {
         gainStage.globalGain = Float(masterGainDB)
         engine.attach(gainStage)
         self.masterGainStage = gainStage
-
-        if outRate > 0 && Int(outRate.rounded()) != Int(sampleRate.rounded()) {
-            // Source-node format is now stamped at the output device's
-            // nominal rate (in `CATapEngine.buildTapAndAggregate`), and the
-            // aggregate's drift comp delivers that same rate to the IOProc
-            // — so this branch shouldn't be reachable in normal operation.
-            // Bail without wiring rather than connect nodes at a rate that
-            // disagrees with the output: catches a regression (e.g. tap
-            // built before output device changed without rebuild) instead
-            // of silently producing wrong-rate audio.
-            lastError = "Unexpected SR mismatch: source \(Int(sampleRate)) Hz vs output \(Int(outRate)) Hz"
-            log.error("Unexpected SR mismatch: source \(Int(sampleRate)) Hz vs output \(Int(outRate)) Hz — graph rebuild needed")
-            return false
-        }
 
         // AUPeakLimiter has a single input bus, so we
         // can't connect the two source nodes directly to it — the second
@@ -238,7 +257,14 @@ final class SherlockEQAudioEngine: ObservableObject {
         rightEQCascade.setBypassed(referenceMode)
         leftDynamics.setBypassed(referenceMode)
         rightDynamics.setBypassed(referenceMode)
-        return true
+        return .success
+    }
+
+    /// Called by the caller once it gives up retrying a persistent
+    /// `.sampleRateMismatch` — surfaces the same banner `attach()` used to
+    /// set directly, now that we know it isn't just a transient snapshot lag.
+    func reportPersistentSampleRateMismatch(sourceHz: Int, outputHz: Int) {
+        lastError = "Unexpected SR mismatch: source \(sourceHz) Hz vs output \(outputHz) Hz"
     }
 
     func start() {
