@@ -199,7 +199,6 @@ final class CATapEngine: ObservableObject {
 
     private var leftRing: TapRingBuffer?
     private var rightRing: TapRingBuffer?
-    private var tapChannelCount: Int = 2
 
     /// Installed CoreAudio property listeners, kept by block reference
     /// so `AudioObjectRemovePropertyListenerBlock` can match the
@@ -546,7 +545,6 @@ final class CATapEngine: ObservableObject {
             throw TapError.formatUnsupported
         }
         tapFormat = format
-        tapChannelCount = Int(format.channelCount)
 
         let deliveredRate = prep.deliveredRate
 
