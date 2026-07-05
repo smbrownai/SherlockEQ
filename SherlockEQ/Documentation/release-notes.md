@@ -20,6 +20,24 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.8.0
+
+A reworked Tinnitus Notch. Two behavior fixes correct how the notch filter actually sounds, and the Tinnitus Notch screen gets strength presets, a live preview of the band being reduced, a guided pitch-matching flow, and an optional daily check-in.
+
+**Fixed**
+
+- **The notch's Depth slider now actually changes the sound.** Previously the notch always cut all the way to silence at its center frequency no matter what Depth was set to — the slider had no audible effect. Depth now works as labeled: a shallower setting leaves more of the sound in place, a deeper one reduces it further.
+- **Narrow and Wide were swapped.** The Width control's Narrow setting was actually broader than Wide. They're corrected now: Narrow affects the smallest band around your selected pitch, Wide the largest.
+- **The right ear's notch now shows up on the equalizer curve.** When left and right ears had different notch settings, only the left ear's cut appeared on the frequency-response graph — the right ear's was invisible even though it was being applied correctly to the audio. Both ears now draw correctly on the Simple, Speech, Advanced, and Expert tabs.
+
+**Improved**
+
+- **Strength presets: Subtle, Balanced, Strong.** Pick a preset instead of tuning Depth and Width by hand. Each is labeled with its trade-off — Subtle keeps audio clearest, Strong reduces more but can sound duller. The fine-tune sliders are still there if you want manual control.
+- **A live preview of the notch.** The Tinnitus Notch screen now draws the actual shape of the band being reduced — center frequency, depth, and width — instead of just a line marking the pitch. Both ears show at once when your left and right notches differ.
+- **Guided pitch-matching.** An optional walkthrough helps you find a repeatable match: sweep up from below, check for octave confusion, and capture a few matches to get a suggested average and range instead of relying on a single guess.
+- **Clearer guidance on when a notch helps.** The screen now explains that a notch suits steady, tone-like ringing and is less useful for hissing, roaring, clicking, pulsing, or shifting tinnitus — and calls out pulsatile, sudden one-sided, or dizziness-accompanied symptoms as reasons to see a hearing professional instead.
+- **An optional daily check-in.** Rate how much your tinnitus bothered you today — not how loud it seemed — and see a simple trend over time. It's not a clinical score, just a way to notice whether things are trending better.
+
 ## 0.7.3
 
 A small bug-fix release. It resolves a case where waking your Mac — or coming back to it after it's been asleep overnight — could leave SherlockEQ stuck showing an audio-engine error banner instead of resuming normally. Nothing changes in how EQ or dose tracking work.
