@@ -60,6 +60,12 @@ struct ParametricCanvasView: View {
     /// happen via `NotchControlView` so the dedicated frequency/depth/width
     /// inputs stay authoritative.
     var notch: TinnitusNotch? = nil
+    /// The *other* ear's tinnitus notch, drawn as a dimmed marker so both
+    /// ears' notches stay visible when per-ear notches differ. Only supplied
+    /// when `separateNotch` is on (linked notches make this identical to
+    /// `notch`). Never folded into the composite curve — the other ear's notch
+    /// doesn't shape this ear's response; it's a reference marker only.
+    var shadowNotch: TinnitusNotch? = nil
     /// Pre-smoothed log-binned spectrum from `SpectrumAnalyzer.logSpectrumDB`.
     /// Linear-bin FFT data (`spectrumBinsDB`) is no longer drawn — the log
     /// version is uniform across the visible frequency range.
@@ -275,6 +281,7 @@ struct ParametricCanvasView: View {
                         }
                         drawTypedCurve(context, size: size, cachedDB: cachedResultDB, color: earColor, kind: .result)
                     }
+                    drawShadowNotchMarker(context, size: size)
                     drawNotchMarker(context, size: size)
                     // Editable handles show whenever an EQ-derived curve is
                     // visible — either the EQ-only trace or the Result line —
@@ -326,6 +333,7 @@ struct ParametricCanvasView: View {
         .onChange(of: targetBands) { _, _ in recomputeCachedCurves() }
         .onChange(of: shadowTargetBands) { _, _ in recomputeCachedCurves() }
         .onChange(of: notch) { _, _ in recomputeCachedCurves() }
+        .onChange(of: shadowNotch) { _, _ in recomputeCachedCurves() }
         // Peak chips are sticky — recomputed only when fresh spectrum data
         // arrives, not on every body re-eval, so chips don't churn across
         // unrelated invalidations.
@@ -336,22 +344,35 @@ struct ParametricCanvasView: View {
     /// when bands are static (one pass on edit); free on subsequent frames.
     private func recomputeCachedCurves() {
         cachedCurveDB = sampledDB(for: bandsForCurve)
-        cachedShadowDB = sampledDB(for: shadowBands)
+        cachedShadowDB = sampledDB(for: shadowBandsForCurve)
         cachedTargetDB = sampledDB(for: targetBands)
         // Result = what's heard: the EQ curve summed (in dB, via cascade) with
         // the audiogram correction. Computed per ear so an asymmetric audiogram
         // shows two Result lines even when the EQ is edited in lockstep.
         cachedResultDB = sampledDB(for: bandsForCurve + targetBands)
-        cachedResultShadowDB = sampledDB(for: shadowBands + shadowTargetBands)
+        cachedResultShadowDB = sampledDB(for: shadowBandsForCurve + shadowTargetBands)
         cachedTargetShadowDB = sampledDB(for: shadowTargetBands)
     }
 
     /// True when the two ears' curves differ audibly — drives whether the
     /// right-ear (shadow-hue) lines and the legend's Left/Right split are
     /// shown. Symmetric profiles draw one line per type and a simpler legend.
+    /// Notches count: a per-ear notch on otherwise-identical ears is exactly
+    /// the case where the second line carries information.
     private var earsAsymmetric: Bool {
         !bands.audiblyEquivalent(to: shadowBands)
             || !targetBands.audiblyEquivalent(to: shadowTargetBands)
+            || effectiveNotchesDiffer
+    }
+
+    /// Whether the two ears' notches shape audio differently. Disabled and
+    /// nil are the same thing (no contribution); two enabled notches compare
+    /// by value (`TinnitusNotch` is UUID-free, so `==` is safe here, unlike
+    /// freshly-synthesized `EQBand`s whose ids always differ).
+    private var effectiveNotchesDiffer: Bool {
+        let active = notch?.enabled == true ? notch : nil
+        let shadow = shadowNotch?.enabled == true ? shadowNotch : nil
+        return active != shadow
     }
 
     private func sampledDB(for bands: [EQBand]) -> [Double] {
@@ -595,15 +616,19 @@ struct ParametricCanvasView: View {
     /// includes it. `EQBand`'s `notch` filterType + the notch's Q and depth
     /// map naturally to a high-Q biquad bandstop with negative gain.
     private var bandsForCurve: [EQBand] {
-        guard let notch, notch.enabled else { return bands }
-        let notchBand = EQBand(
-            frequencyHz: notch.frequencyHz,
-            gaindB: notch.depthdB,
-            bandwidth: 1.0 / max(notch.qWidth.qValue, 0.1),
-            filterType: .notch,
-            enabled: true
-        )
+        // Same `asEQBand()` the audio path uses, so the drawn dip matches what
+        // the listener hears — a finite parametric cut of `depthdB` at center.
+        guard let notch, let notchBand = notch.asEQBand() else { return bands }
         return bands + [notchBand]
+    }
+
+    /// Shadow-ear equivalent of `bandsForCurve`. The audio applies each ear's
+    /// notch to that ear, so the other-ear curve must fold its own notch in —
+    /// otherwise the shadow line shows no dip even when that ear is notched
+    /// (which is what happened: the Right curve never dipped in any EQ view).
+    private var shadowBandsForCurve: [EQBand] {
+        guard let shadowNotch, let notchBand = shadowNotch.asEQBand() else { return shadowBands }
+        return shadowBands + [notchBand]
     }
 
     /// Vertical marker + label at the notch frequency. Drawn only while the
@@ -624,6 +649,29 @@ struct ParametricCanvasView: View {
             .font(.caption2.monospaced())
             .foregroundColor(.purple.opacity(0.75))
         context.draw(label, at: CGPoint(x: x + 6, y: 14), anchor: .leading)
+    }
+
+    /// Dimmed marker for the *other* ear's tinnitus notch. Drawn under
+    /// `drawNotchMarker` (thinner line, lower opacity, a second label row) so
+    /// the active ear's notch reads as dominant while the other ear's pitch is
+    /// still visible. Skipped when it would land on top of the active marker —
+    /// two identical lines just read as one fuzzy line.
+    private func drawShadowNotchMarker(_ context: GraphicsContext, size: CGSize) {
+        guard let shadowNotch, shadowNotch.enabled else { return }
+        if let notch, notch.enabled, abs(notch.frequencyHz - shadowNotch.frequencyHz) < 1 { return }
+        let x = xForFreq(shadowNotch.frequencyHz, width: size.width)
+        var line = Path()
+        line.move(to: CGPoint(x: x, y: 0))
+        line.addLine(to: CGPoint(x: x, y: size.height))
+        context.stroke(
+            line,
+            with: .color(.purple.opacity(0.28)),
+            style: StrokeStyle(lineWidth: 1, dash: [2, 4])
+        )
+        let label = Text("other ear \(Int(shadowNotch.frequencyHz)) Hz")
+            .font(.caption2.monospaced())
+            .foregroundColor(.purple.opacity(0.5))
+        context.draw(label, at: CGPoint(x: x + 6, y: 30), anchor: .leading)
     }
 
     private func drawNodes(_ context: GraphicsContext, size: CGSize) {
@@ -1339,6 +1387,21 @@ struct ParametricCanvasView: View {
     /// when the notch is enabled (otherwise the user hasn't claimed a
     /// pitch to compare against).
     private func drawNotchLine(_ context: GraphicsContext, size: CGSize) {
+        // The other ear's notch first (dimmer), so the active line lands on top.
+        if let shadowNotch, shadowNotch.enabled,
+           !(notch?.enabled == true && abs((notch?.frequencyHz ?? 0) - shadowNotch.frequencyHz) < 1) {
+            let baselineY = size.height
+            let topY = size.height * (1 - spectrumHeightFraction)
+            let y = baselineY - CGFloat(freqAxis.frac(forHz: shadowNotch.frequencyHz)) * (baselineY - topY)
+            var sLine = Path()
+            sLine.move(to: CGPoint(x: 0, y: y))
+            sLine.addLine(to: CGPoint(x: size.width, y: y))
+            context.stroke(
+                sLine,
+                with: .color(.purple.opacity(0.4)),
+                style: StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round, dash: [2, 4])
+            )
+        }
         guard let notch, notch.enabled else { return }
         let baselineY = size.height
         let topY = size.height * (1 - spectrumHeightFraction)
@@ -2126,6 +2189,7 @@ struct LiveParametricCanvas: View {
     var targetBands: [EQBand] = []
     var shadowTargetBands: [EQBand] = []
     var notch: TinnitusNotch? = nil
+    var shadowNotch: TinnitusNotch? = nil
     var spectrumSampleRate: Double = 48_000
     var earColor: Color = .blue
     var shadowColor: Color = .red
@@ -2280,6 +2344,7 @@ struct LiveParametricCanvas: View {
             targetBands: targetBands,
             shadowTargetBands: shadowTargetBands,
             notch: notch,
+            shadowNotch: shadowNotch,
             spectrumBinsDB: spectrum.logSpectrumDB,
             spectrumPeakHoldDB: spectrum.logSpectrumPeakHoldDB,
             preSpectrumBinsDB: preBins,

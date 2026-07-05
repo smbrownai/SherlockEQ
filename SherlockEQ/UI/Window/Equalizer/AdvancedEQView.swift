@@ -157,6 +157,7 @@ struct AdvancedEQView: View {
             targetBands: leftCorrection,
             shadowTargetBands: rightCorrection,
             notch: profile.leftNotch,
+            shadowNotch: profile.rightNotch,
             spectrumSampleRate: audioState.audio.outputSampleRate ?? 48_000,
             earColor: audioState.preferences.leftEarColor,
             shadowColor: audioState.preferences.rightEarColor,

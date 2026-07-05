@@ -171,6 +171,7 @@ struct SimpleEQView: View {
             targetBands: profile.leftEar.correctionBands,
             shadowTargetBands: profile.rightEar.correctionBands,
             notch: profile.leftNotch,
+            shadowNotch: profile.rightNotch,
             spectrumSampleRate: audioState.audio.outputSampleRate ?? 48_000,
             earColor: audioState.preferences.leftEarColor,
             shadowColor: audioState.preferences.rightEarColor,

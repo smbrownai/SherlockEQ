@@ -29,6 +29,11 @@ final class AudioState: ObservableObject {
     /// records change at most once a day and don't warrant a rebroadcast.
     let doseHistory = DoseHistoryStore()
 
+    /// Daily subjective tinnitus-annoyance check-ins (non-clinical). Like
+    /// `doseHistory`, a plain `let` observed directly by the Tinnitus Notch
+    /// screen — records change at most once a day.
+    let tinnitusCheckIns = TinnitusCheckInStore()
+
     /// EQ-chain control surface — see `EQChainState`. AudioState
     /// sinks each `$value` publisher (in init) and pushes the result
     /// into the engine. The four per-stage toggles also kick
@@ -390,6 +395,7 @@ final class AudioState: ObservableObject {
         // must already be wired to catch it.
         let history = doseHistory
         history.loadAll()
+        tinnitusCheckIns.loadAll()
         tracker.onDayFinalized = { [weak history] dayStart, peak in
             history?.record(dayStart: dayStart, peakDose: peak)
         }

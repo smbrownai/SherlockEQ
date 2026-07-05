@@ -667,16 +667,11 @@ final class SherlockEQAudioEngine: ObservableObject {
     }
 
     private static func notchAsBand(_ notch: TinnitusNotch) -> [EQBand] {
-        guard notch.enabled else { return [] }
-        return [
-            EQBand(
-                frequencyHz: notch.frequencyHz,
-                gaindB: notch.depthdB,
-                bandwidth: 1.0 / max(notch.qWidth.qValue, 0.1),
-                filterType: .notch,
-                enabled: true
-            )
-        ]
+        // Single source of truth on the model: a finite-depth parametric cut
+        // (not a pure RBJ notch, whose gain-independent null made the Depth
+        // control inert and whose 1/Q width inverted Narrow/Wide). See
+        // `TinnitusNotch.asEQBand()`.
+        notch.asEQBand().map { [$0] } ?? []
     }
 
     /// 1 kHz reference tone for the dB-SPL calibration workflow. Routed
