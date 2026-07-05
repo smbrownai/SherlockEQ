@@ -126,6 +126,13 @@ struct ExpertEQView: View {
                 // drew the left notch's marker/curve. (When notches aren't
                 // separate, both ears are kept in sync, so this still matches.)
                 notch: tab == .left ? profile.leftNotch : profile.rightNotch,
+                // The other ear's notch — folded into the shadow (other-ear)
+                // curve so its dip renders, and drawn as a dimmed marker when
+                // the frequencies differ. Passed unconditionally: even linked
+                // notches must appear in the shadow curve's math (the audio
+                // notches both ears), and the canvas dedups the marker when
+                // both ears sit at the same frequency.
+                shadowNotch: tab == .left ? profile.rightNotch : profile.leftNotch,
                 spectrumSampleRate: audioState.audio.outputSampleRate ?? 48_000,
                 earColor: earColor,
                 shadowColor: shadowColor,

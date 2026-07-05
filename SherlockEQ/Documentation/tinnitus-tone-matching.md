@@ -37,15 +37,52 @@ on your own terms.
 1. Start the sweep at a comfortable, low level.
 2. Move slowly across the range; pause where a tone seems to match your tinnitus.
 3. Fine-tune around that frequency.
-4. Optionally **Set as Notch** (left, right, or both ears) to place a narrow cut there in your [parametric EQ](help:parametric-eq).
+4. Optionally **Set as Notch** (left, right, or both ears) to place a gentle cut there in your [parametric EQ](help:parametric-eq).
 
 Keep the level low. The goal is comparison, not loudness.
+
+### Guided matching (optional)
+
+Because pitch matching is imprecise and easy to get an octave wrong, the
+**Guided matching** panel walks through a short protocol: sweep up from below,
+compare a tone an **octave** down and up (a common source of confusion), then
+**capture** the same match a few times. Once you've captured two or more, it
+shows a suggested **average** and the **range** — a more honest figure than a
+single "definitive" number. You can set the notch straight from that average.
+
+### Strength presets
+
+The notch has three comfort presets that trade fidelity for reduction:
+
+- **Subtle** — narrow, shallow: keeps audio clearest.
+- **Balanced** — a noticeable softening while preserving most detail.
+- **Strong** — a wider, deeper cut that may sound duller or muffled.
+
+Start with **Subtle** or **Balanced**. The **Depth** and **Width** sliders
+(behind *Fine-tune*) remain available if you want manual control; the preview
+above the controls shows the exact band being reduced.
+
+### Check-in
+
+An optional daily **check-in** lets you rate how much the ringing bothered you
+(0–10) and see a trend over time. It is **not** a clinical score — it just helps
+you notice whether things trend better rather than chasing the ringing day to
+day. Loudness and annoyance are deliberately separated: annoyance is what
+sound-therapy and habituation approaches aim to reduce.
+
+## What you'll hear
+
+A notch usually sounds slightly **less bright or less sharp** around the
+selected pitch — not a disappearance of the tinnitus. A narrow, shallow notch
+stays clear; a wider or deeper one can sound dull, hollow, or muffled,
+especially on speech (the 3–6 kHz region carries consonant clarity). You are
+hearing ordinary audio with one region de-emphasized, nothing more.
 
 ## What changes in the audio
 
 The Tone Finder generates a reference sine that bypasses your EQ, so it's a
-clean comparison tone. Setting a notch adds a narrow cut to your per-ear EQ
-chain — it does not change the tone generator.
+clean comparison tone. Setting a notch adds a **finite, depth-controlled dip**
+to your per-ear EQ chain — it does not change the tone generator.
 
 ## How it interacts with other settings
 
@@ -72,9 +109,12 @@ chain — it does not change the tone generator.
 
 ## Technical notes
 
-The generator is a continuous-phase sine to avoid clicks while sweeping; the
-notch uses a narrow biquad band-reject filter from the same EQ engine as the
-rest of the app.
+The generator is a continuous-phase sine to avoid clicks while sweeping. The
+notch is realized as a **parametric (peaking) biquad with negative gain** from
+the same EQ engine as the rest of the app — a finite dip whose **depth** (in dB)
+and **width** (Q → octave bandwidth) are exactly what the preview draws, so what
+you see matches what you hear. Narrow ≈ Q 8 (~0.18 octave), Medium ≈ Q 4
+(~0.36 octave), Wide ≈ Q 2 (~0.72 octave).
 
 ## Research context
 
