@@ -200,6 +200,15 @@ final class CATapEngine: ObservableObject {
     private var leftRing: TapRingBuffer?
     private var rightRing: TapRingBuffer?
 
+    /// Number of channels the process tap itself contributes to the
+    /// aggregate's input scope, read from the tap object's own format at
+    /// prep time (not inferred). The IOProc uses this to locate the tap's
+    /// channels as the trailing `tapChannelCount` slice — robust to a mono
+    /// tap or an output device that also exposes hardware inputs ahead of
+    /// the tap. Defaults to 2 (we create a stereo global tap); only ever
+    /// less if the tap format query surfaces a mono tap.
+    private var tapChannelCount: Int = 2
+
     /// Installed CoreAudio property listeners, kept by block reference
     /// so `AudioObjectRemovePropertyListenerBlock` can match the
     /// original closures when tearing down (the API matches by block
@@ -423,6 +432,7 @@ final class CATapEngine: ObservableObject {
         let aggregateDeviceID: AudioDeviceID
         let asbd: AudioStreamBasicDescription
         let deliveredRate: Double
+        let tapChannelCount: Int
     }
 
     /// All of the synchronous CoreAudio calls that historically ran on
@@ -509,6 +519,13 @@ final class CATapEngine: ObservableObject {
             throw error
         }
 
+        // Ask the tap object how many channels IT contributes, so the IOProc
+        // can locate the tap as the trailing slice rather than assuming a
+        // stereo pair. Best-effort: a query failure falls back to 2 (our tap
+        // is always a stereo global tap), preserving prior behaviour. Clamp
+        // to at least 1 so the IOProc arithmetic can't underflow.
+        let tapChannels = max(1, Int((try? tapStreamFormat(newTapID))?.mChannelsPerFrame ?? 2))
+
         return TapPrepResult(
             outputDeviceID: outputDeviceID,
             outputDeviceName: outputDeviceName,
@@ -516,7 +533,8 @@ final class CATapEngine: ObservableObject {
             tapID: newTapID,
             aggregateDeviceID: newAggID,
             asbd: asbd,
-            deliveredRate: deliveredRate
+            deliveredRate: deliveredRate,
+            tapChannelCount: tapChannels
         )
     }
 
@@ -545,6 +563,7 @@ final class CATapEngine: ObservableObject {
             throw TapError.formatUnsupported
         }
         tapFormat = format
+        tapChannelCount = prep.tapChannelCount
 
         let deliveredRate = prep.deliveredRate
 
@@ -775,6 +794,10 @@ final class CATapEngine: ObservableObject {
         let layoutBytesRef = Unmanaged.passUnretained(ioProcFirstByteSize)
         let callsRef = Unmanaged.passUnretained(ioProcCalls)
 
+        // Capture the tap's real channel count by value — the block can't hop
+        // back to the actor to read `self.tapChannelCount` on the audio thread.
+        let tapChannels = tapChannelCount
+
         let ioStatus = AudioDeviceCreateIOProcIDWithBlock(
             &procID,
             aggregateDeviceID,
@@ -791,23 +814,32 @@ final class CATapEngine: ObservableObject {
             let rightBuf = rightRef.takeUnretainedValue()
             let peakBuf = peakRef.takeUnretainedValue()
 
-            // The process tap occupies the LAST stereo pair of channels in the
+            // The process tap occupies the LAST `tapChannels` channels of the
             // aggregate's input scope. CoreAudio appends tap channels after
             // each sub-device's channels, so when the output device is itself
             // an interface with hardware inputs (e.g. a RODECaster), those
             // input channels appear FIRST and the tap follows — reading
             // channels 0-1 there grabs the device's live input (static) instead
-            // of the captured system audio. For an output-only device the tap
-            // is the only input, so the trailing pair IS channels 0-1 and
-            // behaviour is unchanged. Buffers may be interleaved (one buffer,
-            // N channels) or planar (N buffers, one channel each); emitTapChannel
-            // resolves a global channel index across both layouts.
+            // of the captured system audio. `tapChannels` is the tap's own
+            // reported channel count, so we key off the trailing slice rather
+            // than assuming a stereo pair: a MONO tap sitting behind hardware
+            // inputs reads its single channel into both ears instead of pulling
+            // a live input channel into the left ear. For an output-only device
+            // the tap is the only input, so the trailing slice IS channels
+            // 0-1 and behaviour is unchanged. Buffers may be interleaved (one
+            // buffer, N channels) or planar (N buffers, one channel each);
+            // emitTapChannel resolves a global channel index across both.
             var totalChannels = 0
             for b in abl { totalChannels += Int(b.mNumberChannels) }
             guard totalChannels >= 1 else { return }
 
-            let tapRight = totalChannels - 1
-            let tapLeft = totalChannels >= 2 ? totalChannels - 2 : tapRight
+            // Clamp the tap slice to what's actually present, then take its
+            // first two channels as L/R (front pair for a multichannel tap,
+            // the same single channel for a mono tap).
+            let slice = max(1, min(tapChannels, totalChannels))
+            let tapStart = totalChannels - slice
+            let tapLeft = tapStart
+            let tapRight = slice >= 2 ? tapStart + 1 : tapStart
 
             var peak: Float = 0
             let framesL = Self.emitTapChannel(abl: abl, globalChannel: tapLeft, into: leftBuf, peak: &peak)
@@ -1245,6 +1277,23 @@ extension CATapEngine {
             throw TapError.tapUIDUnavailable(status)
         }
         return cf as String
+    }
+
+    /// The tap object's own stream format. `mChannelsPerFrame` is the
+    /// authoritative channel count the tap injects into the aggregate's
+    /// input scope — used to locate the tap channels without assuming a
+    /// stereo pair. Throws on a failed query so the caller can fall back.
+    nonisolated static func tapStreamFormat(_ tapID: AudioObjectID) throws -> AudioStreamBasicDescription {
+        var asbd = AudioStreamBasicDescription()
+        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioTapPropertyFormat,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let status = AudioObjectGetPropertyData(tapID, &address, 0, nil, &size, &asbd)
+        guard status == noErr else { throw TapError.formatUnavailable(status) }
+        return asbd
     }
 
     nonisolated static func inputStreamFormat(_ deviceID: AudioDeviceID) throws -> AudioStreamBasicDescription {
