@@ -1093,13 +1093,19 @@ struct ParametricCanvasView: View {
     /// *per-FFT-bin dBFS* (which is what the spectrum overlay and the
     /// bars actually read). Hann windowing distributes a sine's energy
     /// across ~4 FFT bins, leaving each individual bin's peak energy
-    /// ~6 dB below the tone's RMS. For broadband content the gap is
-    /// larger as energy spreads further. Without this offset, bars never
-    /// turn amber/red even when the dBA meter shows the user is well
-    /// above their ceiling — the math was technically right but the
-    /// comparison was apples-to-oranges. 12 dB is the empirical fit that
-    /// makes the bar warnings line up with Safe Listening's "Loud" state.
-    private static let safetyBinEnergyOffsetDB: Double = 12
+    /// below the tone's RMS; for broadband content the gap is larger as
+    /// energy spreads further. Without this offset, bars never turn
+    /// amber/red even when the dBA meter shows the user is well above
+    /// their ceiling — the comparison would be apples-to-oranges.
+    ///
+    /// This was an empirical 12 dB fit against the old spectrum scale.
+    /// `SpectrumAnalyzer` now coherent-gain-corrects that scale (bins read
+    /// +1.76 dB, referencing (Σw)² rather than N² — see bug-audit #23), so
+    /// the paired offset drops by the same 1.76 dB to keep the warn line
+    /// exactly where it was tuned against Safe Listening's "Loud" state. The
+    /// residual 10.24 dB is now purely the single-sided + broadband-spread
+    /// gap, no longer the window's coherent gain.
+    private static let safetyBinEnergyOffsetDB: Double = 10.24
     private func safetyThresholdDBFS(at hz: Double) -> Double {
         let aw = SpectrumAnalyzer.aWeightDB(frequencyHz: hz)
         return safetyCeilingDBA - calibrationOffsetDBA - aw - Self.safetyBinEnergyOffsetDB

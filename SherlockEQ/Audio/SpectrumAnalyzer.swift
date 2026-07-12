@@ -74,6 +74,12 @@ final class SpectrumAnalyzer: ObservableObject {
     // FFT state (created once, reused per frame).
     private let dftSetup: vDSP.DiscreteFourierTransform<Float>
     private var hannWindow: [Float]
+    /// (Σw)² for the analysis window — the coherent-gain power reference the
+    /// per-bin dBFS scale divides by (see `drainAndProcess`). Precomputed from
+    /// the actual window coefficients so it's exact for whatever window mode
+    /// `vDSP_hann_window` produces (this NORM window is power-normalized, so
+    /// Σw ≈ 0.8165·N, not the textbook 0.5·N). Set alongside `hannWindow`.
+    private var windowSumSquared: Float = 1
     private var sampleRate: Double = 48000
 
     /// Render-thread-shared state, guarded by `accumulatorState`'s unfair
@@ -168,6 +174,8 @@ final class SpectrumAnalyzer: ObservableObject {
         var window = [Float](repeating: 0, count: Self.fftSize)
         vDSP_hann_window(&window, vDSP_Length(Self.fftSize), Int32(vDSP_HANN_NORM))
         self.hannWindow = window
+        let windowSum = vDSP.sum(window)
+        self.windowSumSquared = windowSum * windowSum
         // Reserve once so subsequent `append(contentsOf:)` calls on the
         // audio thread don't reallocate when the array grows.
         accumulatorState.withLock { $0.accumulator.reserveCapacity(Self.maxAccumulatorSamples) }
@@ -406,19 +414,24 @@ final class SpectrumAnalyzer: ObservableObject {
         // Normalise so bin values are dBFS-scaled. Without this, raw biquads
         // are in arbitrary 0…+60 dB range and the parametric canvas paints
         // a solid block instead of a varying spectrum.
-        let invN2 = Float(1.0 / (Double(Self.fftSize) * Double(Self.fftSize)))
-        // Floor on the un-scaled magSquared. Picking `1e-20 / invN2` here is
-        // numerically equivalent to the previous `max(magSquared * invN2,
-        // 1e-20)` clamp — both pin the eventual dB output at 10·log10(1e-20)
-        // = -200 dB for any bin whose magnitude collapses to zero, so log10
-        // never sees a literal zero.
-        var rawFloor: Float = 1e-20 / invN2
+        //
+        // The reference is (Σw)² — the window's *coherent gain* squared — not
+        // N². Dividing by N² leaves a fixed, window-dependent offset in the
+        // absolute dBFS scale (−1.76 dB for this power-normalized Hann window,
+        // whose Σw ≈ 0.8165·N). Referencing (Σw)² removes it: a full-scale
+        // sinusoid now reads its true single-sided level of −6.02 dBFS (the
+        // inherent amplitude-vs-bin convention the −6 dBFS display ceiling is
+        // built around), independent of window choice. See bug-audit #23. NB:
+        // the safety overlay's `safetyBinEnergyOffsetDB` is paired with this
+        // reference — changing one without the other shifts the warn line.
+        var refSquared = windowSumSquared  // = (Σw)²
+        // Floor on the un-scaled magSquared, pinned so the eventual dB output
+        // bottoms out at 10·log10(1e-20) = −200 dB for any bin whose magnitude
+        // collapses to zero — log10 never sees a literal zero.
+        var rawFloor: Float = 1e-20 * refSquared
         vDSP_vthr(magSquared, 1, &rawFloor, &magSquared, 1, vDSP_Length(Self.halfFFT))
-        // dB = 10·log10(magSquared / N²). vDSP_vdbcon with flag=0 (power)
-        // does exactly this with a single reference scalar — folding the
-        // invN2 normalisation into the reference avoids a separate scaling
-        // pass.
-        var refSquared: Float = 1.0 / invN2  // = N²
+        // dB = 10·log10(magSquared / (Σw)²). vDSP_vdbcon with flag=0 (power)
+        // does exactly this with a single reference scalar.
         var dbBins = [Float](repeating: 0, count: Self.halfFFT)
         vDSP_vdbcon(
             magSquared, 1,
