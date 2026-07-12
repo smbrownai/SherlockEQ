@@ -20,6 +20,15 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.8.1
+
+A small maintenance release with two accuracy fixes under the hood: more robust detection of which channels carry your system audio when your output is an audio interface, and a corrected level scale on the spectrum display. Nothing changes in how EQ, presets, or listening-dose tracking work.
+
+**Fixes**
+
+- **Sturdier audio capture on interfaces that also have inputs.** When your output device is an audio interface with its own microphone or line inputs (for example a podcasting mixer), SherlockEQ now reads the device's actual channel layout to locate your system audio instead of assuming a fixed position. This guards against an edge case where a live input could bleed into one ear. On ordinary speakers, headphones, and DACs nothing changes — this is a robustness improvement, not a change you'll normally hear.
+- **The spectrum display's level scale now reads true.** The frequency spectrum was reading about 1.8 dB lower than the actual signal because of how the analysis window was accounted for, so the numbers on the display sat slightly low. The scale is now calibrated correctly. This is a display-only change — it never affected the audio you hear, and it never affected listening-dose tracking, which measures level independently. The safety-warning line on the spectrum stays exactly where it was.
+
 ## 0.8.0
 
 A reworked Tinnitus Notch. Two behavior fixes correct how the notch filter actually sounds, and the Tinnitus Notch screen gets strength presets, a live preview of the band being reduced, a guided pitch-matching flow, and an optional daily check-in.
