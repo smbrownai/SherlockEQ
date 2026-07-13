@@ -2,7 +2,7 @@
 title: "Analog Control Unit"
 slug: "analog-control-unit"
 category: "Surfaces & Organization"
-summary: "A vintage-style control surface that maps directly onto SherlockEQ's existing controls — not a separate processing mode."
+summary: "A vintage-style control surface that drives a dedicated quick-adjust tone profile plus macOS system volume and output — a separate mode, not a view over your main-window controls."
 keywords:
   - analog
   - control unit
@@ -21,10 +21,12 @@ related:
 
 ## What it does
 
-The Analog Control Unit is an optional, fixed-size window styled like a vintage
-hardware front panel. Its knobs and meters are a **direct view over controls you
-already have** — turning a knob here is exactly the same as moving the
-corresponding slider elsewhere.
+The Analog Control Unit is an optional, fixed-width window styled like a vintage
+hardware front panel, with an expandable spectrum-analyzer panel at the bottom.
+It is a **separate quick-adjust mode**: while it's open, audio is routed through
+a dedicated, hidden "analog" tone profile, and its Volume and Output knobs reach
+out to macOS itself. It does **not** edit — or reflect — your main-window
+controls.
 
 ## Why it exists
 
@@ -34,22 +36,32 @@ level.
 
 ## How the knobs map
 
-- **Volume** → master [gain](help:gain-volume).
-- **Balance** → [balance](help:balance).
-- **Bass / Mid / Treble** → [Simple EQ](help:simple-eq).
+- **Volume** → the **macOS system output volume** (via the system, not the app's
+  internal [gain](help:gain-volume)). This reaches outside SherlockEQ and changes
+  the level of all system audio.
+- **Output** → switches the **macOS default output device**, rerouting all system
+  audio (the tap follows it). Not just SherlockEQ's [output](help:output-devices).
+- **Balance / Bass / Mid / Treble** → a dedicated **"analog" tone profile** private
+  to this window (bass shelf @ 250 Hz, mid bell @ 1 kHz, treble shelf @ 5 kHz, plus
+  stereo balance). These do **not** edit your active profile's [Simple EQ](help:simple-eq);
+  the analog tone is remembered separately across opens.
 - **VU meters** → the existing [metering](help:vu-meters).
-- **Output selector** (if shown) → the active [output device](help:output-devices).
+- **Spectrum panel** → an expandable real-time analyzer with its own display
+  settings (color, dimming, sensitivity, peak-only).
 
 ## What changes in the audio
 
-Nothing new. The Analog Control Unit is **not a separate processing mode** — it
-writes to the same state as the main window and popover. Whatever you set here
-is reflected everywhere, and vice versa.
+While the Analog Control Unit is open, audio is routed through its bare,
+dedicated "analog" tone profile — your active profile in the main window is left
+untouched and resumes automatically when you close the window. Changes here are
+**not** reflected in the main window, and vice versa.
 
 ## How it interacts with other settings
 
-- It edits the **active [profile](help:profiles)** and global gain, just like the other surfaces.
-- Open it from the **Window** menu; it coexists with the main window.
+- It edits a **private analog tone profile** and the **macOS system volume /
+  output device** — it does **not** touch your active [profile](help:profiles) or
+  the app's global gain.
+- Open it from the **Window** menu (**⌘1**); it coexists with the main window (**⌘0**).
 
 ## Recommended uses
 
@@ -62,8 +74,11 @@ is reflected everywhere, and vice versa.
 
 ## Technical notes
 
-The faceplate is a pure SwiftUI view bound to the same observable state objects
-as the rest of the app; there is no additional audio processing behind it.
+The faceplate is a pure SwiftUI view. Its tone knobs drive a hidden per-window
+"analog" override profile (a simple Bass/Mid/Treble + balance cascade) that
+temporarily replaces the active profile in the audio graph while the window is
+open; the Volume and Output knobs call macOS system-volume and default-output
+controls directly.
 
 ## Limitations
 

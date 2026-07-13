@@ -54,7 +54,9 @@ frequencies equally.
 ## Recommended uses
 
 - Restoring level after corrective cuts.
-- A consistent output trim per [profile](help:profiles).
+- A single global output trim shared across every profile. (For a trim that
+  belongs to one [profile](help:profiles) and swaps with it, use that profile's
+  **Global trim** control instead — master gain is not per-profile.)
 
 ## Things to avoid
 

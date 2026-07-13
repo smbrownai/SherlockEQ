@@ -38,7 +38,7 @@ A menu-bar popover surfaces live levels, today's dose, master gain, balance, and
 - **Core Audio Tap API** reads system audio at the source. No virtual driver, no kernel extension, no audio routing to configure.
 - **Custom per-ear biquad cascade**, derived from Audio EQ Cookbook formulas, runs in an `AVAudioSourceNode` render block. This bypasses `AVAudioUnitEQ`'s stereo coupling — a left-ear notch leaves the right channel untouched.
 - **vDSP / Accelerate** for a 2048-point Hann-windowed FFT, the IEC 61672-1 A-weighting curve, and the dose math. The audio thread does a `memcpy` into a ring buffer; the FFT runs off-thread.
-- **Stack as many bands per ear as you need.** Seven filter types: parametric, low/high shelf, notch, band/low/high pass.
+- **Stack up to 16 bands per ear.** Seven filter types: parametric, low/high shelf, notch, band/low/high pass.
 
 ## Install
 
@@ -59,7 +59,7 @@ Updates ship via [Sparkle](https://sparkle-project.org). If you installed via Ho
 
 - macOS 14.6 or later (Sonoma)
 - Apple Silicon or Intel (universal binary)
-- Permissions: **Microphone** and **Screen & System Audio Recording** (macOS requires Screen Recording to capture audio from other processes; SherlockEQ does not record video or screen contents)
+- Permission: **Screen & System Audio Recording** (macOS requires this to capture audio from other processes; SherlockEQ does not record video or screen contents). It does **not** request Microphone access — it captures the system audio mix via the Core Audio Tap API, not an input device.
 
 SherlockEQ is **not** in the Mac App Store — the App Store sandbox prohibits the cross-process audio read that the Tap API needs. The DMG is Apple-signed and notarized through the standard Developer ID program.
 

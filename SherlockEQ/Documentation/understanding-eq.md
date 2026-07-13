@@ -34,9 +34,9 @@ match a preference, correct a device, or adjust for how you hear.
 
 Frequency is measured in **hertz (Hz)** — humans hear roughly 20 Hz to
 20,000 Hz (20 kHz). Level changes are measured in **decibels (dB)**: positive
-values boost, negative values cut. The decibel scale is logarithmic, so +6 dB
-is roughly a doubling of acoustic power, and a few decibels is an audible but
-not drastic change.
+values boost, negative values cut. The decibel scale is logarithmic: +10 dB is
+roughly a doubling of *perceived loudness*, +6 dB doubles the sound pressure,
+and a few decibels is an audible but not drastic change.
 
 A **filter** is one EQ move. Common shapes:
 

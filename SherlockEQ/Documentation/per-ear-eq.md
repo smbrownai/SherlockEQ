@@ -32,7 +32,7 @@ particular frequencies. A single stereo EQ can't address that; per-ear EQ can.
 
 ## How to use it
 
-Turn on **Separate L+R** for the profile. The EQ views then show independent
+Turn on **Separate L + R** for the profile. The EQ views then show independent
 left and right controls. Adjust each side to taste. With it off, both ears
 share one shape (the common case).
 
@@ -44,7 +44,7 @@ a change on one side does not affect the other.
 ## How it interacts with other settings
 
 - **Per-Ear EQ vs. [Balance](help:balance):** balance changes overall *level* on one side; per-ear EQ changes the *frequency shape* of one side. They solve different problems and can be used together.
-- Feeds from the same per-ear band storage used by [Simple](help:simple-eq) and [Parametric](help:parametric-eq) modes, plus any [audiogram](help:audiogram-profiles) shaping and [tinnitus notch](help:tinnitus-tone-matching).
+- Feeds from the same per-ear band storage used by [Simple](help:simple-eq), [Speech](help:speech-eq), [Advanced](help:advanced-eq), and [Expert / Parametric](help:parametric-eq) modes, plus any [audiogram](help:audiogram-profiles) shaping and [tinnitus notch](help:tinnitus-tone-matching) layered on top.
 - The per-profile setting; different [profiles](help:profiles) can choose linked or separate.
 
 ## Recommended uses

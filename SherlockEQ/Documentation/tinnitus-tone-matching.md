@@ -37,7 +37,7 @@ on your own terms.
 1. Start the sweep at a comfortable, low level.
 2. Move slowly across the range; pause where a tone seems to match your tinnitus.
 3. Fine-tune around that frequency.
-4. Optionally **Set as Notch** (left, right, or both ears) to place a gentle cut there in your [parametric EQ](help:parametric-eq).
+4. Optionally **Set as Notch** to place a gentle cut there. This sets both ears; a Left / Right / Both choice appears only when **Separate L+R notch** is enabled (see [Per-Ear EQ](help:per-ear-eq)).
 
 Keep the level low. The goal is comparison, not loudness.
 
@@ -86,7 +86,7 @@ to your per-ear EQ chain — it does not change the tone generator.
 
 ## How it interacts with other settings
 
-- A notch is an ordinary band in [Parametric EQ](help:parametric-eq); you can adjust or remove it there.
+- A notch is a dedicated per-profile control, shown only as a marker on the [Parametric EQ](help:parametric-eq) curve. You adjust or remove it on the Tinnitus Notch screen, not as an ordinary EQ band.
 - With [Per-Ear EQ](help:per-ear-eq), you can notch one ear independently.
 - The reference tone ignores your profile EQ so the pitch you hear isn't colored by it.
 

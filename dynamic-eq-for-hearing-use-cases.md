@@ -2,8 +2,8 @@
 
 **Feature:** Level-dependent EQ processors for speech presence, harshness control, and sibilance taming
 **For:** Claude Code implementation session
-**Scope:** New DSP stage (per-ear dynamic band processors), profile schema extension, new "Clarity" panel, Expert canvas activity overlay
-**Status:** Specified, not yet scheduled
+**Scope:** New DSP stage (per-ear dynamic band processors), profile schema extension, new panel, Expert canvas activity overlay
+**Status:** ✅ **Shipped** — implemented as the **Listening Comfort** panel (the working title "Clarity" survives only in internal identifiers: `SidebarSection.clarity`, `ClarityView`, `DynamicFeature`). Code: `Audio/DynamicBandProcessor.swift`, `Models/DynamicFeature.swift`, `HearingProfile.dynamics`, `UI/Window/Clarity/`. This document is retained as the historical design record.
 **Spec date:** 2026-06-09
 
 ---
