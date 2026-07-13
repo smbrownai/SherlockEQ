@@ -109,6 +109,11 @@ translate measured thresholds into frequency- and level-dependent gain using
 loudness models and compression — not a simple inverse curve — and verify the
 result with real-ear measurement.[^4][^3]
 
+SherlockEQ derives its suggested shape from **NAL-R** (National Acoustic
+Laboratories, Revised; Byrne & Dillon 1986), the linear predecessor of NAL-NL2,
+scaled down by the Compensation Strength control. It is a conservative starting
+point for tuning by ear — not a verified clinical fitting.
+
 ## References
 
 [^1]: American Speech-Language-Hearing Association. "Pure-Tone Testing." ASHA Practice Portal. https://www.asha.org/practice-portal/clinical-topics/

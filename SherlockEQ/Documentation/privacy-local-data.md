@@ -77,10 +77,11 @@ you export or share a profile, treat it as you would any personal data.
 
 ## Permissions, and why
 
-SherlockEQ requests **microphone** and **system-audio / screen recording**
-permission. These are required by macOS to capture the system audio mix for
-processing — **not** to record you. See [Getting Started](help:getting-started)
-and [Troubleshooting](help:troubleshooting).
+SherlockEQ requests **System Audio Recording** permission (shown under
+**Screen & System Audio Recording** in System Settings). It does **not** request
+microphone access. This permission is required by macOS to capture the system
+audio mix for processing — **not** to record you. See
+[Getting Started](help:getting-started) and [Troubleshooting](help:troubleshooting).
 
 ## Recommended uses
 

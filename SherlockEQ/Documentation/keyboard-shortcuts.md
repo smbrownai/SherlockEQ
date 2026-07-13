@@ -29,6 +29,7 @@ related:
 | Shortcut | Action |
 | --- | --- |
 | ⌘0 | Show the main SherlockEQ window |
+| ⌘1 | Show the Analog Control Unit |
 | ⌘W | Close the current window |
 | ⌘M | Minimize |
 
@@ -39,7 +40,7 @@ Closing a window does not quit SherlockEQ — it keeps running in the menu bar.
 | Shortcut | Action |
 | --- | --- |
 | ⌘B | Toggle Reference Mode (bypass EQ) — main window |
-| ⌥⇧⌘B | Global Reference Mode toggle (works from any app, when enabled in Settings) |
+| ⇧⌘B | Global Reference Mode toggle (works from any app, when enabled in Settings) |
 
 ## Editing
 

@@ -81,7 +81,7 @@ may need to be opened via **right-click → Open** the first time, or allowed in
 
 ## Reset settings
 
-- To reset a single setup, edit a [profile](help:profiles) and start fresh — or, for a factory preset, use **Reset to Factory Default** to return it to its shipped values.
+- To reset a single setup, edit a [profile](help:profiles) and start fresh — or, for a factory preset, use **Reset to Default** to return it to its shipped values.
 - To clear everything, quit SherlockEQ and remove `~/Library/Application Support/SherlockEQ/` (this deletes your profiles — export first if you want backups). See [Privacy & Local Data](help:privacy-local-data).
 
 ## Uninstall

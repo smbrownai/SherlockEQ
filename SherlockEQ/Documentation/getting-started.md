@@ -36,10 +36,13 @@ per-app setup.
 ## Step 1 — Grant permissions
 
 On first launch macOS will ask for permission to capture system audio.
-SherlockEQ needs two grants:
+SherlockEQ needs **one** grant:
 
-1. **Microphone** — required by the audio framework even though SherlockEQ does not record you.
-2. **System Audio Recording** (called **Screen Recording** on macOS 14) — this is the non-obvious one. Without it, SherlockEQ receives **silence** and the meters stay flat. Grant it in **System Settings → Privacy & Security → Screen & System Audio Recording**, then relaunch.
+- **System Audio Recording** (called **Screen Recording** on macOS 14) — Without it, SherlockEQ receives **silence** and the meters stay flat. Grant it in **System Settings → Privacy & Security → Screen & System Audio Recording**, then relaunch.
+
+SherlockEQ does **not** request microphone access — it captures the system
+audio mix through Apple's Core Audio Tap API, not through an input device, so
+no "Microphone" prompt appears.
 
 If audio isn't being processed, this permission is the first thing to check —
 see [Troubleshooting](help:troubleshooting).

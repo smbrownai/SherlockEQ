@@ -214,7 +214,13 @@ numeric fields alongside. Values entered in **dB HL** (hearing level, as reporte
 on audiograms). Left/right tab on the same screen.
 
 **Conversion to EQ** (`AudiogramConversion.bands(for:compensationFactor:)`):
-- `gain_at_freq = threshold_dBHL × compensation_factor`
+- > **Implemented (updated after this spec):** the linear half-gain formula below
+  > was the original design. Shipping code uses the **NAL-R** prescription
+  > (Byrne & Dillon 1986): `REIG(f) = X + 0.31·HTL(f) + k(f)`, with
+  > `X = 0.05·(HTL₅₀₀ + HTL₁₀₀₀ + HTL₂₀₀₀)`. `compensationFactor` is now an overall
+  > strength multiplier on the whole prescription (not the gain fraction). The
+  > ceiling, disable-threshold, band count, and slider below still hold.
+- `gain_at_freq = threshold_dBHL × compensation_factor` *(original design; superseded by NAL-R)*
 - Default `compensationFactor` = 0.5; range `0.25…1.0`
 - Hard ceiling: no single band boosted more than **+20 dB** regardless of loss
   (`AudiogramConversion.perBandCeilingDB`)
@@ -790,7 +796,7 @@ sidebar (220pt) toggleable from the toolbar.
 
 **Sidebar groups** (`SidebarView`):
 
-- **Audio Processor** — Audiogram, Equalizer, Tinnitus Notch, Safe Listening
+- **Audio Processor** — Audiogram, Equalizer, Tinnitus Notch, Listening Comfort, Safe Listening
 - **App** — Settings, Debug
 - Bottom safe-area inset: active profile name (read-only label) + "Manage
   Profiles" button (selects the Profiles section). Profiles is reachable via this
@@ -1042,8 +1048,10 @@ SherlockEQ/
 <key>LSUIElement</key><true/>                              <!-- start as menu-bar agent -->
 <key>LSApplicationCategoryType</key><string>public.app-category.music</string>
 
-<key>NSMicrophoneUsageDescription</key>
-<string>SherlockEQ uses microphone access for the audio path; it does not record audio.</string>
+<!-- NOTE (updated after this spec): the app ships ONLY NSAudioCaptureUsageDescription.
+     NSMicrophoneUsageDescription was removed — CATap reads other processes' audio via
+     the process-tap API, not an input device, so the app never requests microphone TCC
+     and no "Microphone" prompt appears. The entitlements file is empty (no audio-input). -->
 <key>NSAudioCaptureUsageDescription</key>
 <string>SherlockEQ uses this permission to capture system audio through Apple's Core Audio Tap API. It does not record audio to disk.</string>
 
@@ -1053,13 +1061,14 @@ SherlockEQ/
 <key>SUPublicEDKey</key>  <string>wltqWmlE8DlhQFGVxSRGLO06xjRrYO3jDIu8h3SYx58=</string>
 ```
 
-The two privacy strings cover both TCC buckets — `NSMicrophoneUsageDescription`
-pairs with the `audio-input` entitlement, and `NSAudioCaptureUsageDescription`
-is the "System Audio Recording" bucket (user-visible name on macOS 15+; on 14.x
-the `kTCCServiceAudioCapture` service is grouped under Screen Recording in the
+A single privacy string is used — `NSAudioCaptureUsageDescription`, the
+"System Audio Recording" bucket (user-visible name on macOS 15+; on 14.x the
+`kTCCServiceAudioCapture` service is grouped under Screen Recording in the
 Settings UI). The app deliberately does NOT use `NSScreenCaptureUsageDescription`
 or the CGRequest screen-capture APIs — CATap belongs in System Audio Recording
-only.
+only. It also does NOT request microphone TCC (no `NSMicrophoneUsageDescription`,
+no `audio-input` entitlement): the process-tap API reads other apps' audio
+without an input device, so a "Microphone" prompt would be misleading.
 
 App is NOT sandboxed (`ENABLE_APP_SANDBOX = NO`); hardened runtime is on
 (`ENABLE_HARDENED_RUNTIME = YES`). No privileged helper, no driver installation,
@@ -1075,7 +1084,7 @@ distributed (Core Audio Taps requires `audio-input` outside the sandbox).
 | Item | Notes |
 |------|-------|
 | App Store distribution | Core Audio Taps requires `com.apple.security.device.audio-input` outside the App Store sandbox. Current plan: notarized DMG distribution (same model as eqMac). |
-| dBHL → EQ accuracy | The default 0.5× compensation factor is a pragmatic heuristic. A more rigorous approach would apply ISO 226 equal-loudness correction to convert dBHL thresholds to dBSPL before deriving EQ gains; not currently planned. |
+| dBHL → EQ accuracy | **Resolved.** Shipped as the **NAL-R** prescription (Byrne & Dillon 1986), replacing the linear 0.5× half-gain heuristic. The ISO 226 dBSPL-conversion approach was evaluated and **rejected** — dB HL is already per-frequency normalised, so gaining from SPL would over-boost lows even for normal hearing. See `AudiogramConversion.swift`. |
 | Cubic-spline interpolation | Spec §5.2 originally called for cubic-spline-derived intermediate bands. Not implemented — `AudiogramConversion.bands(for:compensationFactor:)` emits one band per audiogram point. Adding interpolation later would not change the function signature. |
 | Spectrogram visualisation | `.spectrogram` mode is implemented in `ParametricCanvasView` but hidden from the user-visible picker (`CanvasVizMode.userVisibleCases`) pending a performance pass (~120% CPU during testing) and a UX review. |
 | Onboarding wizard | Implemented as a lean three-step first-launch wizard (§8.4): welcome + upstream-EQ note → permission priming (defers the system-audio + notification prompts so they arrive with context) → starter-profile pick with optional deep-links. Replayable from Settings → About. The deeper guided audiogram / tinnitus / calibration steps the original spec imagined were deliberately left as deep-link pointers to the now-first-class screens. |

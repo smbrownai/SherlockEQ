@@ -46,7 +46,7 @@ bell affects a wide band around its center.
 
 ## How it interacts with other settings
 
-- Simple, Parametric, and other EQ modes write to the **same underlying per-ear band storage**, so switching modes is non-destructive — bands you set elsewhere are kept, just hidden.
+- Simple, Speech, Advanced, and Expert modes write to the **same underlying per-ear band storage**, so switching modes is non-destructive — bands you set elsewhere are kept, just hidden.
 - Boosts raise overall level and interact with master [gain](help:gain-volume) and [clipping](help:safety-limits).
 - Differs from [audiogram profiles](help:audiogram-profiles), which derive a frequency-specific shape rather than three broad regions.
 
