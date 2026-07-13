@@ -309,23 +309,41 @@ final class SherlockEQAudioEngine: ObservableObject {
     /// True if `error` is a HAL-layer transient failure — the output
     /// device refused to open right now but should accept a fresh
     /// `start()` once the underlying transition settles. Caller retries
-    /// with escalating backoff. Two codes qualify, both in the avfaudio
-    /// or POSIX domains:
+    /// with escalating backoff. Qualifying codes live in the avfaudio or
+    /// POSIX domains:
     ///
     /// - `EAGAIN` (35) — route / sample-rate renegotiation still in flight.
     /// - `'nope'` (1852797029) — the avfaudio "cannot start IO in the
     ///   current context" code, most often seen when the Mac wakes from
     ///   an overnight sleep before the HAL has re-published the device.
+    /// - the HAL device/object transient statuses (`'!dev'`, `'!obj'`,
+    ///   `'stop'`, `'what'`) — avfaudio surfaces the underlying HAL
+    ///   `OSStatus` as the NSError code when the output device handle is
+    ///   stale or not-yet-ready after wake. Kept in sync with
+    ///   `CATapEngine.transientHALStatuses`.
     private static func isTransientHALFailure(_ error: NSError) -> Bool {
         guard error.domain == "com.apple.coreaudio.avfaudio"
             || error.domain == NSPOSIXErrorDomain
         else { return false }
-        return error.code == 35 || error.code == cannotStartIOInCurrentContext
+        return error.code == 35 || transientHALStatuses.contains(OSStatus(error.code))
     }
 
-    /// `'nope'` (0x6E6F7065) — AVAudioEngine "cannot start IO in the
-    /// current context", a transient post-wake / route-change state.
-    private static let cannotStartIOInCurrentContext = 1_852_797_029
+    /// Transient HAL start statuses avfaudio may re-surface as its NSError
+    /// code after a wake/route change. Mirrors
+    /// `CATapEngine.transientHALStatuses`.
+    ///
+    /// - `'nope'` (1852797029) — cannot act in the current context.
+    /// - `'!dev'` (560227702)  — device handle gone stale.
+    /// - `'!obj'` (560947818)  — stale object ID.
+    /// - `'stop'`              — HAL/device not yet running.
+    /// - `'what'`              — generic post-wake hiccup.
+    private static let transientHALStatuses: Set<OSStatus> = [
+        OSStatus(kAudioHardwareIllegalOperationError),
+        OSStatus(kAudioHardwareBadDeviceError),
+        OSStatus(kAudioHardwareBadObjectError),
+        OSStatus(kAudioHardwareNotRunningError),
+        OSStatus(kAudioHardwareUnspecifiedError),
+    ]
 
     /// Counts consecutive transient-failure retries so the chain can't
     /// loop forever — once it reaches `maxStartRetries` the banner
