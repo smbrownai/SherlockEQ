@@ -408,7 +408,10 @@ trim folded into `globalTrimDB`, `isBuiltIn: true`, and a `presetDescription` +
 Listening, Presence Boost. The cold default (and onboarding default) is **Music
 Balanced**.
 
-Gains per Advanced center (31.5 / 63 / 125 / 250 / 500 / 1k / 2k / 4k / 8k / 16k Hz):
+Gains per factory-preset center (31.5 / 63 / 125 / 250 / 500 / 1k / 2k / 4k /
+8k / 16k Hz — the v1 authoring grid; the Advanced *surface* is now the 12-band
+audiometric grid with 3 kHz and 6 kHz added, where these presets read 0 until
+the Phase-3 §3 re-voicing):
 
 | Preset | Bands (dB) | Output trim |
 |---|---|---|
@@ -848,7 +851,9 @@ alongside. EQ preview rendered below.
 - *Simple* — three slots (250 Hz low-shelf, 1 kHz parametric, 5 kHz high-shelf)
 - *Speech* — six slots (60 Hz low-shelf, 200 / 800 / 2500 / 6000 Hz parametric,
   12 kHz high-shelf) tuned for voice intelligibility
-- *Advanced* — 10-band graphic EQ (31.5, 63, 125, 250, 500, 1k, 2k, 4k, 8k, 16k Hz)
+- *Advanced* — 12-band graphic EQ on the audiometric grid (31.5, 63, 125, 250,
+  500, 1k, 2k, 3k, 4k, 6k, 8k, 16k Hz — the octave series plus the 3 & 6 kHz
+  audiogram frequencies; canonical list: `EQMode.graphicCenters`)
 - *Expert* — full parametric canvas (draggable nodes, biquad curve, spectrum
   underlay, layer chip strip, AutoEQ + audiogram + safety overlays, L/R link)
 

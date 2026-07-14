@@ -233,8 +233,8 @@ extension HearingProfile {
 extension HearingProfile {
 
     /// The four shipped listening-comfort presets, in their canonical UI
-    /// order. These are tone/comfort presets built on the existing 10-band
-    /// Advanced EQ — explicitly **not** medical hearing correction. Each has
+    /// order. These are tone/comfort presets built on the Advanced graphic
+    /// EQ — explicitly **not** medical hearing correction. Each has
     /// a stable id so "Reset to Factory Default" and "Restore Factory
     /// Presets" can find and rebuild it, and a fixed historical `createdAt`
     /// so the store's createdAt sort places them first, in this order.
@@ -255,11 +255,17 @@ extension HearingProfile {
         var createdAt: Date { Date(timeIntervalSince1970: 1_600_000_000 + Double(rawValue)) }
     }
 
-    /// The ten Advanced-EQ center frequencies, in slider order. Mirrors
-    /// `AdvancedEQView.frequencies` / `EQMode.advanced` owned slots.
+    /// Centers the v1 factory gains arrays were authored on. Deliberately
+    /// NOT `EQMode.graphicCenters` (which gained 3 kHz / 6 kHz in the
+    /// phase-3 grid change): the gains below are positional, so zipping
+    /// them against a longer center list would silently shift every
+    /// preset's voicing onto the wrong frequencies. Frozen until the §3
+    /// preset re-voicing lands 12-entry gains tables — the §3 migration
+    /// also compares stored presets against these exact v1 values to
+    /// detect user edits, so factory output must stay byte-stable.
     static let advancedCenters: [Double] = [31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
 
-    /// Build the ten Advanced parametric bands from a gain-per-center list.
+    /// Build the Advanced parametric bands from a gain-per-center list.
     /// Bandwidth 1.0 (one octave) matches the Advanced graphic-EQ slots so
     /// `AdvancedEQView` finds and shows them via `EQBandLookup`.
     private static func advancedBands(_ gains: [Double]) -> [EQBand] {
@@ -348,6 +354,18 @@ extension HearingProfile {
 enum EQMode: String, Codable, CaseIterable, Identifiable {
     case simple, speech, advanced, expert
 
+    /// The Advanced (Graphic) surface's slider centers — the 12-band
+    /// audiometric grid (phase3-make-correction-land.md §2). The octave
+    /// series plus 3 kHz and 6 kHz: audiogram frequencies where
+    /// presbycusis concentrates and consonant energy lives, previously
+    /// missing from the graphic surface. Single source of truth — the
+    /// slider row (`AdvancedEQView.frequencies`) and this mode's
+    /// `ownedSlots` both read it, so the surface and the hidden-bands
+    /// accounting can't drift apart.
+    static let graphicCenters: [Double] = [
+        31.5, 63, 125, 250, 500, 1000, 2000, 3000, 4000, 6000, 8000, 16000
+    ]
+
     var id: String { rawValue }
 
     var label: String {
@@ -398,8 +416,7 @@ enum EQMode: String, Codable, CaseIterable, Identifiable {
                 EQSlot(frequencyHz: 12000, filterType: .highShelf),
             ]
         case .advanced:
-            let centers: [Double] = [31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
-            return Set(centers.map { EQSlot(frequencyHz: $0, filterType: .parametric) })
+            return Set(Self.graphicCenters.map { EQSlot(frequencyHz: $0, filterType: .parametric) })
         case .expert:
             return nil
         }

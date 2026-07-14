@@ -5,7 +5,7 @@ import Combine
 import OSLog
 
 /// AVAudioEngine graph that takes the L/R source nodes from `CATapEngine`,
-/// runs each through an independent 10-band `AVAudioUnitEQ`, and sums to stereo
+/// runs each through an independent per-ear `BiquadCascade`, and sums to stereo
 /// output via `mainMixerNode`.
 @MainActor
 final class SherlockEQAudioEngine: ObservableObject {

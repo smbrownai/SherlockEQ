@@ -2,12 +2,12 @@
 title: "Advanced EQ"
 slug: "advanced-eq"
 category: "Core EQ"
-summary: "A ten-band graphic equalizer at standard octave centers — more control than Simple, simpler than Expert."
+summary: "A twelve-band graphic equalizer on the audiometric grid — more control than Simple, simpler than Expert."
 keywords:
   - advanced
   - graphic
   - equalizer
-  - ten band
+  - twelve band
   - octave
   - sliders
 related:
@@ -21,15 +21,16 @@ related:
 
 ## What it does
 
-Advanced EQ is a **ten-band graphic equalizer**: a row of vertical sliders at
-standard octave-spaced center frequencies. It sits between [Simple
+Advanced EQ is a **twelve-band graphic equalizer**: a row of vertical sliders
+on the audiometric grid — the standard octave centers plus 3 and 6 kHz, the
+same frequencies your [audiogram](help:audiogram-profiles) is measured at. It sits between [Simple
 EQ](help:simple-eq) (three broad controls) and [Expert / Parametric
 EQ](help:parametric-eq) (arbitrary bands) — enough resolution to shape a curve
 across the whole spectrum, without managing individual filter parameters.
 
-The ten bands are fixed at:
+The twelve bands are fixed at:
 
-**31.5 · 63 · 125 · 250 · 500 Hz · 1 · 2 · 4 · 8 · 16 kHz**
+**31.5 · 63 · 125 · 250 · 500 Hz · 1 · 2 · 3 · 4 · 6 · 8 · 16 kHz**
 
 Each is a one-octave-wide peaking filter, so neighbouring sliders blend into a
 smooth overall shape.
