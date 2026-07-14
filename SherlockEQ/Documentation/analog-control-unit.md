@@ -38,7 +38,9 @@ level.
 
 - **Volume** → the **macOS system output volume** (via the system, not the app's
   internal [gain](help:gain-volume)). This reaches outside SherlockEQ and changes
-  the level of all system audio.
+  the level of all system audio. The [listening-dose estimate](help:safety-limits)
+  tracks this knob: turning it changes your dose accrual rate, just like the
+  volume keys.
 - **Output** → switches the **macOS default output device**, rerouting all system
   audio (the tap follows it). Not just SherlockEQ's [output](help:output-devices).
 - **Balance / Bass / Mid / Treble** → a dedicated **"analog" tone profile** private

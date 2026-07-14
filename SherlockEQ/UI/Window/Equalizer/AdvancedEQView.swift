@@ -171,7 +171,7 @@ struct AdvancedEQView: View {
             showSafetyOverlay: showSafetyLayer,
             showPeakCallouts: showPeaksLayer,
             safetyCeilingDBA: profile.safeListeningCeilingDB,
-            calibrationOffsetDBA: audioState.calibrationOffsetDBA
+            calibrationOffsetDBA: audioState.effectiveCalibrationOffsetDBA
         )
         .frame(height: 180)
     }

@@ -34,7 +34,9 @@ struct MainPopoverView: View {
             )
             PopoverLevelStrip(
                 monitor: audioState.stereoMonitor,
-                calibrationOffsetDBA: audioState.calibrationOffsetDBA
+                // Effective (volume-tracked) offset so the zone boundaries
+                // reflect at-ear level, not calibration-time level.
+                calibrationOffsetDBA: audioState.effectiveCalibrationOffsetDBA
             )
             masterGainRow
             balanceRow
