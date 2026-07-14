@@ -110,8 +110,8 @@ Uses `NavigationSplitView` with a left sidebar and a persistent right monitor si
 What belongs here:
 - All profile management (create, duplicate, delete, reorder, import, export)
 - Audiogram entry (interactive chart + numeric fields)
-- Equalizer (Simple / Speech / Advanced / Expert — the active profile commits to one
-  mode; mode picker lives on Profile Detail)
+- Equalizer (Graphic / Parametric — the active profile commits to one
+  surface; picker lives on Profile Detail)
 - Tinnitus Notch (Tone Finder + notch controls, consolidated)
 - Safe Listening detail and history
 - All Settings
@@ -172,12 +172,15 @@ Each profile contains (see `HearingProfile.swift`):
   `autoEQBands: [EQBand]?`, `autoEQPreampDB: Double?` — parsed AutoEQ correction
 - `safeListeningCeilingDB: Double` — user-set, default 85.0
 - `compensationFactor: Double` — `0.25…1.0`, audiogram→EQ strength
-- `separateChannels: Bool` — toggles per-ear UI for the Simple/Advanced/Expert EQ
+- `separateChannels: Bool` — toggles per-ear UI for both EQ
   surfaces (default false: single-column UI; symmetric-hearing users keep it off)
-- `eqMode: EQMode` — `.simple`, `.speech`, `.advanced`, `.expert`. The four modes
-  are storage views onto the same band array, not stackable layers — the profile
-  commits to one mental model. Switching is non-destructive. New profiles default
-  to `.simple`; legacy decode defaults to `.expert`.
+- `eqMode: EQMode` — `.advanced` (display name **Graphic**) or `.expert`
+  (display name **Parametric**). Two surfaces onto the same band array; persisted
+  raw values are frozen for JSON compatibility, and the retired v1 modes
+  ("simple", "speech") decode onto Graphic. Switching is non-destructive — the
+  Graphic surface exposes any band it can't edit via its "Other filters" row
+  (convert-to-sliders fit, or the Parametric escape hatch). New profiles default
+  to `.advanced`; a profile JSON with no eqMode at all decodes `.expert`.
 - `isBuiltIn: Bool` — marks one of the four shipped factory listening presets
   (Voice Clarity, Music Balanced, Gentle Listening, Presence Boost). No longer a
   lock: factory presets are editable in place. The flag only enables a per-profile
@@ -399,7 +402,7 @@ needed).
 
 ### 5.8 Factory Listening Presets
 
-Four shipped **listening-comfort presets** built on the existing 10-band Advanced EQ
+Four shipped **listening-comfort presets** built on the Graphic EQ
 (`HearingProfile.factoryProfiles`). These are tone/comfort presets — **not** medical
 hearing correction; copy never implies treating hearing loss, tinnitus, or any
 condition. Each has a stable id, `eqMode: .advanced`, identical L/R bands, an output
@@ -429,16 +432,17 @@ The limiter stays the existing global setting — no per-profile limiter state. 
 remain instant hard-swaps (click-free by the cascade's state-zeroing + denormal flush);
 no ramping was added.
 
-Separately, the **Speech EQ mode** (`EQMode.speech`) is a 6-band slider surface
-(60 Hz low-shelf, 200 / 800 / 2500 / 6000 Hz parametric, 12 kHz high-shelf) so users
-can dial in a voice-tuned EQ themselves without using the preset.
+The former **Speech EQ mode** was retired in the phase-3 surface consolidation;
+its perceptual vocabulary and voice-tuning role fold into the Graphic surface
+(labels/help + the upcoming "Clearer voices" purpose preset — see
+`phase3-make-correction-land.md` §1/§3).
 
 ---
 
-### 5.9 Parametric EQ (Expert View)
+### 5.9 Parametric EQ
 
-The full-control surface. Reached by setting the active profile's `eqMode` to
-`.expert` (mode picker lives on Profile Detail). Rendered by `ExpertEQView` via
+The full-control surface. Reached by setting the active profile's EQ surface to
+**Parametric** on Profile Detail (`eqMode = .expert`). Rendered by `ExpertEQView` via
 `ParametricCanvasView`.
 
 - Interactive frequency response canvas: log-scaled x-axis (20 Hz – 20 kHz),
@@ -695,7 +699,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     var safeListeningCeilingDB: Double              // default 85
     var compensationFactor: Double                  // 0.25…1.0
     var separateChannels: Bool
-    var eqMode: EQMode                              // .simple / .speech / .advanced / .expert
+    var eqMode: EQMode                              // .advanced (Graphic) / .expert (Parametric)
     var isBuiltIn: Bool                             // factory preset marker (editable, not locked)
     var presetDescription: String?                 // factory-preset card copy
     var presetTags: [String]                       // factory-preset best-use tags
@@ -729,7 +733,7 @@ struct TinnitusNotch: Codable, Hashable {
     var qWidth: NotchWidth                          // .narrow (Q 8) / .medium (Q 4) / .wide (Q 2)
 }
 
-enum EQMode: String, Codable, CaseIterable { case simple, speech, advanced, expert }
+enum EQMode: String, Codable, CaseIterable { case advanced /* Graphic */, expert /* Parametric */ }
 ```
 
 `HearingProfile` carries a custom `init(from decoder:)` so older JSON (pre-balance,
@@ -847,18 +851,20 @@ ear tabs). Draggable threshold points at standard frequencies plus numeric entry
 alongside. EQ preview rendered below.
 
 **Equalizer** — shows the single EQ surface that matches the active profile's
-`eqMode`. The four modes:
-- *Simple* — three slots (250 Hz low-shelf, 1 kHz parametric, 5 kHz high-shelf)
-- *Speech* — six slots (60 Hz low-shelf, 200 / 800 / 2500 / 6000 Hz parametric,
-  12 kHz high-shelf) tuned for voice intelligibility
-- *Advanced* — 12-band graphic EQ on the audiometric grid (31.5, 63, 125, 250,
+`eqMode`. The two surfaces:
+- *Graphic* — 12-band graphic EQ on the audiometric grid (31.5, 63, 125, 250,
   500, 1k, 2k, 3k, 4k, 6k, 8k, 16k Hz — the octave series plus the 3 & 6 kHz
-  audiogram frequencies; canonical list: `EQMode.graphicCenters`)
-- *Expert* — full parametric canvas (draggable nodes, biquad curve, spectrum
+  audiogram frequencies; canonical list: `EQMode.graphicCenters`). Off-grid
+  bands (from Parametric, the retired Simple/Speech modes, or the CLI's
+  `simple-eq` slots) appear in an **"Other filters" row**: the response curve
+  always includes them, and the row offers **Convert to Graphic** (a damped
+  fixed-point fit of their composite response onto the 12 bells —
+  `GraphicConversion`; one undo step) or **Edit in Parametric**. Nothing
+  active is ever invisible.
+- *Parametric* — full parametric canvas (draggable nodes, biquad curve, spectrum
   underlay, layer chip strip, AutoEQ + audiogram + safety overlays, L/R link)
 
-Switching modes is non-destructive: bands the other modes wrote stay in storage and
-just hide. A "hidden bands" hint chip surfaces them when relevant.
+Switching surfaces is non-destructive: bands stay in storage either way.
 
 **Tinnitus Notch** — Tone Finder + notch controls on one screen. Frequency sweep
 (1 kHz – 16 kHz), fine-tune stepper, volume row, "Set as notch frequency". Notch
@@ -969,6 +975,7 @@ SherlockEQ/
 │   ├── AudioCounter.swift                  ← Lock-protected diagnostic counters
 │   ├── SystemVolumeController.swift        ← macOS output volume read/write + dB/mute/UID
 │   ├── VolumeAnchoredCalibration.swift     ← Calibration volume anchor + delta math
+│   ├── GraphicConversion.swift             ← Off-grid filters → 12-band graphic fit
 │   └── GlobalHotKey.swift                  ← Carbon RegisterEventHotKey wrapper (⌘⇧B)
 │
 ├── State/
@@ -1023,9 +1030,7 @@ SherlockEQ/
 │   │   │   └── EQPreviewView.swift
 │   │   ├── Equalizer/
 │   │   │   ├── EqualizerView.swift         ← Switches on profile.eqMode
-│   │   │   ├── SimpleEQView.swift
-│   │   │   ├── SpeechEQView.swift
-│   │   │   ├── AdvancedEQView.swift
+│   │   │   ├── GraphicEQView.swift         ← 12-band graphic surface + "Other filters" row
 │   │   │   └── ExpertEQView.swift
 │   │   ├── ToneFinder/
 │   │   │   └── ToneFinderView.swift        ← Sidebar title: "Tinnitus Notch"; bundles Tone Finder + notch controls
@@ -1049,7 +1054,6 @@ SherlockEQ/
 │       ├── BuiltInProfileBanner.swift
 │       ├── EQBypassButton.swift
 │       ├── EQGainChip.swift
-│       ├── HiddenBandsHintChip.swift
 │       ├── CanvasLayerChipStrip.swift
 │       ├── LogFreqAxis.swift
 │       ├── PlaceholderView.swift

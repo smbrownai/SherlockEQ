@@ -68,10 +68,35 @@ struct HearingProfileDecoderTests {
     @Test func missingEqModeDefaultsToExpert() throws {
         // Legacy profiles get .expert so users who scattered bands
         // across the old multi-tab UI still see everything on first
-        // load. New profiles default to .simple via the designated init.
+        // load. New profiles default to .advanced (Graphic) via the
+        // designated init.
         let json = Self.minimalLegacyJSON(omitting: "eqMode")
         let profile = try Self.decoder.decode(HearingProfile.self, from: json)
         #expect(profile.eqMode == EQMode.expert)
+    }
+
+    @Test func retiredModesDecodeToGraphic() throws {
+        // "simple" and "speech" were removed in the phase-3 surface
+        // consolidation; profiles that stored them land on Graphic. Their
+        // off-grid bands stay in storage and surface via the "Other
+        // filters" row — nothing active becomes invisible.
+        for retired in ["simple", "speech"] {
+            let data = "\"\(retired)\"".data(using: .utf8)!
+            let mode = try JSONDecoder().decode(EQMode.self, from: data)
+            #expect(mode == .advanced)
+        }
+    }
+
+    @Test func survivingModesRoundTripTheirRawValues() throws {
+        // Persisted raw values are frozen ("advanced" / "expert") even
+        // though display names changed to Graphic / Parametric — old
+        // exports must keep importing, and re-saves must not churn JSON.
+        for (raw, mode) in [("advanced", EQMode.advanced), ("expert", EQMode.expert)] {
+            let decoded = try JSONDecoder().decode(EQMode.self, from: "\"\(raw)\"".data(using: .utf8)!)
+            #expect(decoded == mode)
+            let encoded = String(data: try JSONEncoder().encode(mode), encoding: .utf8)
+            #expect(encoded == "\"\(raw)\"")
+        }
     }
 
     @Test func missingIsBuiltInDefaultsToFalse() throws {

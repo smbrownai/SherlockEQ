@@ -349,11 +349,13 @@ final class AudioState: ObservableObject {
         applyActiveProfile()
     }
 
-    /// A bare profile: flat audiogram, no notch / clarity / AutoEQ, Simple-EQ
-    /// mode, linked channels. Only the simple shelves + balance ever change.
+    /// A bare profile: flat audiogram, no notch / clarity / AutoEQ, linked
+    /// channels. Only the three tone bands (bass/mid/treble shelves + bell)
+    /// and balance ever change; the profile never renders in the Equalizer
+    /// UI, so its eqMode is inert (Graphic, like every new profile).
     private static func makeAnalogProfile() -> HearingProfile {
         var profile = HearingProfile.makeDefault(name: "Analog Control Unit", symbol: "dial.medium.fill")
-        profile.eqMode = .simple
+        profile.eqMode = .advanced
         profile.separateChannels = false
         return profile
     }

@@ -12,7 +12,7 @@ keywords:
   - de-ess
   - adaptive
 related:
-  - speech-eq
+  - graphic-eq
   - parametric-eq
   - per-ear-eq
   - safety-limits
@@ -65,7 +65,7 @@ goes with the audio rather than being baked into a fixed curve.
 
 - Runs alongside your chosen EQ mode and [headphone correction](help:headphone-correction-autoeq); it shapes dynamically on top of those static curves.
 - With [Per-Ear EQ](help:per-ear-eq) on, each feature can be set independently for the left and right ears; otherwise one control drives both.
-- For *static* speech shaping (always-on, not signal-following), use [Speech EQ](help:speech-eq) instead — the two complement each other.
+- For *static* speech shaping (always-on, not signal-following), shape the voice region on the [Graphic EQ](help:graphic-eq) instead — the two complement each other.
 - Reductions lower level on their moments; Speech Presence's lift interacts with master [gain](help:gain-volume) and [clipping](help:safety-limits) like any boost.
 
 ## Recommended uses
@@ -77,7 +77,7 @@ goes with the audio rather than being baked into a fixed curve.
 ## Things to avoid
 
 - Maxing **Strength** and **Sensitivity** together — the processing becomes audible (pumping, lisping) on material that didn't need it.
-- Treating it as a fix for a consistently dull or bright source — that's a job for static [EQ](help:simple-eq).
+- Treating it as a fix for a consistently dull or bright source — that's a job for static [EQ](help:graphic-eq).
 
 ## Not a hearing aid
 

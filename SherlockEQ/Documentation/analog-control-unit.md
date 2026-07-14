@@ -13,7 +13,7 @@ keywords:
 related:
   - gain-volume
   - balance
-  - simple-eq
+  - graphic-eq
   - vu-meters
 ---
 
@@ -45,7 +45,7 @@ level.
   audio (the tap follows it). Not just SherlockEQ's [output](help:output-devices).
 - **Balance / Bass / Mid / Treble** → a dedicated **"analog" tone profile** private
   to this window (bass shelf @ 250 Hz, mid bell @ 1 kHz, treble shelf @ 5 kHz, plus
-  stereo balance). These do **not** edit your active profile's [Simple EQ](help:simple-eq);
+  stereo balance). These do **not** edit your active profile's [Graphic EQ](help:graphic-eq);
   the analog tone is remembered separately across opens.
 - **VU meters** → the existing [metering](help:vu-meters).
 - **Spectrum panel** → an expandable real-time analyzer with its own display

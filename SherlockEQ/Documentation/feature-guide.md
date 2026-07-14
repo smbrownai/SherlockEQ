@@ -23,10 +23,8 @@ A map of SherlockEQ's capabilities. Each entry links to a full article.
 
 - [Volume / Gain](help:gain-volume) — master output level after EQ.
 - [Balance](help:balance) — left/right level offset.
-- [Simple EQ](help:simple-eq) — Bass / Mid / Treble.
-- [Speech EQ](help:speech-eq) — six named bands tuned for voice and dialogue.
-- [Advanced EQ](help:advanced-eq) — ten-band graphic EQ at octave centers.
-- [Parametric EQ](help:parametric-eq) — frequency, gain, Q, filter type, stacked bands (Expert).
+- [Graphic EQ](help:graphic-eq) — twelve-band graphic EQ on the audiometric grid; the everyday surface.
+- [Parametric EQ](help:parametric-eq) — frequency, gain, Q, filter type, stacked bands.
 - [Per-Ear EQ](help:per-ear-eq) — independent left and right correction.
 
 Each profile picks **one** of these EQ modes for the Equalizer screen; they all

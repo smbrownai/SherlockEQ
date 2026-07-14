@@ -1,17 +1,18 @@
 import SwiftUI
 
-/// Equalizer section of the main window — shows the EQ view that
-/// matches the active profile's `eqMode`. The four modes (Simple,
-/// Speech, Advanced, Expert) are storage views onto one underlying
-/// band array, not stackable layers — the profile commits to one
-/// mental model. Mode picker lives on Profile Detail.
+/// Equalizer section of the main window — shows the EQ surface that
+/// matches the active profile's `eqMode`. Two surfaces (Graphic,
+/// Parametric) edit one underlying band array; the picker lives on
+/// Profile Detail. Switching is non-destructive — bands the other
+/// surface wrote stay in storage, and Graphic surfaces any it can't
+/// edit via its "Other filters" row.
 struct EqualizerView: View {
     @EnvironmentObject private var profileStore: ProfileStore
     @EnvironmentObject private var audioState: AudioState
 
     var body: some View {
         let activeProfile = audioState.activeProfile(in: profileStore)
-        let mode = activeProfile?.eqMode ?? .simple
+        let mode = activeProfile?.eqMode ?? .advanced
 
         VStack(spacing: 0) {
             // Factory presets are editable in place; edits to one can be
@@ -19,9 +20,7 @@ struct EqualizerView: View {
             // globally via "Restore Factory Presets". No lock here.
             Group {
                 switch mode {
-                case .simple:   SimpleEQView()
-                case .speech:   SpeechEQView()
-                case .advanced: AdvancedEQView()
+                case .advanced: GraphicEQView()
                 case .expert:   ExpertEQView()
                 }
             }

@@ -17,7 +17,8 @@ import Foundation
 /// stored data.
 ///
 /// These are deliberately NOT modelled as `EQBand`s: storing them as
-/// bands would entangle them with `EQMode.ownedSlots`, `HiddenBandsHintChip`
+/// bands would entangle them with `EQMode.ownedSlots`, the Graphic surface's
+/// "Other filters" accounting
 /// accounting, preset menus, AutoEQ combine logic, and
 /// `audiblyEquivalent(to:)` — none of which know what a threshold or an
 /// attack time means. They follow the Tinnitus Notch pattern instead:

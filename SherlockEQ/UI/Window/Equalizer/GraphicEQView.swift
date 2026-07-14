@@ -4,7 +4,7 @@ import SwiftUI
 /// octave series plus 3 kHz and 6 kHz, so the graphic surface speaks the
 /// same frequencies as the audiogram). Like Simple, it shares the
 /// underlying band array with the other tabs.
-struct AdvancedEQView: View {
+struct GraphicEQView: View {
     @EnvironmentObject private var profileStore: ProfileStore
     @EnvironmentObject private var audioState: AudioState
 
@@ -38,7 +38,7 @@ struct AdvancedEQView: View {
             ContentUnavailableView(
                 "No active profile",
                 systemImage: "slider.vertical.3",
-                description: Text("Make a profile active to use the Advanced EQ.")
+                description: Text("Make a profile active to use the Graphic EQ.")
             )
         }
     }
@@ -52,7 +52,7 @@ struct AdvancedEQView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 topBar
-                HiddenBandsHintChip()
+                otherFiltersRow(profile)
                 CanvasLayerChipStrip(
                     showInputSpectrum: $showInputLayer,
                     showOutputSpectrum: $showOutputLayer,
@@ -85,11 +85,11 @@ struct AdvancedEQView: View {
 
     /// One-click curated curves shaped to the 10 octave bands. Mirrors
     /// the Speech and Simple preset menus so the affordance reads as
-    /// consistent across tabs. Each preset overwrites the 10 Advanced
+    /// consistent across tabs. Each preset overwrites the graphic
     /// bands on both ears; other tabs' bands stay untouched.
     private var presetMenu: some View {
         Menu {
-            ForEach(AdvancedEQPreset.allCases) { preset in
+            ForEach(GraphicEQPreset.allCases) { preset in
                 Button {
                     apply(preset)
                 } label: {
@@ -129,11 +129,11 @@ struct AdvancedEQView: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("One-click curated curves for the 10 Advanced bands.")
-        .accessibilityLabel("Advanced EQ preset")
+        .help("One-click curated curves for the graphic bands.")
+        .accessibilityLabel("Graphic EQ preset")
     }
 
-    private func apply(_ preset: AdvancedEQPreset) {
+    private func apply(_ preset: GraphicEQPreset) {
         guard let profile = audioState.activeProfile(in: profileStore) else { return }
         var updated = profile
         EQBandLookup.mutateBothEars(of: &updated) { bands in
@@ -143,6 +143,105 @@ struct AdvancedEQView: View {
             }
         }
         try? profileStore.save(updated)
+    }
+
+    // MARK: - Other filters (the "nothing invisible" invariant)
+
+    /// Bands the graphic sliders can't represent — anything off the 12-slot
+    /// grid (filters from the retired Simple/Speech modes, Parametric-
+    /// authored bands, CLI `simple-eq` writes). The response curve above
+    /// already draws them (it renders the full band array), so the curve is
+    /// honest; this row makes sure the *controls* story is honest too:
+    /// convert them onto the sliders, or edit them where they live. See
+    /// phase3-make-correction-land.md §1.4.
+    @ViewBuilder private func otherFiltersRow(_ profile: HearingProfile) -> some View {
+        let leftHidden = audiblyContributing(EQMode.advanced.hiddenBands(in: profile.leftEar.bands))
+        let rightHidden = audiblyContributing(EQMode.advanced.hiddenBands(in: profile.rightEar.bands))
+        let count = max(leftHidden.count, rightHidden.count)
+        if count > 0 {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "slider.horizontal.2.square.on.square")
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(count) other filter\(count == 1 ? "" : "s") active")
+                        .font(.callout.weight(.semibold))
+                    Text("Filters not on these sliders — from Parametric, an older mode, or the command line. The curve above includes them.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Convert to Graphic") {
+                    convertOtherFilters(profile)
+                }
+                .help("Approximate these filters on the 12 sliders and remove the originals. One undo step.")
+                Button("Edit in Parametric") {
+                    var updated = profile
+                    updated.eqMode = .expert
+                    try? profileStore.save(updated, actionName: "Switch to Parametric")
+                }
+                .help("Switch this profile to the Parametric surface, where every filter is editable directly.")
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.orange.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(Color.orange.opacity(0.35))
+            )
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// The invariant is about *audible* processing: an off-grid band that
+    /// contributes nothing (disabled, or a gain-driven type sitting at
+    /// 0 dB — e.g. residue from the CLI's `simple-eq … 0`) doesn't warrant
+    /// the row. Gain-independent types (notch / band-pass / low-pass /
+    /// high-pass) always shape the signal while enabled, whatever their
+    /// gain field says.
+    private func audiblyContributing(_ bands: [EQBand]) -> [EQBand] {
+        bands.filter { band in
+            guard band.enabled else { return false }
+            switch band.filterType {
+            case .parametric, .lowShelf, .highShelf:
+                return band.gaindB != 0
+            case .notch, .bandPass, .lowPass, .highPass:
+                return true
+            }
+        }
+    }
+
+    /// Fold the off-grid filters into the graphic sliders (per ear) and
+    /// remove the originals. Additive in dB — cascade magnitudes sum — so
+    /// fitting the off-grid bands alone and adding onto the current slider
+    /// gains preserves the total curve up to the fit's approximation error.
+    /// Inert off-grid bands (disabled / 0-gain) contribute nothing to the
+    /// fit and are simply removed as cleanup.
+    private func convertOtherFilters(_ profile: HearingProfile) {
+        var updated = profile
+        for ear in [\HearingProfile.leftEar, \HearingProfile.rightEar] {
+            let hidden = EQMode.advanced.hiddenBands(in: updated[keyPath: ear].bands)
+            guard !hidden.isEmpty else { continue }
+            let fitted = GraphicConversion.fittedGains(for: hidden.filter(\.enabled))
+
+            let hiddenIDs = Set(hidden.map(\.id))
+            updated[keyPath: ear].bands.removeAll { hiddenIDs.contains($0.id) }
+
+            for (center, gain) in zip(EQMode.graphicCenters, fitted) where gain != 0 {
+                let current = EQBandLookup.gain(
+                    at: center, filterType: .parametric,
+                    in: updated[keyPath: ear].bands
+                )
+                let merged = min(GraphicConversion.sliderRangeDB.upperBound,
+                                 max(GraphicConversion.sliderRangeDB.lowerBound, current + gain))
+                EQBandLookup.setGain(
+                    merged, at: center, bandwidth: Self.bandwidth,
+                    filterType: .parametric, in: &updated[keyPath: ear].bands
+                )
+            }
+        }
+        try? profileStore.save(updated, actionName: "Convert filters to Graphic EQ")
     }
 
     @State private var dummySelection: UUID? = nil
@@ -278,7 +377,7 @@ struct AdvancedEQView: View {
             Button(role: .destructive) {
                 reset(profile)
             } label: {
-                Label("Flatten Advanced bands", systemImage: "arrow.counterclockwise")
+                Label("Flatten Graphic bands", systemImage: "arrow.counterclockwise")
             }
         }
     }
@@ -467,14 +566,14 @@ private struct VerticalGainSlider: View {
     }
 }
 
-// MARK: - Advanced presets
+// MARK: - Graphic presets
 
-/// Curated starting points for the Advanced graphic EQ. Each preset
+/// Curated starting points for the Graphic EQ. Each preset
 /// lists per-band dB offsets keyed by the band's centre frequency
 /// (Hz). Bands not in `gains` get 0 (flat / removed from the chain) —
 /// which is also how the presets behave on the 12-band grid's 3 kHz /
 /// 6 kHz slots until the §3 re-voicing gives them explicit values.
-enum AdvancedEQPreset: String, CaseIterable, Identifiable {
+enum GraphicEQPreset: String, CaseIterable, Identifiable {
     case flat
     case loudness
     case warm
@@ -570,7 +669,7 @@ enum AdvancedEQPreset: String, CaseIterable, Identifiable {
 
     func gain(forHz hz: Double) -> Double { gains[hz] ?? 0 }
 
-    /// Keyed by band centre frequency — matches `AdvancedEQView.frequencies`.
+    /// Keyed by band centre frequency — matches `GraphicEQView.frequencies`.
     var gains: [Double: Double] {
         switch self {
         case .flat:
