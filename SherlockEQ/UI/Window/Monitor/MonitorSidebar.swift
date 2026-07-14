@@ -8,9 +8,9 @@ import SwiftUI
 ///
 /// Contents (top → bottom):
 ///   1. Output level VU — vertical L/R peak meter. Triple-tap the
-///      header to cycle through Digital → Analog VU → Vectorscope →
-///      Waveform display modes. The three secondary modes preserve the
-///      easter-egg behaviours from the (now-removed) Meters tab.
+///      header to swap between the Digital and Analog VU display modes
+///      (the analog dial is the nostalgic easter egg shared with the
+///      Analog Control Unit).
 ///   2. Volume slider — master gain (post-EQ, pre-output). −60 ... +12 dB.
 ///   3. Balance slider — active profile's stereo balance. Includes a
 ///      recenter button. Editing here is the same as editing in
@@ -24,14 +24,12 @@ struct MonitorSidebar: View {
     @State private var displayMode: DisplayMode = .digital
 
     enum DisplayMode: String, CaseIterable {
-        case digital, analog, vectorscope, waveform
+        case digital, analog
 
         var label: String {
             switch self {
-            case .digital:     return "Output level"
-            case .analog:      return "Analog VU"
-            case .vectorscope: return "Vectorscope"
-            case .waveform:    return "Waveform"
+            case .digital: return "Output level"
+            case .analog:  return "Analog VU"
             }
         }
 
@@ -99,16 +97,6 @@ struct MonitorSidebar: View {
                     vertical: true
                 )
                 .frame(height: 240)
-            case .vectorscope:
-                VectorscopeView(monitor: audioState.stereoMonitor)
-                    .frame(height: 180)
-            case .waveform:
-                WaveformView(
-                    monitor: audioState.stereoMonitor,
-                    earColor: audioState.preferences.leftEarColor,
-                    rightColor: audioState.preferences.rightEarColor
-                )
-                .frame(height: 180)
             }
         }
     }

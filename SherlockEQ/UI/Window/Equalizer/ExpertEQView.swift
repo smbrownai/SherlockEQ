@@ -22,9 +22,6 @@ struct ExpertEQView: View {
     private var linkChannels: Bool {
         !(audioState.activeProfile(in: profileStore)?.separateChannels ?? false)
     }
-    /// Selected underlay visualisation, persisted across launches.
-    @AppStorage("sherlockeq.expertVizMode") private var vizModeRaw: String = CanvasVizMode.spectrum.rawValue
-
     // Canvas layer visibility — persisted per-user via @AppStorage so the
     // layout the user picked last session is what they see next launch.
     // Each chip in the layer strip mutates one of these.
@@ -37,17 +34,9 @@ struct ExpertEQView: View {
     @AppStorage("sherlockeq.layer.eq")        private var showEQLayer        = false
     @AppStorage("sherlockeq.layer.audiogram") private var showAudiogramLayer = false
     @AppStorage("sherlockeq.layer.safety")    private var showSafetyLayer    = false
-    @AppStorage("sherlockeq.layer.peaks")     private var showPeaksLayer     = false
-    /// Live dynamic-feature (Clarity) overlay. Default on, but the chip is
-    /// hidden whenever the active profile has no enabled dynamic features.
+    /// Live dynamic-feature (Listening Comfort) overlay. Default on, but the
+    /// chip is hidden whenever the active profile has no enabled features.
     @AppStorage("sherlockeq.layer.dynamics")  private var showDynamicsLayer  = true
-    // Spectrogram-mode layers (separate keys so toggling them doesn't
-    // disturb the user's Spectrum-mode chip configuration).
-    @AppStorage("sherlockeq.spectrogram.notch")       private var showNotchLineLayer    = true
-    @AppStorage("sherlockeq.spectrogram.regions")     private var showRegionLabelsLayer = true
-    @AppStorage("sherlockeq.spectrogram.legend")      private var showColorLegendLayer  = true
-    @AppStorage("sherlockeq.spectrogram.time")        private var showTimeAxisLayer     = true
-    @AppStorage("sherlockeq.spectrogram.persistence") private var showPersistenceLayer  = false
 
     /// Standard 8 bands at audiogram frequencies — used by Quick start
     /// to populate an empty profile with a useful working surface.
@@ -83,40 +72,21 @@ struct ExpertEQView: View {
         ScrollView {
             VStack(spacing: 18) {
                 header
-            // Layer chips only matter when the spectrum visualisation is
-            // active — they toggle pieces of that scene. In Spectrogram /
-            // Bars modes the chips would just sit greyed out, so hide the
-            // strip entirely instead.
-            if vizMode == .spectrum {
-                CanvasLayerChipStrip(
-                    showInputSpectrum: $showInputLayer,
-                    showOutputSpectrum: $showOutputLayer,
-                    showEQCurve: $showEQLayer,
-                    showAudiogramTarget: $showAudiogramLayer,
-                    showResultCurve: $showResultLayer,
-                    showSafetyOverlay: $showSafetyLayer,
-                    showPeakCallouts: $showPeaksLayer,
-                    showDynamics: $showDynamicsLayer,
-                    hasAudiogram: hasAudiogram,
-                    hasDynamics: hasEnabledDynamics,
-                    earColor: earColor
-                )
-            } else if vizMode == .spectrogram {
-                SpectrogramLayerChipStrip(
-                    showEQCurve: $showEQLayer,
-                    showNotchLine: $showNotchLineLayer,
-                    showRegionLabels: $showRegionLabelsLayer,
-                    showColorLegend: $showColorLegendLayer,
-                    showTimeAxis: $showTimeAxisLayer,
-                    showPersistence: $showPersistenceLayer,
-                    earColor: earColor,
-                    hasNotch: profile.leftNotch.enabled || profile.rightNotch.enabled
-                )
-            }
+            CanvasLayerChipStrip(
+                showInputSpectrum: $showInputLayer,
+                showOutputSpectrum: $showOutputLayer,
+                showEQCurve: $showEQLayer,
+                showAudiogramTarget: $showAudiogramLayer,
+                showResultCurve: $showResultLayer,
+                showSafetyOverlay: $showSafetyLayer,
+                showDynamics: $showDynamicsLayer,
+                hasAudiogram: hasAudiogram,
+                hasDynamics: hasEnabledDynamics,
+                earColor: earColor
+            )
             LiveParametricCanvas(
                 spectrum: audioState.spectrum,
                 preSpectrum: audioState.preSpectrum,
-                includeHistory: true,
                 bands: bandsBinding(for: profile),
                 shadowBands: shadowBands(for: profile),
                 targetBands: correction,
@@ -136,7 +106,6 @@ struct ExpertEQView: View {
                 spectrumSampleRate: audioState.audio.outputSampleRate ?? 48_000,
                 earColor: earColor,
                 shadowColor: shadowColor,
-                vizMode: vizMode,
                 selectedBandID: $selectedBandID,
                 showInputSpectrum: showInputLayer,
                 showOutputSpectrum: showOutputLayer,
@@ -144,12 +113,6 @@ struct ExpertEQView: View {
                 showAudiogramTarget: showAudiogramLayer,
                 showResultCurve: showResultLayer,
                 showSafetyOverlay: showSafetyLayer,
-                showPeakCallouts: showPeaksLayer,
-                showNotchLine: showNotchLineLayer,
-                showRegionLabels: showRegionLabelsLayer,
-                showColorLegend: showColorLegendLayer,
-                showTimeAxis: showTimeAxisLayer,
-                showPersistence: showPersistenceLayer,
                 // Profile's user-set ceiling + AudioState's SPL calibration
                 // drive the safety threshold curve. With both at their
                 // defaults the curve sits where the old heuristic was;
@@ -309,29 +272,6 @@ struct ExpertEQView: View {
 
     // MARK: - Sections
 
-    private var vizMode: CanvasVizMode {
-        // Spectrum is the only view for now — the Spectrum/Bars toggle below
-        // is commented out. Restore the resolved line to bring the toggle back.
-        get { .spectrum }
-        // get { Self.resolveVizMode(vizModeRaw) }
-    }
-
-    private var vizModeBinding: Binding<CanvasVizMode> {
-        Binding(
-            get: { Self.resolveVizMode(vizModeRaw) },
-            set: { vizModeRaw = $0.rawValue }
-        )
-    }
-
-    /// Decode the persisted raw value, coercing any legacy
-    /// `.spectrogram` value back to `.spectrum` so a user whose stored
-    /// preference predates the temporary hiding doesn't end up showing
-    /// a mode whose picker tile no longer exists.
-    private static func resolveVizMode(_ raw: String) -> CanvasVizMode {
-        let parsed = CanvasVizMode(rawValue: raw) ?? .spectrum
-        return CanvasVizMode.userVisibleCases.contains(parsed) ? parsed : .spectrum
-    }
-
     private var header: some View {
         HStack(spacing: 12) {
             // Ear-tab picker is only meaningful when L and R are being
@@ -350,20 +290,6 @@ struct ExpertEQView: View {
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 240)
             }
-
-            // Spectrum / Bars toggle — temporarily disabled so Spectrum is the
-            // only view. Underlying code (CanvasVizMode, drawOctaveBars, the
-            // bindings) is left intact; un-comment this and restore the
-            // resolved `vizMode` getter above to bring Bars back.
-            //
-            // Picker("", selection: vizModeBinding) {
-            //     ForEach(CanvasVizMode.userVisibleCases) { mode in
-            //         Text(mode.label).tag(mode)
-            //     }
-            // }
-            // .pickerStyle(.segmented)
-            // .frame(maxWidth: 160)
-            // .help("Pick the visualisation behind the EQ curve")
 
             Spacer()
 

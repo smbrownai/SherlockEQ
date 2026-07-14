@@ -4,23 +4,18 @@ import AVFoundation
 import Combine
 import os
 
-/// Stereo-sample monitor for the vectorscope + analog VU views.
+/// Stereo-level monitor for the digital + analog VU views.
 ///
 /// The audio tap callback runs on the render thread — we can't mutate
 /// `@Published` properties from there without crossing Combine's main-
 /// thread requirement. So `ingest` is a `nonisolated` fast path that
-/// only memcpys into a lock-guarded staging buffer, and a 60-fps Timer
-/// on the main thread drains the buffer and updates the published
-/// state. That same Timer drives the needle physics.
+/// only stores per-buffer RMS into a lock-guarded staging slot, and a
+/// 60-fps Timer on the main thread drains it and updates the published
+/// state.
 final class StereoMonitor: ObservableObject {
 
-    nonisolated static let scopeSampleCount: Int = 512
-
-    @Published private(set) var scopeSamples: [SamplePair]
     @Published private(set) var leftPeak: Float = 0
     @Published private(set) var rightPeak: Float = 0
-    @Published private(set) var leftNeedle: Float = 0
-    @Published private(set) var rightNeedle: Float = 0
 
     /// Raw per-tick RMS, linear (0…1). Republished every display tick
     /// even when the value is unchanged so downstream consumers driving
@@ -31,56 +26,26 @@ final class StereoMonitor: ObservableObject {
     @Published private(set) var leftRMS: Float = 0
     @Published private(set) var rightRMS: Float = 0
 
-    struct SamplePair: Hashable {
-        let l: Float
-        let r: Float
-    }
-
-    private let needleTimeStep: Float = 1.0 / 60.0
-    private let needleSpring: Float = 65
-    private let needleDamping: Float = 16
-    private var leftNeedleVelocity: Float = 0
-    private var rightNeedleVelocity: Float = 0
+    private let displayTimeStep: Float = 1.0 / 60.0
     private var displayTimer: Timer?
 
-    /// Staging buffer written by `ingest` (audio thread), drained by the
-    /// display timer (main). Lock window is microseconds; both producer
-    /// and consumer hold it only long enough to fill / copy the small
-    /// `samples` array.
-    ///
-    /// `samples` is pre-sized to `scopeSampleCount` and treated as
-    /// owned-by-staging — `ingest` writes through `withUnsafeMutableBufferPointer`
-    /// in place (so the audio thread does no allocation per buffer), and
-    /// `tick` takes an explicit `Array(...)` copy so the published value
-    /// detaches from staging and the next ingest doesn't trigger COW.
-    /// `samplesValid` tracks whether the buffer carries fresh data so
-    /// the consumer can hold its prior published value when no new audio
-    /// arrived (matches the previous `if !snapshot.samples.isEmpty` gate).
+    /// Staging slot written by `ingest` (audio thread), drained by the
+    /// display timer (main). Lock window is nanoseconds — two Float
+    /// max-stores on the producer side, a copy-and-reset on the consumer.
     private let stagingLock = OSAllocatedUnfairLock<Staging>(
-        initialState: Staging(
-            samples: Array(repeating: SamplePair(l: 0, r: 0), count: StereoMonitor.scopeSampleCount),
-            samplesValid: false,
-            leftPeakLinear: 0,
-            rightPeakLinear: 0
-        )
+        initialState: Staging(leftPeakLinear: 0, rightPeakLinear: 0)
     )
     private struct Staging {
-        var samples: [SamplePair]
-        var samplesValid: Bool
         var leftPeakLinear: Float
         var rightPeakLinear: Float
     }
 
     init() {
-        scopeSamples = Array(
-            repeating: SamplePair(l: 0, r: 0),
-            count: Self.scopeSampleCount
-        )
         installScreenSleepObservers()
-        // No auto-start. The 60 Hz display loop only runs while a Meters
+        // No auto-start. The 60 Hz display loop only runs while a VU
         // view is actually on screen — see `subscribe()` / `unsubscribe()`.
         // Audio ingestion (`ingest`) keeps running regardless so the staging
-        // buffer is always fresh when a Meters view appears.
+        // slot is always fresh when a VU view appears.
     }
 
     deinit {
@@ -142,7 +107,7 @@ final class StereoMonitor: ObservableObject {
         }
     }
 
-    /// Called from a Meters view's `.onAppear`. Spins up the 60 Hz display
+    /// Called from a VU view's `.onAppear`. Spins up the 60 Hz display
     /// loop on first subscriber. Idempotent for additional subscribers.
     @MainActor
     func subscribe() {
@@ -152,9 +117,8 @@ final class StereoMonitor: ObservableObject {
         }
     }
 
-    /// Called from a Meters view's `.onDisappear`. Tears down the display
-    /// loop when the last subscriber leaves. Resets needle / peak state
-    /// so a fresh attach starts from zero rather than stale values.
+    /// Called from a VU view's `.onDisappear`. Tears down the display
+    /// loop when the last subscriber leaves.
     @MainActor
     func unsubscribe() {
         guard subscriberCount > 0 else { return }
@@ -162,9 +126,6 @@ final class StereoMonitor: ObservableObject {
         if subscriberCount == 0 {
             displayTimer?.invalidate()
             displayTimer = nil
-            // Clear physics state so the next attach starts cold.
-            leftNeedleVelocity = 0
-            rightNeedleVelocity = 0
         }
     }
 
@@ -178,9 +139,9 @@ final class StereoMonitor: ObservableObject {
     nonisolated private static let lastLoggedChannelCount = OSAllocatedUnfairLock<Int>(initialState: 0)
     nonisolated private static let monitorLog = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "StereoMonitor")
 
-    /// Called from the audio tap callback. Realtime-safe — bounded
-    /// memcpy + one lock release. No `@Published` mutation here, so we
-    /// don't trip Combine's "publishing from background thread" gate.
+    /// Called from the audio tap callback. Realtime-safe — a bounded RMS
+    /// loop + one brief lock. No `@Published` mutation here, so we don't
+    /// trip Combine's "publishing from background thread" gate.
     nonisolated func ingest(_ buffer: AVAudioPCMBuffer) {
         guard let channels = buffer.floatChannelData else { return }
         let frames = Int(buffer.frameLength)
@@ -205,11 +166,6 @@ final class StereoMonitor: ObservableObject {
         let left = channels[0]
         let right = chCount >= 2 ? channels[1] : channels[0]
 
-        // Decimated trace for the vectorscope. Stride keeps the visible
-        // shape stable across sample rates.
-        let target = Self.scopeSampleCount
-        let stride = max(1, frames / target)
-
         // Per-buffer RMS over ALL frames — this is what a real VU meter
         // integrates, not the peak. Combined with the 60-fps envelope
         // smoothing it lands close to the canonical 300 ms VU response.
@@ -223,56 +179,16 @@ final class StereoMonitor: ObservableObject {
         let lRMS = sqrt(lSq * invN)
         let rRMS = sqrt(rSq * invN)
 
-        // The `withLock` closure is `@Sendable`, and `UnsafeMutablePointer`
-        // isn't `Sendable`, so capturing `left` / `right` directly would
-        // be a Swift-6 error. Wrap them in a small `@unchecked Sendable`
-        // view — safe because the pointers are valid for this call's
-        // lifetime and the only reader is this thread.
-        struct ChannelPointers: @unchecked Sendable {
-            let left: UnsafePointer<Float>
-            let right: UnsafePointer<Float>
-        }
-        let pointers = ChannelPointers(
-            left: UnsafePointer(left),
-            right: UnsafePointer(right)
-        )
-
-        // Write the decimated scope trace straight into staging.samples
-        // under the lock. Staging owns the only reference to its sample
-        // buffer (tick takes an explicit Array() copy on drain), so
-        // subscript writes don't trigger COW — no allocation on the
-        // audio thread.
         stagingLock.withLock { staging in
-            for i in 0..<target {
-                let srcIdx = min(frames - 1, i * stride)
-                staging.samples[i] = SamplePair(
-                    l: pointers.left[srcIdx],
-                    r: pointers.right[srcIdx]
-                )
-            }
-            staging.samplesValid = true
             staging.leftPeakLinear = max(lRMS, staging.leftPeakLinear)
             staging.rightPeakLinear = max(rRMS, staging.rightPeakLinear)
         }
     }
 
     func reset() {
-        scopeSamples = Array(
-            repeating: SamplePair(l: 0, r: 0),
-            count: Self.scopeSampleCount
-        )
         leftPeak = 0; rightPeak = 0
         leftRMS = 0; rightRMS = 0
-        leftNeedle = 0; rightNeedle = 0
-        leftNeedleVelocity = 0; rightNeedleVelocity = 0
         stagingLock.withLock { staging in
-            // Keep the pre-allocated samples buffer (just clear it) so
-            // the next ingest still has the owned-by-staging invariant
-            // that lets it write in place without allocating.
-            staging.samples.withUnsafeMutableBufferPointer { buf in
-                for i in buf.indices { buf[i] = SamplePair(l: 0, r: 0) }
-            }
-            staging.samplesValid = false
             staging.leftPeakLinear = 0
             staging.rightPeakLinear = 0
         }
@@ -283,103 +199,48 @@ final class StereoMonitor: ObservableObject {
         // firing during UI event tracking (slider drags, scroll, etc.).
         // `Timer.scheduledTimer` attaches to *current* runloop in
         // .default mode, which can mean nothing during App init.
-        let timer = Timer(timeInterval: TimeInterval(needleTimeStep), repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: TimeInterval(displayTimeStep), repeats: true) { [weak self] _ in
             self?.tick()
         }
         RunLoop.main.add(timer, forMode: .common)
         displayTimer = timer
     }
 
-    /// Drain the staging buffer and publish on main. Combine sees the
+    /// Drain the staging slot and publish on main. Combine sees the
     /// `@Published` set happen on the main thread because the Timer
     /// fires on the runloop it was scheduled on (main).
-    private struct TickSnapshot {
-        var samples: [SamplePair]
-        var samplesValid: Bool
-        var leftPeakLinear: Float
-        var rightPeakLinear: Float
-    }
-
     private func tick() {
-        // Take an EXPLICIT copy of staging.samples here on the main
-        // thread. That detaches the published buffer from staging so
-        // the next audio-thread ingest can keep mutating staging.samples
-        // in place without triggering COW. The samples-allocation cost
-        // moves from realtime (per audio buffer, ~200 Hz) to main
-        // (per display tick, 60 Hz).
-        let snapshot: TickSnapshot = stagingLock.withLock { staging in
-            let copy = TickSnapshot(
-                samples: staging.samplesValid ? Array(staging.samples) : [],
-                samplesValid: staging.samplesValid,
-                leftPeakLinear: staging.leftPeakLinear,
-                rightPeakLinear: staging.rightPeakLinear
-            )
+        let (lPeak, rPeak): (Float, Float) = stagingLock.withLock { staging in
+            let copy = (staging.leftPeakLinear, staging.rightPeakLinear)
             // Reset peaks inside the lock so the next audio tick can
-            // observe a fresh max. The samples buffer stays allocated
-            // and owned by staging; `samplesValid` flips false until
-            // the next ingest writes fresh data.
-            staging.samplesValid = false
+            // observe a fresh max.
             staging.leftPeakLinear = 0
             staging.rightPeakLinear = 0
             return copy
         }
 
-        if snapshot.samplesValid {
-            scopeSamples = snapshot.samples
-        }
         // Per-tick RMS for `AnalogVUMeter`'s ballistics. The audio tap
         // delivers ~21 ms buffers (1024 frames @ 48 kHz) while this
         // timer fires every ~16.7 ms — so on roughly 22 % of ticks no
-        // new buffer has arrived and `snapshot.leftPeakLinear` is 0.
-        // A naïve assignment would crash the VU integrator's target
-        // to the floor on every gap and pin the needle at −∞ during
-        // normal playback. Hold the previous reading with a gentle
-        // per-tick decay so single-tick gaps don't bounce to zero but
-        // real silence still drains away within a couple of frames.
+        // new buffer has arrived and the drained peak is 0. A naïve
+        // assignment would crash the VU integrator's target to the
+        // floor on every gap and pin the needle at −∞ during normal
+        // playback. Hold the previous reading with a gentle per-tick
+        // decay so single-tick gaps don't bounce to zero but real
+        // silence still drains away within a couple of frames.
         let kHoldDecay: Float = 0.85
-        if snapshot.leftPeakLinear > 0 {
-            leftRMS = snapshot.leftPeakLinear
+        if lPeak > 0 {
+            leftRMS = lPeak
         } else {
             leftRMS = leftRMS * kHoldDecay
         }
-        if snapshot.rightPeakLinear > 0 {
-            rightRMS = snapshot.rightPeakLinear
+        if rPeak > 0 {
+            rightRMS = rPeak
         } else {
             rightRMS = rightRMS * kHoldDecay
         }
         // Attack-fast / release-slow envelope on the peak.
-        leftPeak = max(snapshot.leftPeakLinear, leftPeak * 0.85)
-        rightPeak = max(snapshot.rightPeakLinear, rightPeak * 0.85)
-
-        // Needle physics (mass-spring-damper, mass = 1).
-        let lTarget = vuPosition(forLinear: leftPeak)
-        let rTarget = vuPosition(forLinear: rightPeak)
-        let lAccel = needleSpring * (lTarget - leftNeedle) - needleDamping * leftNeedleVelocity
-        let rAccel = needleSpring * (rTarget - rightNeedle) - needleDamping * rightNeedleVelocity
-        leftNeedleVelocity += lAccel * needleTimeStep
-        rightNeedleVelocity += rAccel * needleTimeStep
-        leftNeedle = max(0, min(1.1, leftNeedle + leftNeedleVelocity * needleTimeStep))
-        rightNeedle = max(0, min(1.1, rightNeedle + rightNeedleVelocity * needleTimeStep))
-    }
-
-    /// Map linear RMS (0…1) to dial position (0 … 1.05).
-    ///
-    /// Calibrated for *consumer playback*, not broadcast. Real VU at
-    /// 0 VU = -20 dBFS was meant for a +4 dBu nominal pro line level
-    /// peaking around -10 dBFS — modern mastered music is mixed much
-    /// hotter (typical RMS -14 to -10 dBFS, peaks slamming 0 dBFS).
-    /// Reading consumer output against the broadcast reference pegs the
-    /// meter on anything louder than a whisper.
-    ///
-    /// Map (dBFS RMS):
-    ///   -40 → 0 (far left, ≈ silence)
-    ///   -20 → 0.5 (mid-scale, "0 VU" engraving area)
-    ///    -3 → 0.93 (well into red)
-    ///     0 → 1.05 (peg)
-    private func vuPosition(forLinear v: Float) -> Float {
-        if v < 1e-6 { return 0 }
-        let db = 20 * log10(v)
-        let normalized = (db + 40) / 40
-        return max(0, min(1.05, normalized))
+        leftPeak = max(lPeak, leftPeak * 0.85)
+        rightPeak = max(rPeak, rightPeak * 0.85)
     }
 }

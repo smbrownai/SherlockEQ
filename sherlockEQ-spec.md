@@ -120,8 +120,9 @@ What belongs here:
 ### Right-Hand Monitor Sidebar (220pt, toggleable)
 Persistent across every main-window section so the user keeps level/dose awareness
 while editing EQ, browsing profiles, calibrating, etc. Contents:
-1. Output level VU — vertical L/R peak meter. Triple-tap the header to cycle
-   Digital → Analog VU → Vectorscope → Waveform.
+1. Output level VU — vertical L/R peak meter. Triple-tap the header to swap
+   between the Digital and Analog VU displays (the analog dial is the
+   nostalgic easter egg shared with the Analog Control Unit).
 2. Master gain slider (`-60…+12 dB`).
 3. Balance slider (per active profile, `-1…+1`) with recenter button.
 4. Dose mini-bar — today's NIOSH dose as a thin green/amber/red capsule.
@@ -446,9 +447,11 @@ The full-control surface. Reached by setting the active profile's `eqMode` to
 - Spectrum underlay drawn at the bottom 1/3, log-binned from
   `SpectrumAnalyzer.logSpectrumDB` (vDSP discrete Fourier transform). Pre-EQ
   spectrum optionally overlaid as a thin cyan outline.
-- Visualisation modes: `.spectrum` (line + peak-hold + pre-EQ outline), `.octaveBars`
-  (31 ISO 1/3-octave bars). `.spectrogram` exists in code but is hidden from the
-  user-visible picker pending a performance/UX revisit.
+- One visualisation: the live spectrum (line + peak-hold + pre-EQ outline).
+  The former `.octaveBars` / `.spectrogram` modes, the peak-callout chips, and
+  the lens presets were removed in the scope-reduction pass (2026-07) — the
+  layer chips (Output / Input / Result / EQ / Correction / Safety / Dynamics)
+  are the remaining, individually toggleable overlays.
 - L and R curves displayed simultaneously (different colors via
   `AppPreferences.leftEarColor` / `.rightEarColor`), with a Link L+R toggle to edit
   one or both ears
@@ -1027,10 +1030,7 @@ SherlockEQ/
 │   │   ├── Monitor/
 │   │   │   └── MonitorSidebar.swift        ← Right-hand panel: VU, gain, balance, dose
 │   │   ├── Meters/
-│   │   │   ├── MetersView.swift            ← Display-mode container (digital/analog/vectorscope/waveform)
-│   │   │   ├── AnalogVUMeter.swift
-│   │   │   ├── VectorscopeView.swift
-│   │   │   └── WaveformView.swift
+│   │   │   └── AnalogVUMeter.swift         ← Analog VU dial (MonitorSidebar + Analog Control Unit + popover easter egg)
 │   │   ├── Settings/
 │   │   │   ├── SettingsView.swift
 │   │   │   └── AcknowledgmentsView.swift
@@ -1038,7 +1038,7 @@ SherlockEQ/
 │   │       └── DebugView.swift
 │   │
 │   └── Components/
-│       ├── ParametricCanvasView.swift      ← Expert canvas (incl. CanvasVizMode enum)
+│       ├── ParametricCanvasView.swift      ← Expert canvas (spectrum underlay + curves)
 │       ├── NotchControlView.swift
 │       ├── NoticeBannerView.swift
 │       ├── BuiltInProfileBanner.swift
@@ -1046,7 +1046,6 @@ SherlockEQ/
 │       ├── EQGainChip.swift
 │       ├── HiddenBandsHintChip.swift
 │       ├── CanvasLayerChipStrip.swift
-│       ├── SpectrogramLayerChipStrip.swift
 │       ├── LogFreqAxis.swift
 │       ├── PlaceholderView.swift
 │       ├── ColorHex.swift
@@ -1114,7 +1113,7 @@ distributed (Core Audio Taps requires `audio-input` outside the sandbox).
 | App Store distribution | Core Audio Taps requires `com.apple.security.device.audio-input` outside the App Store sandbox. Current plan: notarized DMG distribution (same model as eqMac). |
 | dBHL → EQ accuracy | **Resolved.** Shipped as the **NAL-R** prescription (Byrne & Dillon 1986), replacing the linear 0.5× half-gain heuristic. The ISO 226 dBSPL-conversion approach was evaluated and **rejected** — dB HL is already per-frequency normalised, so gaining from SPL would over-boost lows even for normal hearing. See `AudiogramConversion.swift`. |
 | Cubic-spline interpolation | Spec §5.2 originally called for cubic-spline-derived intermediate bands. Not implemented — `AudiogramConversion.bands(for:compensationFactor:)` emits one band per audiogram point. Adding interpolation later would not change the function signature. |
-| Spectrogram visualisation | `.spectrogram` mode is implemented in `ParametricCanvasView` but hidden from the user-visible picker (`CanvasVizMode.userVisibleCases`) pending a performance pass (~120% CPU during testing) and a UX review. |
+| Spectrogram visualisation | **Removed** (2026-07 scope-reduction pass) along with the 1/3-octave bars mode, peak callouts, lens presets, vectorscope, and waveform scope. These were mixing-engineer instruments serving no hearing-accommodation purpose; the code was deleted rather than left dormant. The Analog Control Unit and analog VU dial were deliberately kept (nostalgia is their purpose). Git history has the deleted implementations if ever needed. |
 | Onboarding wizard | Implemented as a lean three-step first-launch wizard (§8.4): welcome + upstream-EQ note → permission priming (defers the system-audio + notification prompts so they arrive with context) → starter-profile pick with optional deep-links. Replayable from Settings → About. The deeper guided audiogram / tinnitus / calibration steps the original spec imagined were deliberately left as deep-link pointers to the now-first-class screens. |
 | AutoEQ license | AutoEQ data is MIT licensed. Credit lives in Settings → About → Acknowledgments with a link to the upstream repo. |
 | Window sizing | Current minimum 1400 × 740pt is set so the Expert layer-chip strip and the dual sidebars fit on one row without compression. Lowering the floor would require collapsing the right monitor sidebar by default. |
