@@ -244,8 +244,85 @@ final class ProfileStore: ObservableObject {
 
     /// Bumped whenever the shipped factory-preset set changes. A launch that
     /// sees a lower stored version runs the one-time reconcile below.
-    private static let factoryPresetsVersion = 1
+    /// v2 (phase3-make-correction-land.md §3): presets re-voiced on the
+    /// 12-band grid via the shared `PresetCurve` table; Presence Boost
+    /// retired and replaced by Reduce Boom.
+    private static let factoryPresetsVersion = 2
     private static let factoryPresetsVersionKey = "sherlockeq.factoryPresetsVersion"
+
+    /// The complete v1 factory-preset definitions, frozen for the v1 → v2
+    /// migration's edit detection (spec Design note 3). Comparing a stored
+    /// preset against the CURRENT builders is circular — after a re-voicing,
+    /// every untouched preset "differs" — so upgrade decisions compare
+    /// against these exact shipped-v1 values instead. Full profiles (not
+    /// just gains) so an edit anywhere — a renamed preset, an added
+    /// audiogram or notch — reads as user work and is preserved.
+    /// Internal (not private) so migration tests can seed exact v1 state.
+    enum FrozenFactoryV1 {
+        static let presenceBoostID = UUID(uuidString: "F0000004-0000-4000-A000-000000000004")!
+
+        /// v1 authoring grid (pre-3k/6k).
+        private static let centers: [Double] = [31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+
+        private static func bands(_ gains: [Double]) -> [EQBand] {
+            zip(centers, gains).map { freq, gain in
+                EQBand(frequencyHz: freq, gaindB: gain, bandwidth: 1.0, filterType: .parametric, enabled: true)
+            }
+        }
+
+        private static func profile(
+            id: UUID, orderIndex: Int, name: String, symbol: String,
+            gains: [Double], trimDB: Double, description: String, tags: [String]
+        ) -> HearingProfile {
+            let stamp = Date(timeIntervalSince1970: 1_600_000_000 + Double(orderIndex))
+            let b = bands(gains)
+            return HearingProfile(
+                id: id, name: name, symbol: symbol, linkedDeviceUID: nil,
+                leftEar: EarProfile(thresholds: AudiogramPoint.flat, bands: b),
+                rightEar: EarProfile(thresholds: AudiogramPoint.flat, bands: b),
+                leftNotch: .disabled, rightNotch: .disabled,
+                globalTrimDB: trimDB, safeListeningCeilingDB: 85.0,
+                compensationFactor: 0.5, eqMode: .advanced, isBuiltIn: true,
+                presetDescription: description, presetTags: tags,
+                createdAt: stamp, modifiedAt: stamp
+            )
+        }
+
+        static let profiles: [HearingProfile] = [
+            profile(
+                id: HearingProfile.Factory.voiceClarity.id, orderIndex: 0,
+                name: "Voice Clarity", symbol: "waveform.badge.mic",
+                gains: [-4, -3, -2, -1, 0, 1, 2, 2.5, 0.5, -1], trimDB: -2,
+                description: "Improves spoken-word clarity by reducing low-frequency boom and gently increasing speech presence. Best for podcasts, calls, meetings, lectures, and audiobooks.",
+                tags: ["Voice", "Speech", "Clarity"]),
+            profile(
+                id: HearingProfile.Factory.musicBalanced.id, orderIndex: 1,
+                name: "Music Balanced", symbol: "music.note",
+                gains: [0.5, 1, 0.5, -0.5, 0, 0, 0.5, 1, 0, -0.5], trimDB: -1,
+                description: "A natural, lightly refined music profile with modest bass support and gentle clarity. Designed to preserve the character of music without making it overly bright.",
+                tags: ["Music", "Balanced", "Natural"]),
+            profile(
+                id: HearingProfile.Factory.gentleListening.id, orderIndex: 2,
+                name: "Gentle Listening", symbol: "moon.stars",
+                gains: [0, 0, 0.5, 0.5, 0, 0, -0.5, -1.5, -2.5, -3], trimDB: 0,
+                description: "Softens bright or fatiguing audio for longer, more comfortable listening. Useful for sharp headphones, late-night sessions, or content that feels harsh.",
+                tags: ["Comfort", "Soft", "Long Sessions"]),
+            profile(
+                id: presenceBoostID, orderIndex: 3,
+                name: "Presence Boost", symbol: "sparkles",
+                gains: [-1, -1, -1, -0.5, 0, 0.5, 1.5, 2, 0.5, 0], trimDB: -2,
+                description: "Adds mild definition and presence for audio that sounds dull or veiled. Conservative by design and not a substitute for an audiogram-based profile.",
+                tags: ["Clarity", "Presence", "Mild Lift"]),
+        ]
+
+        /// True when `stored` is byte-for-audibly identical to the v1
+        /// factory definition with the same id — i.e. the user never
+        /// touched it and the migration may replace it.
+        static func isUneditedV1(_ stored: HearingProfile) -> Bool {
+            guard let v1 = profiles.first(where: { $0.id == stored.id }) else { return false }
+            return ProfileStore.profile(stored, matchesCanonical: v1)
+        }
+    }
 
     private var storedFactoryVersion: Int {
         get { UserDefaults.standard.integer(forKey: Self.factoryPresetsVersionKey) }
@@ -254,26 +331,46 @@ final class ProfileStore: ObservableObject {
 
     private var factoryIDs: Set<UUID> { Set(HearingProfile.factoryProfiles.map(\.id)) }
 
-    /// One-time-per-version migration. Removes legacy built-ins that aren't
-    /// one of the current factory presets (e.g. the old "Default" / "Voice
-    /// Clarity" with random ids), then installs any of the four canonical
-    /// presets that are missing by id. Gated on `factoryPresetsVersion` so a
-    /// preset the user deliberately deleted is NOT silently re-added on every
-    /// launch — only on a genuine version bump. Existing-by-id presets are
-    /// left untouched so in-place edits survive.
+    /// One-time-per-version migration. Gated on `factoryPresetsVersion` so
+    /// a preset the user deliberately deleted is NOT silently re-added on
+    /// every launch — only on a genuine version bump. Three rules, in the
+    /// spirit of "never clobber a user edit" (spec Design note 3):
+    ///
+    /// 1. **Retired/legacy built-ins** (ids outside the canonical set —
+    ///    Presence Boost after v2, ancient random-id Default/Voice Clarity):
+    ///    deleted when they exactly match a frozen shipped definition
+    ///    (pristine — nothing of the user's is lost); otherwise **demoted**
+    ///    to a plain user profile (star and factory affordances removed,
+    ///    every edit preserved).
+    /// 2. **Canonical presets present by id**: replaced with the current
+    ///    version only when still pristine-v1; an edited one is left
+    ///    entirely alone ("Reset to Factory Default" now targets v2).
+    /// 3. **Canonical presets missing**: installed.
     func reconcileFactoryPresets() {
         guard storedFactoryVersion < Self.factoryPresetsVersion else { return }
         do {
             let canonicalIDs = factoryIDs
-            // Drop legacy built-ins (random-id Default / Voice Clarity, or
-            // factory presets retired in a past version). User profiles
-            // (isBuiltIn == false) are never touched.
             for legacy in profiles where legacy.isBuiltIn && !canonicalIDs.contains(legacy.id) {
-                try delete(legacy)
+                if FrozenFactoryV1.isUneditedV1(legacy) {
+                    try delete(legacy)
+                } else {
+                    var demoted = legacy
+                    demoted.isBuiltIn = false
+                    demoted.presetDescription = nil
+                    demoted.presetTags = []
+                    try save(demoted)
+                    log.info("Demoted edited retired preset \(demoted.name, privacy: .public) to user profile")
+                }
             }
-            // Install any canonical preset that isn't present by id.
-            for preset in HearingProfile.factoryProfiles where !profiles.contains(where: { $0.id == preset.id }) {
-                try save(preset)
+            for preset in HearingProfile.factoryProfiles {
+                if let stored = profiles.first(where: { $0.id == preset.id }) {
+                    if FrozenFactoryV1.isUneditedV1(stored) {
+                        try save(preset)   // pristine v1 → upgrade to v2
+                    }
+                    // edited → leave alone
+                } else {
+                    try save(preset)       // missing → install on version bump
+                }
             }
             storedFactoryVersion = Self.factoryPresetsVersion
             log.info("Reconciled factory presets to version \(Self.factoryPresetsVersion)")
@@ -331,8 +428,18 @@ final class ProfileStore: ObservableObject {
     /// silently leaving the Reset button disabled.
     func differsFromFactory(_ profile: HearingProfile) -> Bool {
         guard let canonical = HearingProfile.factoryCanonical(forID: profile.id) else { return false }
-        if !profile.leftEar.bands.audiblyEquivalent(to: canonical.leftEar.bands) { return true }
-        if !profile.rightEar.bands.audiblyEquivalent(to: canonical.rightEar.bands) { return true }
+        return !Self.profile(profile, matchesCanonical: canonical)
+    }
+
+    /// Value-equality between a stored profile and a canonical definition,
+    /// ignoring the always-differing timestamps and comparing band arrays
+    /// with `audiblyEquivalent` (band UUIDs are minted fresh per save, and
+    /// float noise from an edit round-trip shouldn't read as a change).
+    /// Shared by `differsFromFactory` (against current builders) and the
+    /// v1 → v2 migration's edit detection (against `FrozenFactoryV1`).
+    static func profile(_ profile: HearingProfile, matchesCanonical canonical: HearingProfile) -> Bool {
+        if !profile.leftEar.bands.audiblyEquivalent(to: canonical.leftEar.bands) { return false }
+        if !profile.rightEar.bands.audiblyEquivalent(to: canonical.rightEar.bands) { return false }
         var a = profile, b = canonical
         a.createdAt = b.createdAt
         a.modifiedAt = b.modifiedAt
@@ -340,7 +447,7 @@ final class ProfileStore: ObservableObject {
         // struct compare below can't re-flag the same float noise.
         a.leftEar.bands = []; b.leftEar.bands = []
         a.rightEar.bands = []; b.rightEar.bands = []
-        return a != b
+        return a == b
     }
 
     // MARK: - Helpers

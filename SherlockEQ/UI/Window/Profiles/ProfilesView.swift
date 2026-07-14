@@ -54,7 +54,7 @@ struct ProfilesView: View {
             Button("Restore", role: .destructive) { profileStore.restoreFactoryPresets() }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("Recreates Voice Clarity, Music Balanced, Gentle Listening, and Presence Boost and resets any edits to them. Your own profiles are untouched.")
+            Text("Recreates Voice Clarity, Music Balanced, Gentle Listening, and Reduce Boom and resets any edits to them. Your own profiles are untouched.")
         }
     }
 
