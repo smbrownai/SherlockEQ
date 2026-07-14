@@ -1,14 +1,16 @@
 import SwiftUI
 
-/// 10-band graphic EQ — vertical sliders at standard octave-spaced centers.
-/// Like Simple, it shares the underlying band array with the other tabs.
+/// 12-band graphic EQ — vertical sliders on the audiometric grid (the
+/// octave series plus 3 kHz and 6 kHz, so the graphic surface speaks the
+/// same frequencies as the audiogram). Like Simple, it shares the
+/// underlying band array with the other tabs.
 struct AdvancedEQView: View {
     @EnvironmentObject private var profileStore: ProfileStore
     @EnvironmentObject private var audioState: AudioState
 
-    private static let frequencies: [Double] = [
-        31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000
-    ]
+    /// Canonical center list lives on `EQMode` so the slider row and the
+    /// mode's `ownedSlots` (hidden-bands accounting) can't drift apart.
+    private static let frequencies: [Double] = EQMode.graphicCenters
     private static let bandwidth: Double = 1.0   // 1 octave Q
 
     /// Reads the active profile's `separateChannels` flag. Toggle
@@ -175,7 +177,11 @@ struct AdvancedEQView: View {
 
     @ViewBuilder
     private func slidersRow(_ profile: HearingProfile) -> some View {
-        HStack(alignment: .top, spacing: 6) {
+        // Spacing 4 (was 6): twelve 60 pt columns + 11 gaps + row padding
+        // = 788 pt, which fits the detail column even at the minimum
+        // window width with the monitor sidebar visible and the nav
+        // sidebar dragged to its 300 pt maximum (~806 pt available).
+        HStack(alignment: .top, spacing: 4) {
             ForEach(Array(Self.frequencies.enumerated()), id: \.offset) { _, freq in
                 bandColumn(profile: profile, frequency: freq)
             }
@@ -463,9 +469,11 @@ private struct VerticalGainSlider: View {
 
 // MARK: - Advanced presets
 
-/// Curated starting points for the 10-band Advanced EQ. Each preset
+/// Curated starting points for the Advanced graphic EQ. Each preset
 /// lists per-band dB offsets keyed by the band's centre frequency
-/// (Hz). Bands not in `gains` get 0 (flat / removed from the chain).
+/// (Hz). Bands not in `gains` get 0 (flat / removed from the chain) —
+/// which is also how the presets behave on the 12-band grid's 3 kHz /
+/// 6 kHz slots until the §3 re-voicing gives them explicit values.
 enum AdvancedEQPreset: String, CaseIterable, Identifiable {
     case flat
     case loudness
