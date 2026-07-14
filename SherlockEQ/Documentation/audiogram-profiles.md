@@ -59,7 +59,7 @@ them through the same per-ear filter chain as the rest of the equalizer.
 ## How it interacts with other settings
 
 - Feeds [Per-Ear EQ](help:per-ear-eq); left and right are shaped independently.
-- Stacks with [Simple](help:simple-eq) / [Parametric](help:parametric-eq) bands and any [headphone correction](help:headphone-correction-autoeq).
+- Stacks with [Graphic](help:graphic-eq) / [Parametric](help:parametric-eq) bands and any [headphone correction](help:headphone-correction-autoeq).
 - Boosting where hearing is reduced raises level — mind [gain](help:gain-volume) and [safety](help:safety-limits).
 - Saved as part of a [profile](help:profiles).
 

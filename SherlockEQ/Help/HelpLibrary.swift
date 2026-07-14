@@ -27,7 +27,7 @@ final class HelpLibrary {
             .home, .gettingStarted, .featureGuide,
         ]),
         HelpSection(title: "Core EQ", topics: [
-            .understandingEQ, .gainVolume, .balance, .simpleEQ, .speechEQ, .advancedEQ, .parametricEQ,
+            .understandingEQ, .gainVolume, .balance, .graphicEQ, .parametricEQ,
         ]),
         HelpSection(title: "Hearing-Aware Features", topics: [
             .perEarEQ, .audiogramProfiles, .tinnitusToneMatching, .headphoneCorrection, .listeningComfort,

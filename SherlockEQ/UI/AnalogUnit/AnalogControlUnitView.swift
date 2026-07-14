@@ -6,7 +6,7 @@ import SwiftUI
 ///
 ///   • Volume → macOS system output volume (`SystemVolumeController`).
 ///   • Balance + Bass/Mid/Treble → a dedicated, hidden "analog" override
-///     profile (`AudioState.analogOverrideProfile`): a bare Simple-EQ tone
+///     profile (`AudioState.analogOverrideProfile`): a bare three-band tone
 ///     with no audiogram / notch / clarity / AutoEQ. Opening the window
 ///     routes audio through it; closing restores the real active profile,
 ///     which is never touched. The tone persists across opens.
@@ -67,7 +67,7 @@ struct AnalogControlUnitView: View {
             .padding(.bottom, 14)
         }
         // Contextual help — the panel maps onto existing controls, so the
-        // `?` explains that mapping (Volume→gain, Bass/Mid/Treble→Simple EQ).
+        // `?` explains that mapping (Volume→system volume, Bass/Mid/Treble→tone bands).
         .overlay(alignment: .topTrailing) {
             HelpContextButton(.analogControlUnit, label: "Analog Control Unit")
                 .padding(10)
@@ -293,7 +293,7 @@ struct AnalogControlUnitView: View {
         )
     }
 
-    /// Edits one Simple-EQ shelf/parametric band on the Analog Unit's own
+    /// Edits one tone shelf/parametric band on the Analog Unit's own
     /// override profile (never the user's active profile). Mono tone —
     /// writes both ears in lockstep; reads the left ear as representative.
     private func eqBinding(frequencyHz: Double, bandwidth: Double, filterType: EQFilterType) -> Binding<Double> {

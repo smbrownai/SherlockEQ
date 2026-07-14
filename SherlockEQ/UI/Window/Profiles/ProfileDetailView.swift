@@ -453,15 +453,15 @@ struct ProfileDetailView: View {
         }
     }
 
-    /// EQ mode picker: which lens this profile uses on the Equalizer
-    /// screen. The four modes are storage views onto one underlying
-    /// band array — switching never deletes data, it only changes
-    /// which slice is editable. A profile picks the way its owner
-    /// wants to think about EQ; Expert is the "I want everything" mode.
+    /// EQ surface picker: Graphic (12-band audiometric graphic EQ) or
+    /// Parametric (full canvas). Both edit one underlying band array —
+    /// switching never deletes data. Named for the tool, not the user's
+    /// skill level; Graphic surfaces any band it can't edit via its
+    /// "Other filters" row.
     @ViewBuilder private func eqModeRow(_ profile: HearingProfile) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text("EQ mode")
+                Text("EQ surface")
                     .foregroundStyle(.secondary)
                     .frame(width: 120, alignment: .leading)
                 Picker("", selection: Binding(
@@ -482,8 +482,8 @@ struct ProfileDetailView: View {
         }
     }
 
-    /// Per-profile UI toggle: when on, every EQ tab (Simple, Speech,
-    /// Advanced, Expert) exposes per-ear sliders / band lists for
+    /// Per-profile UI toggle: when on, both EQ surfaces (Graphic,
+    /// Parametric) expose per-ear sliders / band lists for
     /// fine-tuning. When off (default), one column drives both ears.
     /// Toggling never mutates band data — the profile's leftEar /
     /// rightEar arrays stay as they are; only future edits in the

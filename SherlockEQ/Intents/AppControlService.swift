@@ -83,9 +83,13 @@ struct AppControlService {
     static let balanceRange: ClosedRange<Double> = -1...1
     static let simpleEQRange: ClosedRange<Double> = -24...24
 
-    /// Simple-EQ band layout — must match the app's Simple mode slots
-    /// (`HearingProfile.EQMode.ownedSlots`) so both adapters edit the same
-    /// bands the GUI's Simple sliders do.
+    /// Three-band tone layout (bass shelf / mid bell / treble shelf) —
+    /// the legacy "Simple EQ" slots. The Simple *mode* was retired in the
+    /// phase-3 surface consolidation, but these remain valid band slots:
+    /// the Analog Control Unit's knobs write the same layout, and bands
+    /// written here surface on the Graphic EQ's "Other filters" row
+    /// (with one-click conversion onto the sliders). The command name
+    /// stays `simple-eq` for script compatibility.
     struct SimpleSlot {
         let key: String
         let frequencyHz: Double

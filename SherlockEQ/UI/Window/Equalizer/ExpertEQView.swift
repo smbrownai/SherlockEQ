@@ -64,7 +64,7 @@ struct ExpertEQView: View {
         let correction = targetBands(for: profile)
         let shadowCorrection = tab == .left ? profile.rightEar.correctionBands : profile.leftEar.correctionBands
         let hasAudiogram = !correction.isEmpty || !shadowCorrection.isEmpty
-        // Wrapped in ScrollView (matching AdvancedEQView) so the view
+        // Wrapped in ScrollView (matching GraphicEQView) so the view
         // breathes when window height is tight. Outer padding bumped from
         // 20 → 24 to match the rest of the app's window-content margins,
         // and VStack spacing raised so the canvas, controls bar, and notch

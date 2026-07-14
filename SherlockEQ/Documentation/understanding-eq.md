@@ -10,7 +10,7 @@ keywords:
   - filter
   - basics
 related:
-  - simple-eq
+  - graphic-eq
   - parametric-eq
   - gain-volume
   - vu-meters

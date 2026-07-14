@@ -62,11 +62,11 @@ boosting**. Watch the [VU Meters](help:vu-meters) and read
 [Volume / Gain](help:gain-volume) and [Safety](help:safety-limits) before
 pushing levels.
 
-## Step 4 — Try Simple EQ
+## Step 4 — Try the Graphic EQ
 
-The fastest way to hear what SherlockEQ does: open the Equalizer and use the
-[Simple EQ](help:simple-eq) Bass / Mid / Treble controls. Small moves
-(±2–4 dB) are usually enough.
+The fastest way to hear what SherlockEQ does: open the Equalizer and move a
+few [Graphic EQ](help:graphic-eq) sliders — try the bass (63–125 Hz) and
+presence (2–4 kHz) bands. Small moves (±2–4 dB) are usually enough.
 
 ## Step 5 — Save a profile
 

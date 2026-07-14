@@ -49,13 +49,12 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     /// Toggling the value never mutates band data; only future edits
     /// in the new mode propagate to one or both ears.
     var separateChannels: Bool                  // default false — single column UI
-    /// Which EQ "lens" this profile uses. The four modes are storage
-    /// views onto the same band array, not stackable layers — the
-    /// profile commits to one mental model (quick tone-shaping with
-    /// Simple, voice-tuned with Speech, graphic-EQ with Advanced,
-    /// full parametric with Expert). Switching is non-destructive:
-    /// bands the other modes wrote stay in storage and only hide.
-    var eqMode: EQMode                          // new profiles default .simple; legacy decode .expert
+    /// Which EQ surface this profile uses — Graphic (12-band audiometric
+    /// graphic EQ) or Parametric (full canvas). Both edit the same band
+    /// array; switching is non-destructive, and Graphic surfaces any
+    /// bands it can't edit via its "Other filters" row instead of hiding
+    /// them. See `EQMode`.
+    var eqMode: EQMode                          // new profiles default .advanced (Graphic); legacy decode .expert
     /// Marks one of the shipped factory listening presets. No longer a
     /// read-only lock — factory presets are editable in place. The flag
     /// only enables the per-profile "Reset to Factory Default" affordance
@@ -117,7 +116,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         // Legacy profiles default to .expert so users who edited bands
         // across multiple tabs in the old multi-tab world still see
         // everything on first load. New profiles created via init
-        // default to .simple — see the designated initializer.
+        // default to .advanced (Graphic) — see the designated initializer.
         self.eqMode                 = try c.decodeIfPresent(EQMode.self, forKey: .eqMode) ?? .expert
         self.isBuiltIn              = try c.decodeIfPresent(Bool.self, forKey: .isBuiltIn) ?? false
         self.presetDescription      = try c.decodeIfPresent(String.self, forKey: .presetDescription)
@@ -156,7 +155,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         autoEQSourcePath: String? = nil,
         safeListeningCeilingDB: Double, compensationFactor: Double,
         separateChannels: Bool = false,
-        eqMode: EQMode = .simple,
+        eqMode: EQMode = .advanced,
         isBuiltIn: Bool = false,
         presetDescription: String? = nil,
         presetTags: [String] = [],
@@ -267,7 +266,7 @@ extension HearingProfile {
 
     /// Build the Advanced parametric bands from a gain-per-center list.
     /// Bandwidth 1.0 (one octave) matches the Advanced graphic-EQ slots so
-    /// `AdvancedEQView` finds and shows them via `EQBandLookup`.
+    /// `GraphicEQView` finds and shows them via `EQBandLookup`.
     private static func advancedBands(_ gains: [Double]) -> [EQBand] {
         zip(advancedCenters, gains).map { freq, gain in
             EQBand(frequencyHz: freq, gaindB: gain, bandwidth: 1.0, filterType: .parametric, enabled: true)
@@ -346,20 +345,35 @@ extension HearingProfile {
     static var defaultActiveFactoryID: UUID { Factory.musicBalanced.id }
 }
 
-/// Which EQ lens this profile uses. The four modes are storage views
-/// onto one underlying band array — picking a mode chooses how the
-/// user thinks about EQ for this profile, not how the audio is
-/// processed. Switching mode is non-destructive: bands the other
-/// modes wrote stay in storage and only hide.
+/// Which EQ surface this profile uses. Two surfaces, named for the tool
+/// rather than the user's skill level (phase3-make-correction-land.md §1):
+/// **Graphic** (12-band audiometric graphic EQ) and **Parametric** (the
+/// full canvas — arbitrary frequency, gain, Q, and filter type; a
+/// materially different editing model, not "more sliders").
+///
+/// Persisted raw values remain `"advanced"` / `"expert"` so existing
+/// profile JSON, exports, and imports round-trip unchanged; only display
+/// names changed. The retired v1 modes ("simple", "speech") decode onto
+/// Graphic — their bands stay in storage and surface through Graphic's
+/// "Other filters" row rather than running invisibly.
 enum EQMode: String, Codable, CaseIterable, Identifiable {
-    case simple, speech, advanced, expert
+    case advanced   // display name: Graphic
+    case expert     // display name: Parametric
+
+    /// Tolerant decode: retired mode strings (and anything unknown) map
+    /// to Graphic. Encoding stays the synthesized rawValue, so a migrated
+    /// profile re-saves as `"advanced"`.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = EQMode(rawValue: raw) ?? .advanced
+    }
 
     /// The Advanced (Graphic) surface's slider centers — the 12-band
     /// audiometric grid (phase3-make-correction-land.md §2). The octave
     /// series plus 3 kHz and 6 kHz: audiogram frequencies where
     /// presbycusis concentrates and consonant energy lives, previously
     /// missing from the graphic surface. Single source of truth — the
-    /// slider row (`AdvancedEQView.frequencies`) and this mode's
+    /// slider row (`GraphicEQView.frequencies`) and this mode's
     /// `ownedSlots` both read it, so the surface and the hidden-bands
     /// accounting can't drift apart.
     static let graphicCenters: [Double] = [
@@ -370,17 +384,13 @@ enum EQMode: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .simple:   return "Simple"
-        case .speech:   return "Speech"
-        case .advanced: return "Advanced"
-        case .expert:   return "Expert"
+        case .advanced: return "Graphic"
+        case .expert:   return "Parametric"
         }
     }
 
     var symbol: String {
         switch self {
-        case .simple:   return "slider.horizontal.3"
-        case .speech:   return "waveform.badge.mic"
         case .advanced: return "slider.vertical.3"
         case .expert:   return "waveform.path"
         }
@@ -388,33 +398,16 @@ enum EQMode: String, Codable, CaseIterable, Identifiable {
 
     var tagline: String {
         switch self {
-        case .simple:   return "Three quick knobs — bass, mids, treble."
-        case .speech:   return "Six bands tuned for voice intelligibility."
-        case .advanced: return "Ten octave-spaced graphic EQ bands."
+        case .advanced: return "Twelve graphic bands on the audiometric grid."
         case .expert:   return "Full parametric — drop a band anywhere."
         }
     }
 
-    /// (frequency Hz, filter type) pairs the mode owns — bands at
-    /// these slots show in the mode's UI. Expert returns nil because
+    /// (frequency Hz, filter type) pairs the surface owns — bands at
+    /// these slots show on its sliders. Parametric returns nil because
     /// it owns everything; the helper below uses that as a sentinel.
     fileprivate var ownedSlots: Set<EQSlot>? {
         switch self {
-        case .simple:
-            return [
-                EQSlot(frequencyHz: 250,  filterType: .lowShelf),
-                EQSlot(frequencyHz: 1000, filterType: .parametric),
-                EQSlot(frequencyHz: 5000, filterType: .highShelf),
-            ]
-        case .speech:
-            return [
-                EQSlot(frequencyHz: 60,    filterType: .lowShelf),
-                EQSlot(frequencyHz: 200,   filterType: .parametric),
-                EQSlot(frequencyHz: 800,   filterType: .parametric),
-                EQSlot(frequencyHz: 2500,  filterType: .parametric),
-                EQSlot(frequencyHz: 6000,  filterType: .parametric),
-                EQSlot(frequencyHz: 12000, filterType: .highShelf),
-            ]
         case .advanced:
             return Set(Self.graphicCenters.map { EQSlot(frequencyHz: $0, filterType: .parametric) })
         case .expert:
@@ -422,10 +415,12 @@ enum EQMode: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// Returns the bands in `chain` that aren't visible in this mode's
-    /// UI. Expert hides nothing, so always returns []. Non-Expert
-    /// modes return any band whose (freq, filterType) doesn't fall in
-    /// the owned-slot set.
+    /// Returns the bands in `chain` that aren't on this surface's own
+    /// controls. Parametric hides nothing, so always returns []. Graphic
+    /// returns any band whose (freq, filterType) doesn't fall in the
+    /// owned-slot set — these drive the "Other filters" row, which offers
+    /// conversion or the Parametric escape hatch so nothing active is
+    /// ever invisible.
     func hiddenBands(in chain: [EQBand]) -> [EQBand] {
         guard let owned = ownedSlots else { return [] }
         return chain.filter { band in

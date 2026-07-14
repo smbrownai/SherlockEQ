@@ -13,7 +13,7 @@ keywords:
 related:
   - safety-limits
   - vu-meters
-  - simple-eq
+  - graphic-eq
   - balance
 ---
 

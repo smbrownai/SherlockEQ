@@ -13,7 +13,7 @@ keywords:
   - shelf
   - peaking
 related:
-  - simple-eq
+  - graphic-eq
   - per-ear-eq
   - understanding-eq
   - safety-limits
@@ -26,7 +26,7 @@ related:
 Parametric EQ gives you full control over each band: its **frequency**, its
 **gain**, its **Q** (bandwidth), and its **filter type**. You can stack
 multiple bands to build any response shape. In a profile's **Tuning** section
-this mode is selected as **Expert**.
+this surface is selected as **Parametric**.
 
 ## Why it exists
 
@@ -58,7 +58,7 @@ responses, applied per ear.
 ## How it interacts with other settings
 
 - Bands stack: overlapping boosts **add up**, which can clip. Watch headroom.
-- Shares per-ear band storage with [Simple](help:simple-eq), [Speech](help:speech-eq), and [Advanced](help:advanced-eq) EQ. Audiogram correction and the tinnitus notch are applied as separate per-ear layers on top, not stored in the same band list.
+- Shares per-ear band storage with the [Graphic EQ](help:graphic-eq). Audiogram correction and the tinnitus notch are applied as separate per-ear layers on top, not stored in the same band list.
 - With [Per-Ear EQ](help:per-ear-eq) on, left and right hold independent band lists.
 
 ## Recommended uses

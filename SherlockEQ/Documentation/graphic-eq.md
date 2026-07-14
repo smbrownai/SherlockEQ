@@ -1,8 +1,8 @@
 ---
-title: "Advanced EQ"
-slug: "advanced-eq"
+title: "Graphic EQ"
+slug: "graphic-eq"
 category: "Core EQ"
-summary: "A twelve-band graphic equalizer on the audiometric grid — more control than Simple, simpler than Expert."
+summary: "A twelve-band graphic equalizer on the audiometric grid — the everyday EQ surface, with full Parametric one click away."
 keywords:
   - advanced
   - graphic
@@ -11,22 +11,21 @@ keywords:
   - octave
   - sliders
 related:
-  - simple-eq
-  - speech-eq
+  - graphic-eq
   - parametric-eq
   - understanding-eq
 ---
 
-# Advanced EQ
+# Graphic EQ
 
 ## What it does
 
-Advanced EQ is a **twelve-band graphic equalizer**: a row of vertical sliders
+Graphic EQ is a **twelve-band graphic equalizer**: a row of vertical sliders
 on the audiometric grid — the standard octave centers plus 3 and 6 kHz, the
-same frequencies your [audiogram](help:audiogram-profiles) is measured at. It sits between [Simple
-EQ](help:simple-eq) (three broad controls) and [Expert / Parametric
-EQ](help:parametric-eq) (arbitrary bands) — enough resolution to shape a curve
-across the whole spectrum, without managing individual filter parameters.
+same frequencies your [audiogram](help:audiogram-profiles) is measured at.
+It's the everyday surface: enough resolution to shape a curve across the
+whole spectrum without managing individual filter parameters. For arbitrary
+bands, use [Parametric EQ](help:parametric-eq).
 
 The twelve bands are fixed at:
 
@@ -43,7 +42,7 @@ isn't enough, this is the fastest tool.
 
 ## How to use it
 
-- Set a profile's EQ mode to **Advanced** in the profile's Tuning section, then open the **Equalizer** screen.
+- Set a profile's EQ surface to **Graphic** in the profile's Tuning section, then open the **Equalizer** screen.
 - Drag sliders to shape the curve, or start from a **preset** (general shapes, music genres, and corrective curves) and tweak.
 - Move in small steps; the sliders read out in dB.
 
@@ -55,7 +54,7 @@ curve you see drawn over the spectrum.
 
 ## How it interacts with other settings
 
-- Advanced, Simple, Speech, and Expert all write to the **same per-ear band storage** — switching modes is non-destructive. A hint appears if the current mode is hiding bands set elsewhere.
+- Graphic and Parametric write to the **same per-ear band storage** — switching surfaces is non-destructive. Filters the sliders can't represent (from Parametric, an older version's modes, or the command line) appear in an **Other filters** row, which can convert them onto the sliders or take you to Parametric — nothing active is ever invisible.
 - Boosts raise overall level and interact with master [gain](help:gain-volume) and [clipping](help:safety-limits).
 - Turn on [Per-Ear EQ](help:per-ear-eq) to set the left and right sliders independently.
 
@@ -72,8 +71,8 @@ curve you see drawn over the spectrum.
 ## Limitations
 
 The band centers and one-octave width are fixed. To place a band at an arbitrary
-frequency, change its Q, or use a shelf/notch/pass filter, use [Expert /
-Parametric EQ](help:parametric-eq).
+frequency, change its Q, or use a shelf/notch/pass filter, use
+[Parametric EQ](help:parametric-eq).
 
 ## References
 

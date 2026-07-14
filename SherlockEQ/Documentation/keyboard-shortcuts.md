@@ -2,7 +2,7 @@
 title: "Keyboard Shortcuts"
 slug: "keyboard-shortcuts"
 category: "Reference"
-summary: "Keyboard shortcuts across the menu bar, windows, and the Expert equalizer."
+summary: "Keyboard shortcuts across the menu bar, windows, and the Parametric equalizer."
 keywords:
   - keyboard
   - shortcuts
@@ -48,7 +48,7 @@ Closing a window does not quit SherlockEQ — it keeps running in the menu bar.
 | --- | --- |
 | ⌘Z / ⇧⌘Z | Undo / Redo profile edits |
 
-## Expert Equalizer
+## Parametric Equalizer
 
 With a band selected, the arrow keys edit it. Modifiers change the step size, so
 you can sweep coarsely or nudge surgically without leaving the keyboard.
