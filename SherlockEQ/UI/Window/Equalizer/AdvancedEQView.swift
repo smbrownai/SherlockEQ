@@ -23,12 +23,11 @@ struct AdvancedEQView: View {
     @AppStorage("sherlockeq.layer.output")    private var showOutputLayer    = true
     @AppStorage("sherlockeq.layer.input")     private var showInputLayer     = true
     // Result is the default-visible hero. The EQ-only and Correction traces
-    // are the breakdown, off until the user picks them (or the Breakdown lens).
+    // are the breakdown, off until the user picks them.
     @AppStorage("sherlockeq.layer.result")    private var showResultLayer    = true
     @AppStorage("sherlockeq.layer.eq")        private var showEQLayer        = false
     @AppStorage("sherlockeq.layer.audiogram") private var showAudiogramLayer = false
     @AppStorage("sherlockeq.layer.safety")    private var showSafetyLayer    = false
-    @AppStorage("sherlockeq.layer.peaks")     private var showPeaksLayer     = false
 
     var body: some View {
         if let profile = audioState.activeProfile(in: profileStore) {
@@ -59,7 +58,6 @@ struct AdvancedEQView: View {
                     showAudiogramTarget: $showAudiogramLayer,
                     showResultCurve: $showResultLayer,
                     showSafetyOverlay: $showSafetyLayer,
-                    showPeakCallouts: $showPeaksLayer,
                     // Dynamic-feature overlay is an Expert-canvas affordance
                     // (live node semantics); the graphic-EQ canvas hides it.
                     showDynamics: .constant(false),
@@ -169,7 +167,6 @@ struct AdvancedEQView: View {
             showAudiogramTarget: showAudiogramLayer,
             showResultCurve: showResultLayer,
             showSafetyOverlay: showSafetyLayer,
-            showPeakCallouts: showPeaksLayer,
             safetyCeilingDBA: profile.safeListeningCeilingDB,
             calibrationOffsetDBA: audioState.effectiveCalibrationOffsetDBA
         )

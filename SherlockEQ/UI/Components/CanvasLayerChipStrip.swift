@@ -1,10 +1,8 @@
 import SwiftUI
 
-/// Layer-visibility chips + lens preset menu for the parametric canvas.
+/// Layer-visibility chips for the parametric canvas.
 ///
-/// Each chip independently toggles one canvas overlay. A leading "Lens"
-/// dropdown sets multiple chips at once for common workflows (focused
-/// editing, A/B compare, clinical view, loudness monitoring).
+/// Each chip independently toggles one canvas overlay.
 ///
 /// Accessibility:
 /// - Chip state uses BOTH fill+color and a checkmark glyph — never color
@@ -14,8 +12,6 @@ import SwiftUI
 /// - Each chip is a `Button` with explicit `accessibilityLabel` and
 ///   `accessibilityValue("on"/"off")` so VoiceOver reads "Output, on,
 ///   toggle button".
-/// - The `Lens` menu announces the selected preset via VoiceOver and shows
-///   a short description on hover.
 struct CanvasLayerChipStrip: View {
     @Binding var showInputSpectrum: Bool
     @Binding var showOutputSpectrum: Bool
@@ -25,9 +21,7 @@ struct CanvasLayerChipStrip: View {
     /// heard. The default-visible hero line when an audiogram exists.
     @Binding var showResultCurve: Bool
     @Binding var showSafetyOverlay: Bool
-    @Binding var showPeakCallouts: Bool
-    /// Live dynamic-feature bells overlay (Clarity features). A manually
-    /// toggled chip — not part of any lens preset (v1).
+    /// Live dynamic-feature bells overlay (Listening Comfort features).
     @Binding var showDynamics: Bool
     /// When false the Audiogram chip is hidden (no thresholds entered yet).
     let hasAudiogram: Bool
@@ -68,8 +62,6 @@ struct CanvasLayerChipStrip: View {
 
     private var fullStripContent: some View {
             HStack(spacing: 8) {
-                lensMenu
-                Divider().frame(height: 20)
                 chip(
                     "Output",
                     swatch: Self.outputColor,
@@ -115,12 +107,6 @@ struct CanvasLayerChipStrip: View {
                     isOn: $showSafetyOverlay,
                     hint: "Highlights frequency regions where sustained energy exceeds a hearing-safety threshold."
                 )
-                chip(
-                    "Peaks",
-                    swatch: Self.peaksColor,
-                    isOn: $showPeakCallouts,
-                    hint: "Labels the loudest live frequencies on the spectrum with chips showing the frequency."
-                )
                 if hasDynamics {
                     chip(
                         "Dynamics",
@@ -134,8 +120,8 @@ struct CanvasLayerChipStrip: View {
             }
     }
 
-    /// Compact fallback: lens menu still inline (primary control), all
-    /// other layer toggles tucked into a popover so the bar never overflows.
+    /// Compact fallback: all layer toggles tucked into a popover so the
+    /// bar never overflows at large text sizes / narrow windows.
     @ViewBuilder
     private var compactStrip: some View {
         if #available(macOS 26.0, *) {
@@ -147,8 +133,6 @@ struct CanvasLayerChipStrip: View {
 
     private var compactStripContent: some View {
         HStack(spacing: 8) {
-            lensMenu
-            Divider().frame(height: 20)
             layersButton
             Spacer()
         }
@@ -226,11 +210,6 @@ struct CanvasLayerChipStrip: View {
                 swatch: Self.safetyColor,
                 isOn: $showSafetyOverlay
             )
-            popoverRow(
-                "Peaks",
-                swatch: Self.peaksColor,
-                isOn: $showPeakCallouts
-            )
             if hasDynamics {
                 popoverRow(
                     "Dynamics",
@@ -272,69 +251,6 @@ struct CanvasLayerChipStrip: View {
         }
         .toggleStyle(.switch)
         .controlSize(.small)
-    }
-
-    // MARK: - Lens menu
-
-    private var lensMenu: some View {
-        Menu {
-            ForEach(CanvasLens.allCases) { lens in
-                Button {
-                    apply(lens)
-                } label: {
-                    VStack(alignment: .leading) {
-                        Label(lens.label, systemImage: lens.symbol)
-                        Text(lens.tagline)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .accessibilityLabel("\(lens.label) lens. \(lens.tagline)")
-            }
-        } label: {
-            // Accent-tinted styling so the Lens reads as the strip's
-            // *primary control*, not just another chip. The chips next to
-            // it carry colored layer swatches that draw the eye; without
-            // its own visual handle, the Lens disappears between them.
-            // The accent fill + tinted icon + label gives it a clear
-            // "this is a menu" affordance distinct from the layer toggles.
-            HStack(spacing: 6) {
-                Image(systemName: "rectangle.3.group.bubble")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.tint)
-                Text("Lens")
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(.tint)
-                Image(systemName: "chevron.down")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.tint)
-            }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 6)
-            // Accent-tinted surface so the Lens still reads as the strip's
-            // primary control next to the layer chips' plainer bodies.
-            .glassChipSurface(
-                tint: Color.accentColor.opacity(0.25),
-                fallbackFill: Color.accentColor.opacity(0.16),
-                fallbackStroke: Color.accentColor.opacity(0.55)
-            )
-            .contentShape(Rectangle())
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Switch the canvas to a curated layer combination for a specific workflow.")
-        .accessibilityLabel("Layer preset")
-    }
-
-    private func apply(_ lens: CanvasLens) {
-        showOutputSpectrum  = lens.visibility.output
-        showInputSpectrum   = lens.visibility.input
-        showEQCurve         = lens.visibility.eq
-        showAudiogramTarget = lens.visibility.audiogram
-        showResultCurve     = lens.visibility.result
-        showSafetyOverlay   = lens.visibility.safety
-        showPeakCallouts    = lens.visibility.peaks
     }
 
     // MARK: - Chip
@@ -410,70 +326,4 @@ struct CanvasLayerChipStrip: View {
     static let inputColor = Color(red: 0.55, green: 0.60, blue: 0.68)
     /// Amber — matches the safety overlay.
     static let safetyColor = Color(red: 1.0, green: 0.65, blue: 0.20)
-    /// Warm yellow — matches the peak-callout chips on the canvas.
-    static let peaksColor = Color(red: 1.0, green: 0.82, blue: 0.30)
-}
-
-// MARK: - Lens presets
-
-/// Curated layer combinations. Each lens is a one-click way to put the
-/// canvas in a mode optimised for a specific workflow.
-enum CanvasLens: String, CaseIterable, Identifiable {
-    case eq, breakdown, compare, audiogram, loudness
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .eq:        return "Result"
-        case .breakdown: return "Breakdown"
-        case .compare:   return "Compare"
-        case .audiogram: return "Audiogram"
-        case .loudness:  return "Loudness"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .eq:        return "slider.horizontal.3"
-        case .breakdown: return "square.3.layers.3d.down.right"
-        case .compare:   return "arrow.left.arrow.right"
-        case .audiogram: return "ear"
-        case .loudness:  return "exclamationmark.shield"
-        }
-    }
-
-    var tagline: String {
-        switch self {
-        case .eq:        return "Just the result — output + what you actually hear."
-        case .breakdown: return "Pull the curve apart — Result, your EQ, and the correction layered together."
-        case .compare:   return "Input + output, see how the chain is shaping the sound."
-        case .audiogram: return "Clinical view — what you hear next to the hearing-correction curve."
-        case .loudness:  return "Monitoring view — spectrum with safety zones called out."
-        }
-    }
-
-    struct Visibility {
-        let output: Bool
-        let input: Bool
-        let eq: Bool
-        let audiogram: Bool
-        let result: Bool
-        let safety: Bool
-        let peaks: Bool
-    }
-
-    var visibility: Visibility {
-        switch self {
-        // Result-focused: the "what you hear" line and the output spectrum.
-        case .eq:        return .init(output: true,  input: false, eq: false, audiogram: false, result: true,  safety: false, peaks: false)
-        // Decomposition: Result + its two contributors at once.
-        case .breakdown: return .init(output: true,  input: false, eq: true,  audiogram: true,  result: true,  safety: false, peaks: false)
-        // Compare turns peaks on — they're useful as anchor points when
-        // visually diffing the input vs output silhouettes.
-        case .compare:   return .init(output: true,  input: true,  eq: false, audiogram: false, result: true,  safety: false, peaks: true)
-        case .audiogram: return .init(output: true,  input: false, eq: false, audiogram: true,  result: true,  safety: false, peaks: false)
-        case .loudness:  return .init(output: true,  input: false, eq: false, audiogram: false, result: true,  safety: true,  peaks: true)
-        }
-    }
 }

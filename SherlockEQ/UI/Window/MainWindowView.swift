@@ -108,12 +108,12 @@ struct MainWindowView: View {
                 .accessibilityLabel(monitorSidebarVisible ? "Hide monitor panel" : "Show monitor panel")
             }
         }
-        // Sized so the Expert layer-chip strip (Lens + 6 chips: Output /
-        // Input / EQ / Audiogram / Safety / Peaks) fits on one row at the
-        // default Dynamic Type size, with the existing top header bar
-        // (ear picker + viz picker + bands badge + Q/Oct + Link L+R + Add
-        // band) above it, the main sidebar at left, AND the persistent
-        // 240pt monitor sidebar at right.
+        // Sized so the Expert layer-chip strip (Output / Input / Result /
+        // EQ / Correction / Safety chips) fits on one row at the default
+        // Dynamic Type size, with the existing top header bar (ear picker
+        // + bands badge + Q/Oct + Link L+R + Add band) above it, the main
+        // sidebar at left, AND the persistent 240pt monitor sidebar at
+        // right.
         .frame(minWidth: 1366, idealWidth: 1400, minHeight: 716, idealHeight: 800)
         .linkUndoManagerToProfileStore()
         // Honor cross-window deep-link requests (e.g. the onboarding wizard's

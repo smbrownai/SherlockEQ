@@ -655,10 +655,10 @@ final class AudioState: ObservableObject {
         // display-loop 60 Hz respectively). Rebroadcasting either through
         // `audioState.objectWillChange` would re-evaluate every SwiftUI
         // view holding an `@EnvironmentObject AudioState` reference on
-        // every publish — i.e. the entire window tree. Canvas / Meters
+        // every publish — i.e. the entire window tree. Canvas / VU
         // views observe the analyzer / monitor directly via @ObservedObject
-        // (see `LiveParametricCanvas`, `MetersView`) so only that subtree
-        // pays the cost.
+        // (see `LiveParametricCanvas`, `MonitorSidebar`, `AnalogVUMeter`)
+        // so only that subtree pays the cost.
         _ = spectrum
         _ = preSpectrum
         _ = stereoMonitor

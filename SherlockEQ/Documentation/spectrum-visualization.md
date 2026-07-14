@@ -2,15 +2,13 @@
 title: "Spectrum & Visualization"
 slug: "spectrum-visualization"
 category: "Metering & Visualization"
-summary: "The live frequency analyzer, 1/3-octave bars, peak callouts, and how to read them while you EQ."
+summary: "The live frequency analyzer behind the EQ canvas, its layers, and how to read them while you EQ."
 keywords:
   - spectrum
   - analyzer
   - fft
-  - bars
-  - octave
-  - peaks
   - visualization
+  - layers
 related:
   - vu-meters
   - parametric-eq
@@ -24,8 +22,8 @@ related:
 
 The spectrum view shows, in real time, how much energy the audio carries at
 each **frequency** — a moving picture of the bass, mids, and treble in whatever
-you're listening to. It can display a smooth spectrum, **1/3-octave bars**, and
-**peak callouts** that label prominent tones.
+you're listening to. It draws a smooth spectrum silhouette with a faint
+**peak-hold** line marking recent maxima at each frequency.
 
 ## Why it exists
 
@@ -35,7 +33,7 @@ the sound.
 
 ## How to use it
 
-- Toggle layers (input vs. output, EQ curve, safety overlay, peaks) to compare before/after.
+- Toggle layers (input vs. output, EQ curve, hearing correction, safety overlay) to compare before/after.
 - Hover for a readout of frequency and level at the cursor.
 - Watch where energy concentrates before deciding where to cut or boost.
 
@@ -63,8 +61,7 @@ alter it.
 ## Technical notes
 
 The analyzer uses a windowed discrete Fourier transform with smoothing and
-log-frequency binning; peak callouts use prominence detection with hysteresis
-so labels don't flicker. FFT bin energy reads lower than time-domain RMS, which
+log-frequency binning. FFT bin energy reads lower than time-domain RMS, which
 the safety overlay compensates for.
 
 ## Limitations
