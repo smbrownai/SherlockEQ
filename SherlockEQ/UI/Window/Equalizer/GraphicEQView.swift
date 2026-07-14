@@ -52,7 +52,6 @@ struct GraphicEQView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 topBar
-                otherFiltersRow(profile)
                 CanvasLayerChipStrip(
                     showInputSpectrum: $showInputLayer,
                     showOutputSpectrum: $showOutputLayer,
@@ -68,6 +67,10 @@ struct GraphicEQView: View {
                     earColor: audioState.preferences.leftEarColor
                 )
                 previewCanvas(profile, leftCorrection: leftCorrection, rightCorrection: rightCorrection)
+                // Between curve and sliders (spec §1.4): the row explains
+                // that the curve ABOVE includes filters the sliders BELOW
+                // can't represent — its copy depends on this position.
+                otherFiltersRow(profile)
                 slidersRow(profile)
                 resetButton(profile)
             }
