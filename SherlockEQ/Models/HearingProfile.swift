@@ -232,20 +232,26 @@ extension HearingProfile {
 extension HearingProfile {
 
     /// The four shipped listening-comfort presets, in their canonical UI
-    /// order. These are tone/comfort presets built on the Advanced graphic
-    /// EQ — explicitly **not** medical hearing correction. Each has
+    /// order. Each wraps one shared `PresetCurve` (§3.2's single source of
+    /// truth) — explicitly **not** medical hearing correction. Each has
     /// a stable id so "Reset to Factory Default" and "Restore Factory
     /// Presets" can find and rebuild it, and a fixed historical `createdAt`
     /// so the store's createdAt sort places them first, in this order.
+    ///
+    /// v2 note (phase3-make-correction-land.md §3.3): Presence Boost
+    /// (F0000004…) was retired — it was Voice Clarity at ~60 % scale — and
+    /// replaced by Reduce Boom with a NEW id. `ProfileStore`'s reconcile
+    /// deletes an unedited Presence Boost and demotes an edited one to a
+    /// user profile; its id must never be reused.
     enum Factory: Int, CaseIterable {
-        case voiceClarity, musicBalanced, gentleListening, presenceBoost
+        case voiceClarity, musicBalanced, gentleListening, reduceBoom
 
         var id: UUID {
             switch self {
             case .voiceClarity:    return UUID(uuidString: "F0000001-0000-4000-A000-000000000001")!
             case .musicBalanced:   return UUID(uuidString: "F0000002-0000-4000-A000-000000000002")!
             case .gentleListening: return UUID(uuidString: "F0000003-0000-4000-A000-000000000003")!
-            case .presenceBoost:   return UUID(uuidString: "F0000004-0000-4000-A000-000000000004")!
+            case .reduceBoom:      return UUID(uuidString: "F0000005-0000-4000-A000-000000000005")!
             }
         }
 
@@ -254,31 +260,12 @@ extension HearingProfile {
         var createdAt: Date { Date(timeIntervalSince1970: 1_600_000_000 + Double(rawValue)) }
     }
 
-    /// Centers the v1 factory gains arrays were authored on. Deliberately
-    /// NOT `EQMode.graphicCenters` (which gained 3 kHz / 6 kHz in the
-    /// phase-3 grid change): the gains below are positional, so zipping
-    /// them against a longer center list would silently shift every
-    /// preset's voicing onto the wrong frequencies. Frozen until the §3
-    /// preset re-voicing lands 12-entry gains tables — the §3 migration
-    /// also compares stored presets against these exact v1 values to
-    /// detect user edits, so factory output must stay byte-stable.
-    static let advancedCenters: [Double] = [31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
-
-    /// Build the Advanced parametric bands from a gain-per-center list.
-    /// Bandwidth 1.0 (one octave) matches the Advanced graphic-EQ slots so
-    /// `GraphicEQView` finds and shows them via `EQBandLookup`.
-    private static func advancedBands(_ gains: [Double]) -> [EQBand] {
-        zip(advancedCenters, gains).map { freq, gain in
-            EQBand(frequencyHz: freq, gaindB: gain, bandwidth: 1.0, filterType: .parametric, enabled: true)
-        }
-    }
-
     private static func makeFactory(
         _ which: Factory, name: String, symbol: String,
-        gains: [Double], outputGainDB: Double,
+        curve: PresetCurve,
         description: String, tags: [String]
     ) -> HearingProfile {
-        let bands = advancedBands(gains)
+        let bands = curve.bands
         let stamp = which.createdAt
         return HearingProfile(
             id: which.id,
@@ -289,7 +276,7 @@ extension HearingProfile {
             rightEar: EarProfile(thresholds: AudiogramPoint.flat, bands: bands),
             leftNotch: .disabled,
             rightNotch: .disabled,
-            globalTrimDB: outputGainDB,
+            globalTrimDB: curve.trimDB,
             safeListeningCeilingDB: 85.0,
             compensationFactor: 0.5,
             eqMode: .advanced,
@@ -303,35 +290,35 @@ extension HearingProfile {
 
     static func factoryVoiceClarity() -> HearingProfile {
         makeFactory(.voiceClarity, name: "Voice Clarity", symbol: "waveform.badge.mic",
-            gains: [-4, -3, -2, -1, 0, 1, 2, 2.5, 0.5, -1], outputGainDB: -2,
-            description: "Improves spoken-word clarity by reducing low-frequency boom and gently increasing speech presence. Best for podcasts, calls, meetings, lectures, and audiobooks.",
+            curve: .clearerVoices,
+            description: "Voices are hard to follow — lifts speech presence and consonant detail while easing low-frequency boom. For podcasts, calls, TV dialogue, and audiobooks.",
             tags: ["Voice", "Speech", "Clarity"])
     }
 
     static func factoryMusicBalanced() -> HearingProfile {
         makeFactory(.musicBalanced, name: "Music Balanced", symbol: "music.note",
-            gains: [0.5, 1, 0.5, -0.5, 0, 0, 0.5, 1, 0, -0.5], outputGainDB: -1,
-            description: "A natural, lightly refined music profile with modest bass support and gentle clarity. Designed to preserve the character of music without making it overly bright.",
-            tags: ["Music", "Balanced", "Natural"])
+            curve: .musicBalance,
+            description: "The everyday starting point — light warmth, less low-mid mud, and a gentle clarity lift. Audible against Reference Mode without imposing a strong flavor.",
+            tags: ["Music", "Everyday", "Balanced"])
     }
 
     static func factoryGentleListening() -> HearingProfile {
         makeFactory(.gentleListening, name: "Gentle Listening", symbol: "moon.stars",
-            gains: [0, 0, 0.5, 0.5, 0, 0, -0.5, -1.5, -2.5, -3], outputGainDB: 0,
-            description: "Softens bright or fatiguing audio for longer, more comfortable listening. Useful for sharp headphones, late-night sessions, or content that feels harsh.",
+            curve: .gentleListening,
+            description: "Audio feels sharp or tiring — progressively softens the highs for long, comfortable sessions, sharp headphones, and late-night listening.",
             tags: ["Comfort", "Soft", "Long Sessions"])
     }
 
-    static func factoryPresenceBoost() -> HearingProfile {
-        makeFactory(.presenceBoost, name: "Presence Boost", symbol: "sparkles",
-            gains: [-1, -1, -1, -0.5, 0, 0.5, 1.5, 2, 0.5, 0], outputGainDB: -2,
-            description: "Adds mild definition and presence for audio that sounds dull or veiled. Conservative by design and not a substitute for an audiogram-based profile.",
-            tags: ["Clarity", "Presence", "Mild Lift"])
+    static func factoryReduceBoom() -> HearingProfile {
+        makeFactory(.reduceBoom, name: "Reduce Boom", symbol: "speaker.minus",
+            curve: .reduceBoom,
+            description: "Audio sounds boomy or muddy — tightens the low end so voices and detail come through. Good for boomy rooms, small speakers, and bass-heavy headphones.",
+            tags: ["Clarity", "Low End", "Small Speakers"])
     }
 
     /// All four factory presets, in canonical UI order.
     static var factoryProfiles: [HearingProfile] {
-        [factoryVoiceClarity(), factoryMusicBalanced(), factoryGentleListening(), factoryPresenceBoost()]
+        [factoryVoiceClarity(), factoryMusicBalanced(), factoryGentleListening(), factoryReduceBoom()]
     }
 
     /// The canonical (pristine) factory preset for a given id, or nil if the

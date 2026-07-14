@@ -43,7 +43,7 @@ isn't enough, this is the fastest tool.
 ## How to use it
 
 - Set a profile's EQ surface to **Graphic** in the profile's Tuning section, then open the **Equalizer** screen.
-- Drag sliders to shape the curve, or start from a **preset** (general shapes, music genres, and corrective curves) and tweak.
+- Drag sliders to shape the curve, or start from a **preset**: a small set named for outcomes — Clearer voices, Music balance, Gentle listening, Reduce boom, Reduce harshness — plus genre "Tone flavors" in a submenu (taste presets, not hearing correction). The selector shows **Custom** whenever your sliders diverge from every preset.
 - Move in small steps; the sliders read out in dB.
 
 ## What changes in the audio

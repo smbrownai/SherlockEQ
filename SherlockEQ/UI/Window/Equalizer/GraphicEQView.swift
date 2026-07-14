@@ -86,31 +86,64 @@ struct GraphicEQView: View {
         }
     }
 
-    /// One-click curated curves shaped to the 10 octave bands. Mirrors
-    /// the Speech and Simple preset menus so the affordance reads as
-    /// consistent across tabs. Each preset overwrites the graphic
-    /// bands on both ears; other tabs' bands stay untouched.
+    /// The current purpose preset the sliders + trim represent, or nil for
+    /// "Custom". Detection lives in `PresetCurve.matching` so the selector
+    /// and the curve table can't disagree about what counts as a match.
+    private var currentCurve: PresetCurve? {
+        guard let profile = audioState.activeProfile(in: profileStore) else { return nil }
+        let left = Self.frequencies.map {
+            EQBandLookup.gain(at: $0, filterType: .parametric, in: profile.leftEar.bands)
+        }
+        let right = Self.frequencies.map {
+            EQBandLookup.gain(at: $0, filterType: .parametric, in: profile.rightEar.bands)
+        }
+        return PresetCurve.matching(leftGains: left, rightGains: right, trimDB: profile.globalTrimDB)
+    }
+
+    /// The purpose-preset selector (spec §3.2): a small outcome-named set —
+    /// what the user wants to improve, not a genre or a skill level — with
+    /// the genre curves demoted to a clearly-labeled "Tone flavors" submenu.
+    /// The label reflects the current state, including "Custom" whenever the
+    /// sliders diverge from every curve.
     private var presetMenu: some View {
         Menu {
-            ForEach(GraphicEQPreset.allCases) { preset in
+            ForEach(PresetCurve.allCases) { curve in
                 Button {
-                    apply(preset)
+                    apply(curve)
                 } label: {
                     VStack(alignment: .leading) {
-                        Label(preset.label, systemImage: preset.symbol)
-                        Text(preset.tagline)
+                        Label(curve.label, systemImage: curve.symbol)
+                        Text(curve.tagline)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
-                .accessibilityLabel("\(preset.label) preset. \(preset.tagline)")
+                .accessibilityLabel("\(curve.label) preset. \(curve.tagline)")
+            }
+            Divider()
+            Menu("Tone flavors") {
+                Section("Taste presets — not hearing correction. They stack with your profile's correction.") {
+                    ForEach(ToneFlavorPreset.allCases) { preset in
+                        Button {
+                            apply(preset)
+                        } label: {
+                            VStack(alignment: .leading) {
+                                Label(preset.label, systemImage: preset.symbol)
+                                Text(preset.tagline)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .accessibilityLabel("\(preset.label) tone flavor. \(preset.tagline)")
+                    }
+                }
             }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "wand.and.stars")
+                Image(systemName: currentCurve?.symbol ?? "slider.horizontal.3")
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(.tint)
-                Text("Preset")
+                Text("Preset: \(currentCurve?.label ?? "Custom")")
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.tint)
                 Image(systemName: "chevron.down")
@@ -132,11 +165,29 @@ struct GraphicEQView: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("One-click curated curves for the graphic bands.")
+        .help("Outcome presets for the graphic bands — pick what you want to improve.")
         .accessibilityLabel("Graphic EQ preset")
+        .accessibilityValue(currentCurve?.label ?? "Custom")
     }
 
-    private func apply(_ preset: GraphicEQPreset) {
+    /// Apply a purpose preset: writes every slider on both ears AND the
+    /// curve's output trim (the trim is part of the curve's design — the
+    /// headroom guard for curves that boost). One undoable save.
+    private func apply(_ curve: PresetCurve) {
+        guard let profile = audioState.activeProfile(in: profileStore) else { return }
+        var updated = profile
+        EQBandLookup.mutateBothEars(of: &updated) { bands in
+            for (freq, gain) in zip(EQMode.graphicCenters, curve.gains) {
+                EQBandLookup.setGain(gain, at: freq, bandwidth: Self.bandwidth, filterType: .parametric, in: &bands)
+            }
+        }
+        updated.globalTrimDB = curve.trimDB
+        try? profileStore.save(updated, actionName: "Apply \(curve.label)")
+    }
+
+    /// Apply a tone flavor: slider gains only (flavors predate the trim
+    /// concept and never carried one — the user's trim stays put).
+    private func apply(_ preset: ToneFlavorPreset) {
         guard let profile = audioState.activeProfile(in: profileStore) else { return }
         var updated = profile
         EQBandLookup.mutateBothEars(of: &updated) { bands in
@@ -145,7 +196,7 @@ struct GraphicEQView: View {
                 EQBandLookup.setGain(gain, at: freq, bandwidth: Self.bandwidth, filterType: .parametric, in: &bands)
             }
         }
-        try? profileStore.save(updated)
+        try? profileStore.save(updated, actionName: "Apply \(preset.label)")
     }
 
     // MARK: - Other filters (the "nothing invisible" invariant)
@@ -576,9 +627,17 @@ private struct VerticalGainSlider: View {
 /// (Hz). Bands not in `gains` get 0 (flat / removed from the chain) —
 /// which is also how the presets behave on the 12-band grid's 3 kHz /
 /// 6 kHz slots until the §3 re-voicing gives them explicit values.
-enum GraphicEQPreset: String, CaseIterable, Identifiable {
-    case flat
-    case loudness
+/// Genre / taste curves — the "Tone flavors" submenu (spec §3.4). Kept as
+/// secondary color for listeners who want them, clearly labeled as taste
+/// rather than correction. The retired cases are deliberate:
+///   • `flat` → the `PresetCurve.flat` purpose preset.
+///   • `loudness` → DELETED: a static bass/treble shelf impersonating an
+///     equal-loudness contour is wrong physics (equal-loudness is level-
+///     dependent by definition). A correct SPL-keyed version is possible
+///     post-Phase-1 volume anchoring — future spec, not a menu item.
+///   • `trebleTame` / `bassRoll` → superseded by the better-voiced
+///     `PresetCurve.reduceHarshness` / `.reduceBoom` purpose presets.
+enum ToneFlavorPreset: String, CaseIterable, Identifiable {
     case warm
     case bright
     case vShape
@@ -590,15 +649,11 @@ enum GraphicEQPreset: String, CaseIterable, Identifiable {
     case hipHop
     case electronic
     case techno
-    case trebleTame
-    case bassRoll
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .flat:       return "Flat"
-        case .loudness:   return "Loudness compensation"
         case .warm:       return "Warm"
         case .bright:     return "Bright"
         case .vShape:     return "V-shape"
@@ -610,15 +665,11 @@ enum GraphicEQPreset: String, CaseIterable, Identifiable {
         case .hipHop:     return "Hip-hop / R&B"
         case .electronic: return "Electronic"
         case .techno:     return "Techno"
-        case .trebleTame: return "Treble tame"
-        case .bassRoll:   return "Bass rolloff"
         }
     }
 
     var symbol: String {
         switch self {
-        case .flat:       return "minus"
-        case .loudness:   return "speaker.wave.3"
         case .warm:       return "flame"
         case .bright:     return "sparkles"
         case .vShape:     return "chevron.up.chevron.down"
@@ -630,17 +681,11 @@ enum GraphicEQPreset: String, CaseIterable, Identifiable {
         case .hipHop:     return "waveform.path.ecg"
         case .electronic: return "waveform"
         case .techno:     return "waveform.circle"
-        case .trebleTame: return "ear.trianglebadge.exclamationmark"
-        case .bassRoll:   return "arrow.down.right"
         }
     }
 
     var tagline: String {
         switch self {
-        case .flat:
-            return "Reset all 10 bands to 0."
-        case .loudness:
-            return "Boosts low and high extremes — restores perceived balance at low listening volume (Fletcher-Munson)."
         case .warm:
             return "Bass-forward, gentle treble rolloff — easier on long sessions."
         case .bright:
@@ -663,10 +708,6 @@ enum GraphicEQPreset: String, CaseIterable, Identifiable {
             return "Wide synth shape — sub-bass body, scooped low-mids, shimmer on top."
         case .techno:
             return "Kick-forward bass body and crisp hi-hats — built for pumping four-on-the-floor."
-        case .trebleTame:
-            return "Progressive treble cut — useful for hyperacusis or sibilant material."
-        case .bassRoll:
-            return "Gentle low-frequency cut — tightens up small speakers and reduces room boom."
         }
     }
 
@@ -675,11 +716,6 @@ enum GraphicEQPreset: String, CaseIterable, Identifiable {
     /// Keyed by band centre frequency — matches `GraphicEQView.frequencies`.
     var gains: [Double: Double] {
         switch self {
-        case .flat:
-            return [:]
-        case .loudness:
-            return [31.5: 6, 63: 5, 125: 3, 250: 1,
-                    4000: 1, 8000: 3, 16000: 5]
         case .warm:
             return [31.5: 2, 63: 3, 125: 2, 250: 1,
                     2000: -1, 4000: -2, 8000: -2, 16000: -1]
@@ -722,10 +758,6 @@ enum GraphicEQPreset: String, CaseIterable, Identifiable {
             return [31.5: 4, 63: 4, 125: 2,
                     1000: -1,
                     4000: 1, 8000: 3, 16000: 3]
-        case .trebleTame:
-            return [2000: -1, 4000: -3, 8000: -5, 16000: -6]
-        case .bassRoll:
-            return [31.5: -6, 63: -4, 125: -2]
         }
     }
 }

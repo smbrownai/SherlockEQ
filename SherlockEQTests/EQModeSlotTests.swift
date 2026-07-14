@@ -65,23 +65,37 @@ struct EQModeSlotTests {
         #expect(EQMode.expert.hiddenBands(in: bands).isEmpty)
     }
 
-    // MARK: - Factory freeze (the §3 migration contract)
+    // MARK: - Factory presets live on the graphic grid
 
-    @Test func factoryPresetsStayOnTheFrozenV1Centers() {
-        #expect(HearingProfile.advancedCenters == [
-            31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000
-        ])
+    @Test func factoryPresetsAreVoicedOnTheGraphicGrid() {
+        // §3 re-voicing: factory presets wrap `PresetCurve`s, which emit one
+        // band per graphic center — surface and presets share one grid.
         for preset in HearingProfile.factoryProfiles {
-            #expect(preset.leftEar.bands.map(\.frequencyHz) == HearingProfile.advancedCenters)
-            #expect(preset.rightEar.bands.map(\.frequencyHz) == HearingProfile.advancedCenters)
+            #expect(preset.leftEar.bands.map(\.frequencyHz) == EQMode.graphicCenters)
+            #expect(preset.rightEar.bands.map(\.frequencyHz) == EQMode.graphicCenters)
         }
     }
 
     @Test func factoryPresetBandsAreAllOwnedByGraphic() {
-        // v1 centers are a subset of the 12-band grid, so every factory
-        // band stays visible on the new surface.
         for preset in HearingProfile.factoryProfiles {
             #expect(EQMode.advanced.hiddenBands(in: preset.leftEar.bands).isEmpty)
+        }
+    }
+
+    @Test func factoryPresetsMatchTheirSharedCurves() {
+        // The factory profiles and the Graphic selector consume ONE curve
+        // table — a factory card must read as its curve, not as "Custom".
+        let pairs: [(HearingProfile, PresetCurve)] = [
+            (HearingProfile.factoryVoiceClarity(), .clearerVoices),
+            (HearingProfile.factoryMusicBalanced(), .musicBalance),
+            (HearingProfile.factoryGentleListening(), .gentleListening),
+            (HearingProfile.factoryReduceBoom(), .reduceBoom),
+        ]
+        for (profile, curve) in pairs {
+            let gains = profile.leftEar.bands.map(\.gaindB)
+            let matched = PresetCurve.matching(
+                leftGains: gains, rightGains: gains, trimDB: profile.globalTrimDB)
+            #expect(matched == curve)
         }
     }
 }

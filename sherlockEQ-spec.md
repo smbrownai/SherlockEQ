@@ -402,35 +402,52 @@ needed).
 
 ### 5.8 Factory Listening Presets
 
-Four shipped **listening-comfort presets** built on the Graphic EQ
-(`HearingProfile.factoryProfiles`). These are tone/comfort presets — **not** medical
-hearing correction; copy never implies treating hearing loss, tinnitus, or any
-condition. Each has a stable id, `eqMode: .advanced`, identical L/R bands, an output
-trim folded into `globalTrimDB`, `isBuiltIn: true`, and a `presetDescription` +
-`presetTags` for its card. Canonical UI order: Voice Clarity, Music Balanced, Gentle
-Listening, Presence Boost. The cold default (and onboarding default) is **Music
-Balanced**.
+Four shipped **listening-comfort presets**, each wrapping one shared
+**`PresetCurve`** — the outcome-named curve table (v2, phase-3 §3) that also
+powers the Graphic EQ's purpose-preset selector, so the factory cards and the
+in-EQ presets can't drift apart. These are tone/comfort presets — **not**
+medical hearing correction; copy never implies treating hearing loss,
+tinnitus, or any condition. Each has a stable id, `eqMode: .advanced`,
+identical L/R bands, the curve's output trim in `globalTrimDB`,
+`isBuiltIn: true`, and outcome-language `presetDescription` + `presetTags`.
+Canonical UI order: Voice Clarity, Music Balanced, Gentle Listening,
+**Reduce Boom** (which replaced the retired Presence Boost — Voice Clarity at
+~60 % scale, a redundant slot). The cold default (and onboarding default) is
+**Music Balanced**, now voiced to be clearly audible on a Reference-Mode A/B.
 
-Gains per factory-preset center (31.5 / 63 / 125 / 250 / 500 / 1k / 2k / 4k /
-8k / 16k Hz — the v1 authoring grid; the Advanced *surface* is now the 12-band
-audiometric grid with 3 kHz and 6 kHz added, where these presets read 0 until
-the Phase-3 §3 re-voicing):
+The `PresetCurve` table (gains on the 12-band grid 31.5 / 63 / 125 / 250 /
+500 / 1k / 2k / 3k / 4k / 6k / 8k / 16k Hz):
 
-| Preset | Bands (dB) | Output trim |
-|---|---|---|
-| Voice Clarity | −4, −3, −2, −1, 0, +1, +2, +2.5, +0.5, −1 | −2 dB |
-| Music Balanced | +0.5, +1, +0.5, −0.5, 0, 0, +0.5, +1, 0, −0.5 | −1 dB |
-| Gentle Listening | 0, 0, +0.5, +0.5, 0, 0, −0.5, −1.5, −2.5, −3 | 0 dB |
-| Presence Boost | −1, −1, −1, −0.5, 0, +0.5, +1.5, +2, +0.5, 0 | −2 dB |
+| Curve | Factory card | Gains (dB) | Trim |
+|---|---|---|---|
+| Flat | — | all 0 | 0 |
+| Clearer voices | Voice Clarity | −4, −3, −2, −1, 0, +1, +2, +2.5, +3, +2, +1, −1 | −2 |
+| Music balance | Music Balanced | +1.5, +2, +1, −0.5, −0.5, 0, +1, +1.5, +1.5, +1, +0.5, 0 | −1 |
+| Gentle listening | Gentle Listening | 0, 0, +0.5, +0.5, 0, 0, −0.5, −1, −2, −3, −3.5, −4.5 | 0 |
+| Reduce boom | Reduce Boom | −3, −2.5, −2, −1.5, −0.5, 0, +0.5, +0.5, 0, 0, 0, 0 | 0 |
+| Reduce harshness | — | 0, 0, 0, 0, 0, −0.5, −1.5, −2.5, −2.5, −1.5, −1, −0.5 | 0 |
 
-**Factory lifecycle.** `ProfileStore.reconcileFactoryPresets()` (version-gated on
-`sherlockeq.factoryPresetsVersion`) installs the four on first launch and, on upgrade,
-removes the legacy `Default` / `Voice Clarity` built-ins and installs the four. A
-deleted preset is **not** silently re-added on later launches. `restoreFactoryPresets()`
-(Profiles toolbar) recreates/resets all four; `resetProfileToFactory(_:)` reverts one.
-The limiter stays the existing global setting — no per-profile limiter state. Transitions
-remain instant hard-swaps (click-free by the cascade's state-zeroing + denormal flush);
-no ramping was added.
+The Graphic selector shows these six plus a computed **Custom** state
+(whenever sliders + trim diverge from every curve), with the genre curves
+(Warm … Techno, `ToneFlavorPreset`) demoted to a "Tone flavors" submenu
+labeled *taste presets, not hearing correction*. The former static "Loudness
+compensation" preset was deleted outright — a fixed contour impersonating
+level-dependent equal-loudness is wrong physics (a correct SPL-keyed version
+becomes possible with the Phase-1 volume anchoring; future spec).
+
+**Factory lifecycle.** `ProfileStore.reconcileFactoryPresets()` (version-gated
+on `sherlockeq.factoryPresetsVersion`, now **2**) installs the four on first
+launch. On upgrade it never clobbers user work: canonical presets still
+matching their **frozen v1 definitions** (`ProfileStore.FrozenFactoryV1`,
+full-profile comparison via `profile(_:matchesCanonical:)`) are replaced with
+v2; edited ones are left alone. Retired/unknown built-ins (Presence Boost,
+ancient random-id legacies) are deleted only when pristine — otherwise
+**demoted** to plain user profiles with every edit preserved. A deleted
+preset is **not** silently re-added within a version. `restoreFactoryPresets()`
+(Profiles toolbar) recreates/resets all four; `resetProfileToFactory(_:)`
+reverts one. The limiter stays the existing global setting — no per-profile
+limiter state. Transitions remain instant hard-swaps (click-free by the
+cascade's state-zeroing + denormal flush); no ramping was added.
 
 The former **Speech EQ mode** was retired in the phase-3 surface consolidation;
 its perceptual vocabulary and voice-tuning role fold into the Graphic surface
@@ -993,6 +1010,7 @@ SherlockEQ/
 │   ├── EarProfile.swift
 │   ├── AudiogramPoint.swift
 │   ├── EQBand.swift                        ← incl. EQFilterType enum
+│   ├── PresetCurve.swift                   ← Shared outcome-preset curve table (§5.8)
 │   └── TinnitusNotch.swift                 ← incl. NotchWidth enum
 │
 ├── Persistence/

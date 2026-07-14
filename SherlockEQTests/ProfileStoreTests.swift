@@ -117,13 +117,17 @@ struct ProfileStoreTests {
 
         let store = Self.makeStore(at: dir)
         store.reconcileFactoryPresets()
-        #expect(store.profiles.map(\.name) == ["Voice Clarity", "Music Balanced", "Gentle Listening", "Presence Boost"])
+        #expect(store.profiles.map(\.name) == ["Voice Clarity", "Music Balanced", "Gentle Listening", "Reduce Boom"])
         #expect(store.profiles.allSatisfy { $0.isBuiltIn })
         #expect(store.profiles.allSatisfy { $0.eqMode == .advanced })
-        #expect(store.profiles.allSatisfy { $0.leftEar.bands.count == 10 })
+        #expect(store.profiles.allSatisfy { $0.leftEar.bands.count == 12 })
     }
 
-    @Test func reconcileRemovesLegacyBuiltIns() throws {
+    @Test func reconcileDemotesUnknownLegacyBuiltIns() throws {
+        // An unrecognizable built-in (random id, doesn't match any frozen
+        // shipped definition) might carry user edits we can't detect —
+        // v2's rule demotes it to a user profile instead of deleting it.
+        // (The v1 delete-on-sight rule once wiped a user's edited Default.)
         let dir = Self.makeTempDir()
         defer { Self.cleanup(dir) }
         UserDefaults.standard.set(0, forKey: Self.factoryVersionKey)
@@ -132,8 +136,88 @@ struct ProfileStoreTests {
         let store = Self.makeStore(at: dir)
         try store.save(.makeDefault(name: "Default", isBuiltIn: true)) // legacy random-id built-in
         store.reconcileFactoryPresets()
-        #expect(!store.profiles.contains { $0.name == "Default" })
+        let demoted = try #require(store.profiles.first { $0.name == "Default" })
+        #expect(!demoted.isBuiltIn)
+        #expect(store.profiles.count == 5)   // four factory + the demoted legacy
+    }
+
+    // MARK: - v1 → v2 factory upgrade (phase3-make-correction-land.md §3.4)
+
+    /// Seed the store as a v1 install: the four v1 factory presets on disk
+    /// and the version gate at 1.
+    private static func seedV1(_ store: ProfileStore) throws {
+        for v1 in ProfileStore.FrozenFactoryV1.profiles {
+            try store.save(v1)
+        }
+        UserDefaults.standard.set(1, forKey: factoryVersionKey)
+    }
+
+    @Test func upgradeReplacesPristineV1PresetsAndRetiresPresenceBoost() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
+
+        let store = Self.makeStore(at: dir)
+        try Self.seedV1(store)
+        store.reconcileFactoryPresets()
+
+        // Pristine v1 presets upgraded in place to the 12-band v2 voicings.
+        let mb = try #require(store.profiles.first { $0.id == HearingProfile.Factory.musicBalanced.id })
+        #expect(mb.leftEar.bands.count == 12)
+        #expect(!store.differsFromFactory(mb))
+        // Presence Boost (pristine) retired; Reduce Boom installed.
+        #expect(!store.profiles.contains { $0.id == ProfileStore.FrozenFactoryV1.presenceBoostID })
+        #expect(store.profiles.contains { $0.id == HearingProfile.Factory.reduceBoom.id })
         #expect(store.profiles.count == 4)
+    }
+
+    @Test func upgradeLeavesEditedV1PresetAlone() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
+
+        let store = Self.makeStore(at: dir)
+        try Self.seedV1(store)
+        // User edited Music Balanced's 1 kHz band in v1.
+        var edited = try #require(store.profiles.first { $0.id == HearingProfile.Factory.musicBalanced.id })
+        EQBandLookup.mutateBothEars(of: &edited) { bands in
+            EQBandLookup.setGain(5, at: 1000, bandwidth: 1.0, filterType: .parametric, in: &bands)
+        }
+        try store.save(edited)
+
+        store.reconcileFactoryPresets()
+
+        // The edit survives — still the v1 shape with the user's value.
+        let mb = try #require(store.profiles.first { $0.id == HearingProfile.Factory.musicBalanced.id })
+        #expect(EQBandLookup.gain(at: 1000, filterType: .parametric, in: mb.leftEar.bands) == 5)
+        #expect(mb.isBuiltIn)   // still a factory preset; Reset targets v2 now
+        // The untouched presets upgraded around it.
+        let vc = try #require(store.profiles.first { $0.id == HearingProfile.Factory.voiceClarity.id })
+        #expect(vc.leftEar.bands.count == 12)
+    }
+
+    @Test func upgradeDemotesEditedPresenceBoost() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
+
+        let store = Self.makeStore(at: dir)
+        try Self.seedV1(store)
+        var editedPB = try #require(store.profiles.first { $0.id == ProfileStore.FrozenFactoryV1.presenceBoostID })
+        EQBandLookup.mutateBothEars(of: &editedPB) { bands in
+            EQBandLookup.setGain(-4, at: 8000, bandwidth: 1.0, filterType: .parametric, in: &bands)
+        }
+        try store.save(editedPB)
+
+        store.reconcileFactoryPresets()
+
+        // The user's edited Presence Boost survives as their own profile.
+        let demoted = try #require(store.profiles.first { $0.id == ProfileStore.FrozenFactoryV1.presenceBoostID })
+        #expect(!demoted.isBuiltIn)
+        #expect(demoted.presetDescription == nil)
+        #expect(EQBandLookup.gain(at: 8000, filterType: .parametric, in: demoted.leftEar.bands) == -4)
+        // And the new factory set is fully installed alongside it.
+        #expect(store.profiles.filter(\.isBuiltIn).count == 4)
     }
 
     @Test func reconcileDoesNotReAddDeletedPresetAtSameVersion() throws {

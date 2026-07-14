@@ -51,7 +51,7 @@ change is immediate.
 ## How it interacts with other settings
 
 - Choosing a profile sets the EQ, balance, notch, and correction in effect.
-- **Factory presets are editable in place.** SherlockEQ ships four — **Voice Clarity**, **Music Balanced**, **Gentle Listening**, and **Presence Boost** (a fresh install starts on Music Balanced). Editing one saves your changes to it; there's no need to duplicate first. Use **Reset to Default** on a preset to return it to its shipped values, or **Restore Factory Presets** to bring back any you deleted.
+- **Factory presets are editable in place.** SherlockEQ ships four — **Voice Clarity**, **Music Balanced**, **Gentle Listening**, and **Reduce Boom** (a fresh install starts on Music Balanced). Editing one saves your changes to it; there's no need to duplicate first. Use **Reset to Default** on a preset to return it to its shipped values, or **Restore Factory Presets** to bring back any you deleted.
 - Want to keep a factory preset untouched? **Duplicate** it and edit the copy.
 - Device-linked profiles can switch automatically when you plug in or connect a device.
 
