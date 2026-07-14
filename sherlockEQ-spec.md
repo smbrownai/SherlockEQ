@@ -271,6 +271,20 @@ stream (A-weighted per-bin), then converts dBFS to dBA via the user's calibratio
 offset (`calibrationOffsetDBA`, default 100, persisted). Dose accumulates against
 NIOSH's equal-energy 3 dB exchange rule.
 
+**Volume-aware calibration** (see `volume-aware-dose.md`): CATap captures audio
+*upstream* of the hardware volume control, so a fixed offset is only correct at
+the volume the user calibrated at. Setting the calibration therefore records a
+**volume anchor** — the system output volume (dB) and device UID at that moment
+(`CalibrationVolumeAnchor`, persisted) — and at runtime the dose pipeline uses
+`effectiveCalibrationOffsetDBA = base + (currentVolumeDB − anchorVolumeDB)`,
+tracked live via an always-on `SystemVolumeController` instance owned by
+`AudioState`. A muted output contributes ~zero dose. Every unreadable condition
+(device with no volume property, device changed since calibration, legacy
+install with no anchor) degrades to delta = 0 — the legacy fixed-offset
+behavior — and the Safe Listening screen shows a status line saying which state
+applies. Meter zone boundaries and the canvas safety overlay consume the
+effective offset too, so every at-ear-level surface agrees.
+
 NIOSH constants (`SafeListeningTracker`):
 - `nioshReferenceLevelDBA = 85`
 - `nioshReferenceDuration = 28800 s` (8 hours)
@@ -309,9 +323,11 @@ history, ceiling configuration, notification preferences, SPL-calibration workfl
   republished at most once per minute so the readout doesn't twitch.
 
 **Important framing:** this is an *estimate* based on digital signal level converted
-via a user-set calibration offset. Actual SPL at the ear depends on headphone type,
-fit, and hardware output level. The calibration workflow plays a 1 kHz / −12 dBFS
-reference tone so the user can match it to a known SPL with an external meter.
+via a user-set calibration offset. System-volume changes since calibration are
+tracked into the estimate automatically (when the output device exposes its
+volume); actual SPL at the ear still depends on headphone type and fit. The
+calibration workflow plays a 1 kHz / −12 dBFS reference tone so the user can
+match it to a known SPL with an external meter.
 
 ---
 
@@ -636,8 +652,14 @@ Other AudioState surface:
   (SafeListeningView, MenuBarIcon, DebugView) read `safeListening.sessionDose` /
   `.remainingMinutes` directly.
 - `@Published var calibrationOffsetDBA: Double` — SPL calibration (default 100,
-  persisted as `sherlockeq.calibrationOffsetDBA`). Drives the dBFS→dBA conversion
-  for the dose tracker and the canvas safety-threshold curve.
+  persisted as `sherlockeq.calibrationOffsetDBA`). Setting it also records the
+  volume anchor (`sherlockeq.calibrationAnchorVolumeDB` / `…AnchorDeviceUID`).
+- `let systemVolume: SystemVolumeController` — always-on system-output-volume
+  tracker (volume dB, mute, device UID) feeding the volume-aware calibration.
+- `@Published private(set) var volumeDeltaDB: Double` +
+  `var effectiveCalibrationOffsetDBA: Double` — live volume shift and the
+  offset the analyzers/dose/meters actually consume (base + delta). See
+  `volume-aware-dose.md`.
 - `func activeProfile(in store: ProfileStore) -> HearingProfile?`
 - `func adoptDefaultProfileIfNeeded(from store: ProfileStore)`
 - `func connect(profileStore: ProfileStore)` — subscribes to profile changes and
@@ -727,7 +749,11 @@ if perm.isFinite, perm > 0 {
 ```
 
 Level estimate: RMS of post-EQ FFT spectrum, A-weighted per-bin via standard
-A-weighting coefficients. The dBA the user sees is dBFS + `calibrationOffsetDBA`.
+A-weighting coefficients. The dBA the user sees is dBFS +
+`effectiveCalibrationOffsetDBA` — the user's calibration shifted by the live
+system-volume delta since calibration time (`CalibrationVolumeAnchor.deltaDB`,
+0 when tracking can't apply; −120 while muted). See §5.4 and
+`volume-aware-dose.md`.
 "Remaining minutes" derives from a 60s power-domain rolling average (NIOSH math is
 logarithmic, so arithmetic averaging of dBA would be wrong by ~3 dB per 6 dB of
 peak-to-mean).
@@ -933,6 +959,8 @@ SherlockEQ/
 │   ├── AudioCapturePermission.swift        ← kTCCServiceAudioCapture wrapping
 │   ├── TapRingBuffer.swift                 ← Lock-free ring between tap IOProc and source
 │   ├── AudioCounter.swift                  ← Lock-protected diagnostic counters
+│   ├── SystemVolumeController.swift        ← macOS output volume read/write + dB/mute/UID
+│   ├── VolumeAnchoredCalibration.swift     ← Calibration volume anchor + delta math
 │   └── GlobalHotKey.swift                  ← Carbon RegisterEventHotKey wrapper (⌘⇧B)
 │
 ├── State/

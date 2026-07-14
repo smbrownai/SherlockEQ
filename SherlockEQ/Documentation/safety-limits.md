@@ -56,10 +56,15 @@ Stop if anything is uncomfortable.
 
 SherlockEQ estimates a daily listening **dose** using the NIOSH recommended
 exposure model — 85 dBA over 8 hours with a 3 dB exchange rate — and tints its
-indicators as you approach the limit.[^1] This is an **informational estimate**,
-not a calibrated measurement: it depends on a playback-level calibration you
-provide and on assumptions about your device, so treat it as guidance, not a
-certified exposure reading.
+indicators as you approach the limit.[^1] The estimate is anchored to the
+system volume you calibrate at: when you later turn the volume up or down (or
+mute), SherlockEQ tracks that change into the estimate automatically, as long
+as your output device exposes its volume (most do; some HDMI and optical
+devices don't — the Safe Listening screen tells you which case applies). This
+is still an **informational estimate**, not a calibrated measurement: it
+depends on a playback-level calibration you provide and on assumptions about
+your device and headphone fit, so treat it as guidance, not a certified
+exposure reading.
 
 ## What SherlockEQ is not
 

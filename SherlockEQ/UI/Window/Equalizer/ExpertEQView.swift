@@ -156,7 +156,7 @@ struct ExpertEQView: View {
                 // editing the ceiling in Safe Listening or the calibration
                 // in its settings card immediately reshapes the danger fill.
                 safetyCeilingDBA: profile.safeListeningCeilingDB,
-                calibrationOffsetDBA: audioState.calibrationOffsetDBA,
+                calibrationOffsetDBA: audioState.effectiveCalibrationOffsetDBA,
                 // Match Expert's ±24 dB clamp so extreme bands (keyboard/import)
                 // are drawn and stay draggable instead of snapping to ±18.
                 gainRangeDB: -24...24,

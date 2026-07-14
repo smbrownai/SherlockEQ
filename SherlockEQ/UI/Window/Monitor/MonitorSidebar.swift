@@ -83,7 +83,8 @@ struct MonitorSidebar: View {
             case .digital:
                 DigitalLRMeter(
                     monitor: audioState.stereoMonitor,
-                    calibrationOffsetDBA: audioState.calibrationOffsetDBA
+                    // Effective (volume-tracked) offset — see volume-aware-dose.md.
+                    calibrationOffsetDBA: audioState.effectiveCalibrationOffsetDBA
                 )
                 .frame(height: 180)
             case .analog:

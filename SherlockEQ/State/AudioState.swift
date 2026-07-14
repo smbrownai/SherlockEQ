@@ -125,17 +125,100 @@ final class AudioState: ObservableObject {
     /// §5.4 — quieter listeners should set this lower (e.g. 85), louder
     /// listeners higher (e.g. 110). Persisted so the user only calibrates
     /// once per setup.
+    ///
+    /// Setting this value also re-anchors the calibration to the *current*
+    /// system output volume (see `calibrationAnchor`): "at this volume,
+    /// 0 dBFS is X dB SPL" is the statement the user is making. The dose
+    /// pipeline consumes `effectiveCalibrationOffsetDBA`, which shifts this
+    /// base by the live volume delta.
     @Published var calibrationOffsetDBA: Double = AudioState.loadDouble(
         key: AudioState.calibrationKey,
         default: 100
     ) {
         didSet {
-            spectrum.calibrationOffsetDBA = Float(calibrationOffsetDBA)
-            preSpectrum.calibrationOffsetDBA = Float(calibrationOffsetDBA)
             UserDefaults.standard.set(calibrationOffsetDBA, forKey: Self.calibrationKey)
+            snapshotCalibrationAnchor()
+            refreshVolumeDelta()
         }
     }
     static let calibrationKey = "sherlockeq.calibrationOffsetDBA"
+
+    // MARK: - Volume-aware calibration (see volume-aware-dose.md)
+
+    /// Always-on system-output-volume tracker. CATap captures audio upstream
+    /// of the hardware volume, so the dose estimate must track the volume
+    /// keys itself. Separate instance from the Analog Control Unit's
+    /// window-lifecycle one — two HAL listeners are trivial, and sharing
+    /// would couple that window's start/stop to the dose tracker.
+    let systemVolume = SystemVolumeController()
+
+    /// Live dB shift between the volume at calibration time and now. `0`
+    /// whenever tracking can't apply (no anchor, unreadable volume, device
+    /// mismatch) — the legacy fixed-offset behavior.
+    @Published private(set) var volumeDeltaDB: Double = 0
+
+    /// What the dBFS → dBA conversion actually uses: the user's calibration
+    /// shifted by the live volume delta. Display surfaces that show at-ear
+    /// level (meter zone boundaries, canvas safety overlay) read this; the
+    /// Safe Listening calibration slider binds the base value.
+    var effectiveCalibrationOffsetDBA: Double { calibrationOffsetDBA + volumeDeltaDB }
+
+    /// Volume-tracking condition for the Safe Listening status row. Derived
+    /// from the same pure function as `volumeDeltaDB` so copy and math agree.
+    var volumeTrackingStatus: CalibrationVolumeAnchor.Status {
+        CalibrationVolumeAnchor.status(
+            anchor: calibrationAnchor,
+            currentVolumeDB: systemVolume.volumeDB,
+            currentDeviceUID: systemVolume.deviceUID,
+            isMuted: systemVolume.isMuted)
+    }
+
+    /// Volume + device recorded the last time the calibration was set.
+    /// `nil` on legacy installs (calibrated before volume tracking) and when
+    /// the device exposed no readable volume at calibration time.
+    private var calibrationAnchor: CalibrationVolumeAnchor? = AudioState.loadCalibrationAnchor()
+
+    static let calibrationAnchorVolumeKey = "sherlockeq.calibrationAnchorVolumeDB"
+    static let calibrationAnchorDeviceKey = "sherlockeq.calibrationAnchorDeviceUID"
+
+    private static func loadCalibrationAnchor() -> CalibrationVolumeAnchor? {
+        let defaults = UserDefaults.standard
+        guard let db = defaults.object(forKey: calibrationAnchorVolumeKey) as? Double,
+              let uid = defaults.string(forKey: calibrationAnchorDeviceKey) else { return nil }
+        return CalibrationVolumeAnchor(volumeDB: db, deviceUID: uid)
+    }
+
+    /// Record (or clear) the volume anchor for the calibration that was just
+    /// set. Unreadable volume → no anchor → delta stays 0 (legacy behavior).
+    private func snapshotCalibrationAnchor() {
+        let defaults = UserDefaults.standard
+        if let db = systemVolume.volumeDB, let uid = systemVolume.deviceUID,
+           !systemVolume.isMuted {
+            calibrationAnchor = CalibrationVolumeAnchor(volumeDB: db, deviceUID: uid)
+            defaults.set(db, forKey: Self.calibrationAnchorVolumeKey)
+            defaults.set(uid, forKey: Self.calibrationAnchorDeviceKey)
+        } else {
+            calibrationAnchor = nil
+            defaults.removeObject(forKey: Self.calibrationAnchorVolumeKey)
+            defaults.removeObject(forKey: Self.calibrationAnchorDeviceKey)
+        }
+    }
+
+    /// Recompute the live volume delta and push the *effective* calibration
+    /// into both analyzers. Called on every controller publish and whenever
+    /// the base calibration changes; both are rare (HAL property listeners
+    /// fire on actual changes, no polling).
+    private func refreshVolumeDelta() {
+        let delta = CalibrationVolumeAnchor.deltaDB(
+            anchor: calibrationAnchor,
+            currentVolumeDB: systemVolume.volumeDB,
+            currentDeviceUID: systemVolume.deviceUID,
+            isMuted: systemVolume.isMuted)
+        if delta != volumeDeltaDB { volumeDeltaDB = delta }
+        let effective = Float(calibrationOffsetDBA + delta)
+        spectrum.calibrationOffsetDBA = effective
+        preSpectrum.calibrationOffsetDBA = effective
+    }
 
     func activeProfile(in store: ProfileStore) -> HearingProfile? {
         guard let id = activeProfileID else { return nil }
@@ -357,6 +440,7 @@ final class AudioState: ObservableObject {
 
     private var tapObserver: AnyCancellable?
     private var audioObserver: AnyCancellable?
+    private var systemVolumeObserver: AnyCancellable?
     private var trackerObserver: AnyCancellable?
     private var noticeObserver: AnyCancellable?
     private var preferencesObserver: AnyCancellable?
@@ -440,9 +524,17 @@ final class AudioState: ObservableObject {
         // — see its subscribe/unsubscribe lifecycle.
 
         // Apply persisted SPL calibration to both analyzers so the dBA
-        // figures the dose tracker integrates match the user's setup.
-        spectrum.calibrationOffsetDBA = Float(calibrationOffsetDBA)
-        preSpectrum.calibrationOffsetDBA = Float(calibrationOffsetDBA)
+        // figures the dose tracker integrates match the user's setup, then
+        // start tracking the system output volume: the effective offset
+        // shifts with the volume keys (see volume-aware-dose.md). The
+        // controller publishes on actual HAL changes only; the sink defers
+        // one main-actor turn because @Published sinks fire in willSet,
+        // before the new values are readable (see published-willset rule).
+        refreshVolumeDelta()
+        systemVolume.start()
+        systemVolumeObserver = systemVolume.objectWillChange.sink { [weak self] _ in
+            Task { @MainActor in self?.refreshVolumeDelta() }
+        }
 
         // Spectrum analyzer → dose tracker.
         spectrum.onLevelUpdate = { [weak tracker] dba in

@@ -152,9 +152,11 @@ struct SafeListeningView: View {
                 format: { String(format: "%.0f dB SPL @ 0 dBFS", $0) },
                 set: { state.calibrationOffsetDBA = $0 }
             )
-            Text("The dB SPL produced at your ear when a full-scale (0 dBFS) digital sample plays through your current output device at your usual volume. Used to convert dBFS into dBA for dose tracking AND to anchor the Loudness lens's safety overlay to real SPL. Default 100 is a rough estimate for consumer headphones at moderate volume — for accurate values use the reference tone below.")
+            Text("The dB SPL produced at your ear when a full-scale (0 dBFS) digital sample plays through your current output device, at the volume you calibrate at. Used to convert dBFS into dBA for dose tracking AND to anchor the Loudness lens's safety overlay to real SPL. SherlockEQ records the system volume when you set this, then tracks later volume changes into the estimate automatically. Default 100 is a rough estimate for consumer headphones at moderate volume — for accurate values use the reference tone below.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
+
+            volumeTrackingRow
 
             calibrationToneRow
 
@@ -174,6 +176,49 @@ struct SafeListeningView: View {
                     Label("Reset today's dose", systemImage: "arrow.counterclockwise")
                 }
             }
+        }
+    }
+
+    /// Live volume-tracking status under the calibration slider — tells the
+    /// user whether the estimate is following the system volume right now,
+    /// and why not when it can't (see `volume-aware-dose.md` §7). Symbol +
+    /// text together (never color alone) per the colorblind convention.
+    @ViewBuilder private var volumeTrackingRow: some View {
+        let status = state.volumeTrackingStatus
+        Label {
+            Text(volumeTrackingDescription(for: status))
+        } icon: {
+            Image(systemName: volumeTrackingSymbol(for: status))
+        }
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func volumeTrackingDescription(for status: CalibrationVolumeAnchor.Status) -> String {
+        switch status {
+        case .active(let delta) where abs(delta) < 0.05:
+            return String(localized: "System volume is tracked — currently at the calibrated volume.")
+        case .active(let delta):
+            return String(localized: "System volume is tracked — the estimate currently includes \(delta, format: FloatingPointFormatStyle<Double>().precision(.fractionLength(1)).sign(strategy: .always())) dB for the volume change since calibration.")
+        case .muted:
+            return String(localized: "Output is muted — no listening exposure is accumulating.")
+        case .deviceMismatch:
+            return String(localized: "Calibrated on a different output device — recalibrate to re-anchor volume tracking.")
+        case .unavailable:
+            return String(localized: "This output device doesn't expose its volume — the estimate assumes the volume from calibration time.")
+        case .unanchored:
+            return String(localized: "Adjust the calibration once to anchor it to your current volume — from then on, volume changes adjust the estimate automatically.")
+        }
+    }
+
+    private func volumeTrackingSymbol(for status: CalibrationVolumeAnchor.Status) -> String {
+        switch status {
+        case .active:         return "speaker.wave.2"
+        case .muted:          return "speaker.slash"
+        case .deviceMismatch: return "arrow.triangle.2.circlepath"
+        case .unavailable:    return "speaker.badge.exclamationmark"
+        case .unanchored:     return "scope"
         }
     }
 
@@ -267,7 +312,7 @@ struct SafeListeningView: View {
         card {
             cardHeader("About this estimate", systemImage: "info.circle")
             VStack(alignment: .leading, spacing: 8) {
-                bullet("Loudness is estimated from the digital signal level, not measured at your ear. Actual SPL depends on your hardware, headphone fit, and system volume.")
+                bullet("Loudness is estimated from the digital signal level, not measured at your ear. Actual SPL still depends on your hardware and headphone fit. System-volume changes are tracked into the estimate automatically when your output device exposes its volume.")
                 bullet("Dose uses the NIOSH 3 dB exchange rate: 85 dBA over 8 hours is 100 %; every +3 dBA halves the safe duration.")
                 bullet("SherlockEQ is not a medical device and makes no diagnostic claims. The dose meter is a daily-listening guide, not a clinical reading.")
                 Link(destination: URL(string: "https://www.cdc.gov/niosh/topics/noise/")!) {
