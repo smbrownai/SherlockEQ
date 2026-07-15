@@ -53,9 +53,12 @@ struct EqualizerView: View {
         .navigationTitle("Equalizer")
         .toolbar {
             // Surface switch, next to the title where its effect is —
-            // it swaps this entire screen. Disabled (not hidden) with no
-            // active profile so the control's existence stays discoverable.
-            ToolbarItem(placement: .principal) {
+            // it swaps this entire screen. `.navigation` keeps it at the
+            // leading edge beside "Equalizer"; the window-level Reference
+            // Mode + monitor-panel controls keep the trailing edge to
+            // themselves. Disabled (not hidden) with no active profile so
+            // the control's existence stays discoverable.
+            ToolbarItem(placement: .navigation) {
                 if let profile = activeProfile {
                     surfacePicker(profile)
                 } else {
