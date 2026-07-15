@@ -594,8 +594,14 @@ controls share one screen so the user reads identify-then-dial as one task.
 │   ├──► leftSourceNode  (mono L; render block runs leftEQCascade)       │
 │   └──► rightSourceNode (mono R; render block runs rightEQCascade)      │
 │                                                                        │
-│  Each cascade carries, in order:                                       │
-│    AutoEQ correction → Profile EQ bands → Tinnitus notch → Trim        │
+│  Each ear's render-block chain, in order (phase-4 §4.1):               │
+│    Stage-A cascade: AutoEQ correction (+ AutoEQ preamp)                │
+│    → AdaptiveCorrectionProcessor (6-band level-following WDRC —        │
+│      active only for `.adaptive` profiles; the filterbank IS the       │
+│      correction in that mode)                                          │
+│    → Stage-B cascade: steady correction (when `.steady`) + profile     │
+│      EQ bands + tinnitus notch (+ global trim)                         │
+│    → DynamicBandProcessor (Listening Comfort)                          │
 │                                                                        │
 └────────────────────────────────────────────────────────────────────────┘
                               │ (stereo with one channel zeroed each)
@@ -1047,6 +1053,9 @@ SherlockEQ/
 │   ├── VUMeter.swift                       ← Analog VU ballistics
 │   ├── AudiogramConversion.swift           ← dB HL → EQBand
 │   ├── AcclimatizationRamp.swift           ← 60→100 % over 21 days (§5.2)
+│   ├── AdaptiveFilterbank.swift            ← 6-band LR4 compensated cascade (phase 4)
+│   ├── AdaptiveCorrectionPrescription.swift ← NAL-R-anchored level-gain rule (phase 4)
+│   ├── AdaptiveCorrectionProcessor.swift   ← Per-ear WDRC stage (phase 4)
 │   ├── CorrectionConflict.swift            ← Notch ↔ correction collision check (§5.3)
 │   ├── EQBandLookup.swift                  ← Mode → slot mapping for hidden-band hints
 │   ├── SineToneGenerator.swift             ← Tone Finder + diagnostic test tones

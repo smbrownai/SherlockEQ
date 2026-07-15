@@ -218,6 +218,21 @@ final class AudioState: ObservableObject {
         let effective = Float(calibrationOffsetDBA + delta)
         spectrum.calibrationOffsetDBA = effective
         preSpectrum.calibrationOffsetDBA = effective
+        // Adaptive Correction reads the same anchor (phase4 §4.2): its
+        // gains follow the volume keys — quieter listening genuinely gets
+        // more correction — and the §7.3 reduced-depth cap applies until
+        // the user has actually performed the calibration once.
+        audio.setAdaptiveLevelAnchor(
+            offsetDBA: Double(effective),
+            calibrated: hasUserCalibration
+        )
+    }
+
+    /// §7.3: true once the user has ever set the SPL calibration (slider
+    /// or meter-reading Apply persists the key). The default rule-of-thumb
+    /// offset alone runs Adaptive in its reduced-depth mode.
+    var hasUserCalibration: Bool {
+        UserDefaults.standard.object(forKey: Self.calibrationKey) != nil
     }
 
     func activeProfile(in store: ProfileStore) -> HearingProfile? {
@@ -1056,6 +1071,10 @@ final class AudioState: ObservableObject {
             rightEQCascade: tap.rightEQCascade,
             leftDynamics: tap.leftDynamics,
             rightDynamics: tap.rightDynamics,
+            leftAutoEQCascade: tap.leftAutoEQCascade,
+            rightAutoEQCascade: tap.rightAutoEQCascade,
+            leftAdaptive: tap.leftAdaptive,
+            rightAdaptive: tap.rightAdaptive,
             sampleRate: format.sampleRate
         ) {
         case .success:

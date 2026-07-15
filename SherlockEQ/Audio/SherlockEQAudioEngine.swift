@@ -36,6 +36,15 @@ final class SherlockEQAudioEngine: ObservableObject {
     /// can push per-feature config and Reference Mode can bypass it.
     private weak var leftDynamics: DynamicBandProcessor?
     private weak var rightDynamics: DynamicBandProcessor?
+    private weak var leftAutoEQCascade: BiquadCascade?
+    private weak var rightAutoEQCascade: BiquadCascade?
+    private weak var leftAdaptive: AdaptiveCorrectionProcessor?
+    private weak var rightAdaptive: AdaptiveCorrectionProcessor?
+    /// Live dBFS → dB SPL anchor + §7.3 calibration flag for the adaptive
+    /// stage, pushed by AudioState (volume-anchored) and re-applied to the
+    /// processors on every profile application.
+    private var adaptiveOffsetDBA: Double = 100
+    private var adaptiveCalibrated = false
     /// Sample rate the cascades' coefficients were computed at — kept
     /// so `applyProfile` can recompute against the right Nyquist on
     /// rebuilds (e.g. output-device switch with a different rate).
@@ -144,6 +153,10 @@ final class SherlockEQAudioEngine: ObservableObject {
         rightEQCascade: BiquadCascade,
         leftDynamics: DynamicBandProcessor,
         rightDynamics: DynamicBandProcessor,
+        leftAutoEQCascade: BiquadCascade,
+        rightAutoEQCascade: BiquadCascade,
+        leftAdaptive: AdaptiveCorrectionProcessor,
+        rightAdaptive: AdaptiveCorrectionProcessor,
         sampleRate: Double
     ) -> AttachOutcome {
         teardownGraph()
@@ -178,8 +191,14 @@ final class SherlockEQAudioEngine: ObservableObject {
         self.rightEQCascade = rightEQCascade
         self.leftDynamics = leftDynamics
         self.rightDynamics = rightDynamics
+        self.leftAutoEQCascade = leftAutoEQCascade
+        self.rightAutoEQCascade = rightAutoEQCascade
+        self.leftAdaptive = leftAdaptive
+        self.rightAdaptive = rightAdaptive
         leftDynamics.setSampleRate(sampleRate)
         rightDynamics.setSampleRate(sampleRate)
+        leftAdaptive.setSampleRate(sampleRate)
+        rightAdaptive.setSampleRate(sampleRate)
 
         engine.attach(leftSource)
         engine.attach(rightSource)
@@ -257,6 +276,10 @@ final class SherlockEQAudioEngine: ObservableObject {
         rightEQCascade.setBypassed(referenceMode)
         leftDynamics.setBypassed(referenceMode)
         rightDynamics.setBypassed(referenceMode)
+        leftAutoEQCascade.setBypassed(referenceMode)
+        rightAutoEQCascade.setBypassed(referenceMode)
+        leftAdaptive.setBypassed(referenceMode)
+        rightAdaptive.setBypassed(referenceMode)
         return .success
     }
 
@@ -449,6 +472,18 @@ final class SherlockEQAudioEngine: ObservableObject {
         rightDynamics?.setBypassed(true)
         leftDynamics = nil
         rightDynamics = nil
+        // Stage-A cascades + adaptive correction — same CATapEngine-owned,
+        // clear-and-drop treatment.
+        leftAutoEQCascade?.setBands([], preampDB: 0, sampleRate: tapSampleRate)
+        rightAutoEQCascade?.setBands([], preampDB: 0, sampleRate: tapSampleRate)
+        leftAutoEQCascade?.setBypassed(true)
+        rightAutoEQCascade?.setBypassed(true)
+        leftAutoEQCascade = nil
+        rightAutoEQCascade = nil
+        leftAdaptive?.clear()
+        rightAdaptive?.clear()
+        leftAdaptive = nil
+        rightAdaptive = nil
         if let t = toneSourceNode { engine.detach(t); toneSourceNode = nil }
         // The diagnostic test tone and the SPL-calibration tone are
         // AVAudioPlayerNodes attached straight to mainMixerNode, outside the
@@ -474,9 +509,30 @@ final class SherlockEQAudioEngine: ObservableObject {
         leftEQCascade?.setBypassed(on)
         rightEQCascade?.setBypassed(on)
         // Reference Mode means truly unprocessed — the dynamic stage goes
-        // out of the path alongside the cascade.
+        // out of the path alongside the cascade, and so do the AutoEQ
+        // stage-A cascades and the adaptive correction.
         leftDynamics?.setBypassed(on)
         rightDynamics?.setBypassed(on)
+        leftAutoEQCascade?.setBypassed(on)
+        rightAutoEQCascade?.setBypassed(on)
+        leftAdaptive?.setBypassed(on)
+        rightAdaptive?.setBypassed(on)
+    }
+
+    /// Live level anchor for the adaptive stage (phase4 §4.2): the
+    /// volume-anchored dBFS → dB SPL offset, plus the §7.3 "has the user
+    /// ever actually calibrated" flag (false → reduced-depth gain cap).
+    /// Pushed by AudioState whenever either changes; stored so the next
+    /// `applyProfile` configures new processors with current values, and
+    /// forwarded live so running gains glide (never reset) with the
+    /// volume keys.
+    func setAdaptiveLevelAnchor(offsetDBA: Double, calibrated: Bool) {
+        adaptiveOffsetDBA = offsetDBA
+        adaptiveCalibrated = calibrated
+        leftAdaptive?.setOffsetDBA(offsetDBA)
+        rightAdaptive?.setOffsetDBA(offsetDBA)
+        leftAdaptive?.setCalibrated(calibrated)
+        rightAdaptive?.setCalibrated(calibrated)
     }
 
     /// Master output gain applied post-limiter via a dedicated AVAudioUnitEQ
@@ -551,9 +607,14 @@ final class SherlockEQAudioEngine: ObservableObject {
         rightBalanceMixer?.outputVolume = 1
         leftEQCascade?.setBands([], preampDB: 0, sampleRate: tapSampleRate)
         rightEQCascade?.setBands([], preampDB: 0, sampleRate: tapSampleRate)
-        // Dynamic features clear too — a flattened chain is fully unprocessed.
+        leftAutoEQCascade?.setBands([], preampDB: 0, sampleRate: tapSampleRate)
+        rightAutoEQCascade?.setBands([], preampDB: 0, sampleRate: tapSampleRate)
+        // Dynamic + adaptive stages clear too — a flattened chain is fully
+        // unprocessed.
         leftDynamics?.configure(slots: [])
         rightDynamics?.configure(slots: [])
+        leftAdaptive?.clear()
+        rightAdaptive?.clear()
     }
 
     /// Apply a hearing profile's per-ear bands + global trim to the chain.
@@ -589,23 +650,69 @@ final class SherlockEQAudioEngine: ObservableObject {
         // stay physically separate. Replaces the previous {leftAutoEQ,
         // leftEQ} AVAudioUnitEQ pair (and right), which leaked cross-
         // channel content even with mono-on-one-channel input.
+        // Stage A: the AutoEQ headphone correction + its preamp, ahead of
+        // the (nonlinear) adaptive stage so its detectors see a headphone-
+        // flattened signal (phase4 §4.1). In Steady mode this split is
+        // mathematically inert — an IIR cascade commutes.
         let autoBands = profile.autoEQBands ?? []
+        leftAutoEQCascade?.setBands(autoBands, preampDB: profile.autoEQPreampDB ?? 0, sampleRate: tapSampleRate)
+        rightAutoEQCascade?.setBands(autoBands, preampDB: profile.autoEQPreampDB ?? 0, sampleRate: tapSampleRate)
+        leftAutoEQCascade?.setBypassed(referenceMode)
+        rightAutoEQCascade?.setBypassed(referenceMode)
+
+        // Adaptive Correction: active only for `.adaptive` profiles that
+        // actually carry a correction (the bypass mask clears
+        // correctionBands when the master toggle is off, which disables
+        // this automatically). The filterbank IS the correction in that
+        // mode — the static layer is omitted from stage B below, never
+        // both (phase4 §4.1).
+        let adaptiveActive = profile.correctionMode == .adaptive
+            && !(profile.leftEar.correctionBands.isEmpty && profile.rightEar.correctionBands.isEmpty)
+        if adaptiveActive {
+            let strength = profile.effectiveCorrectionStrength()
+            leftAdaptive?.configure(
+                bands: AdaptiveCorrectionPrescription.bandParameters(
+                    thresholds: profile.leftEar.thresholds,
+                    correctionBands: profile.leftEar.correctionBands),
+                strength: strength,
+                calibrated: adaptiveCalibrated,
+                offsetDBA: adaptiveOffsetDBA,
+                enabled: true
+            )
+            rightAdaptive?.configure(
+                bands: AdaptiveCorrectionPrescription.bandParameters(
+                    thresholds: profile.rightEar.thresholds,
+                    correctionBands: profile.rightEar.correctionBands),
+                strength: strength,
+                calibrated: adaptiveCalibrated,
+                offsetDBA: adaptiveOffsetDBA,
+                enabled: true
+            )
+        } else {
+            leftAdaptive?.clear()
+            rightAdaptive?.clear()
+        }
+        leftAdaptive?.setBypassed(referenceMode)
+        rightAdaptive?.setBypassed(referenceMode)
+
         // Per-ear notch — Tinnitus Notch UI lets the user dial in two
         // independent notches (e.g. for unilateral tinnitus) when
         // `separateNotch` is on. When off, the UI keeps the two in
         // sync, so leftNotch and rightNotch carry the same values.
         let leftNotchBand = Self.notchAsBand(profile.leftNotch)
         let rightNotchBand = Self.notchAsBand(profile.rightNotch)
-        // Correction at its EFFECTIVE strength (target compensationFactor ×
-        // acclimatization ramp) — the same helper the previews draw from,
-        // so heard always equals drawn (phase3 §5).
-        let correction = profile.effectiveCorrectionBands()
-        let combinedLeftBands = autoBands + correction.left + profile.leftEar.bands + leftNotchBand
-        let combinedRightBands = autoBands + correction.right + profile.rightEar.bands + rightNotchBand
-        let combinedPreampDB = (profile.autoEQPreampDB ?? 0) + profile.globalTrimDB
+        // Stage B: the steady correction (at EFFECTIVE strength — target ×
+        // acclimatization ramp, same helper the previews draw from, phase3
+        // §5) unless Adaptive owns the correction, plus the user/preset EQ,
+        // notch, and global trim.
+        let correction = adaptiveActive
+            ? (left: [EQBand](), right: [EQBand]())
+            : profile.effectiveCorrectionBands()
+        let combinedLeftBands = correction.left + profile.leftEar.bands + leftNotchBand
+        let combinedRightBands = correction.right + profile.rightEar.bands + rightNotchBand
 
-        leftEQCascade?.setBands(combinedLeftBands, preampDB: combinedPreampDB, sampleRate: tapSampleRate)
-        rightEQCascade?.setBands(combinedRightBands, preampDB: combinedPreampDB, sampleRate: tapSampleRate)
+        leftEQCascade?.setBands(combinedLeftBands, preampDB: profile.globalTrimDB, sampleRate: tapSampleRate)
+        rightEQCascade?.setBands(combinedRightBands, preampDB: profile.globalTrimDB, sampleRate: tapSampleRate)
         leftEQCascade?.setBypassed(referenceMode)
         rightEQCascade?.setBypassed(referenceMode)
 
@@ -635,7 +742,7 @@ final class SherlockEQAudioEngine: ObservableObject {
         // and any `log show` capture, while staying inspectable locally via
         // Console.app with private data enabled. autoEQ is just a headphone
         // model name (not health data) and stays .public.
-        log.debug("Applied profile \(profile.name, privacy: .private) — L:\(combinedLeftBands.count) bands, R:\(combinedRightBands.count) bands, preamp+trim:\(combinedPreampDB) dB, balance:\(profile.balance, format: .fixed(precision: 2)), notch:\(notchDescription, privacy: .private), autoEQ:\(profile.autoEQName ?? "none", privacy: .public), dynamics:\(Self.dynamicsSummary(profile.dynamics), privacy: .private)")
+        log.debug("Applied profile \(profile.name, privacy: .private) — L:\(combinedLeftBands.count) bands, R:\(combinedRightBands.count) bands, autoEQ bands:\(autoBands.count), trim:\(profile.globalTrimDB) dB, correction:\(adaptiveActive ? "adaptive" : "steady", privacy: .public), balance:\(profile.balance, format: .fixed(precision: 2)), notch:\(notchDescription, privacy: .private), autoEQ:\(profile.autoEQName ?? "none", privacy: .public), dynamics:\(Self.dynamicsSummary(profile.dynamics), privacy: .private)")
     }
 
     /// Map a profile's dynamic settings for one ear into the processor's

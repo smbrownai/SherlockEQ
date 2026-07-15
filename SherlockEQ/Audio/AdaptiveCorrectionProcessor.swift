@@ -132,6 +132,10 @@ final class AdaptiveCorrectionProcessor {
         stateLock.withLock { $0.offsetDBA = offset }
     }
 
+    func setCalibrated(_ calibrated: Bool) {
+        stateLock.withLock { $0.calibrated = calibrated }
+    }
+
     /// Reference-Mode bypass — mirrors `BiquadCascade.setBypassed`. Bumps
     /// the generation so un-bypassing resumes from clean state.
     func setBypassed(_ on: Bool) {

@@ -99,6 +99,24 @@ struct HearingProfileDecoderTests {
         }
     }
 
+    @Test func missingCorrectionModeDecodesToSteady() throws {
+        // Every profile written before Phase 4 must keep today's behavior:
+        // the static NAL-R layer, never Adaptive.
+        let json = Self.minimalLegacyJSON(omitting: "correctionMode")
+        let profile = try Self.decoder.decode(HearingProfile.self, from: json)
+        #expect(profile.correctionMode == .steady)
+    }
+
+    @Test func correctionModeRoundTripsAndTolerates() throws {
+        for (raw, mode) in [("steady", CorrectionMode.steady), ("adaptive", .adaptive)] {
+            let decoded = try JSONDecoder().decode(CorrectionMode.self, from: "\"\(raw)\"".data(using: .utf8)!)
+            #expect(decoded == mode)
+        }
+        // Unknown future strings land on the safe default.
+        let unknown = try JSONDecoder().decode(CorrectionMode.self, from: "\"turbo\"".data(using: .utf8)!)
+        #expect(unknown == .steady)
+    }
+
     @Test func missingAutoEQDeviceFieldsDecodeToNil() throws {
         // Corrections attached before the device-mismatch feature carry no
         // recorded device — they must decode (nil) and produce no warning.
