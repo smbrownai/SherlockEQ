@@ -167,9 +167,12 @@ struct SettingsView: View {
     private var masterGainRow: some View {
         let isZero = abs(audioState.engineParameters.masterGainDB) < 0.05
         return HStack {
-            Text("App master gain")
-                .foregroundStyle(.secondary)
-                .frame(minWidth: 120, alignment: .leading).layoutPriority(1)
+            HStack(spacing: 6) {
+                Text("Master gain")
+                    .foregroundStyle(.secondary)
+                ScopeBadge(scope: .app)
+            }
+            .frame(minWidth: 150, alignment: .leading).layoutPriority(1)
             Slider(
                 value: Binding(
                     get: { audioState.engineParameters.masterGainDB },

@@ -1283,6 +1283,7 @@ SherlockEQ/
 │       ├── EQBypassButton.swift
 │       ├── EQGainChip.swift
 │       ├── CanvasLayerChipStrip.swift
+│       ├── ScopeBadge.swift                 ← control-scope pill (App / Profile / Device / ear / Today)
 │       ├── LogFreqAxis.swift
 │       ├── PlaceholderView.swift
 │       ├── ColorHex.swift
