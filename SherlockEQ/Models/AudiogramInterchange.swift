@@ -109,25 +109,11 @@ extension HearingProfile {
     /// Pass a fresh `modifiedAt` — this type deliberately never reads the clock.
     func applyingAudiogram(_ doc: AudiogramInterchange, modifiedAt: Date) -> HearingProfile {
         var copy = self
-        // Full-strength derivation; the target strength × acclimatization
-        // ramp scales at consumption time (phase3 §5).
-        let hadCorrectionBefore = !leftEar.correctionBands.isEmpty
-            || !rightEar.correctionBands.isEmpty
+        // Shared apply path (full-strength derivation, provenance stamp,
+        // first-application acclimatization) — see
+        // HearingProfile.applyMeasuredAudiogram.
         let (left, right) = doc.perEarThresholds()
-        copy.leftEar.thresholds = left
-        copy.rightEar.thresholds = right
-        for ear in [\HearingProfile.leftEar, \HearingProfile.rightEar] {
-            let derived = AudiogramConversion.bands(
-                for: copy[keyPath: ear].thresholds,
-                compensationFactor: 1.0
-            )
-            copy[keyPath: ear].correctionBands = derived
-            copy[keyPath: ear].bands = EQBandLookup.removingAudiogramBands(
-                matching: derived,
-                from: copy[keyPath: ear].bands
-            )
-        }
-        copy.startAcclimatizationIfFirstAudiogram(hadCorrectionBefore: hadCorrectionBefore, now: modifiedAt)
+        copy.applyMeasuredAudiogram(left: left, right: right, source: .imported, now: modifiedAt)
         copy.modifiedAt = modifiedAt
         return copy
     }

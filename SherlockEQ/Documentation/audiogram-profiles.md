@@ -56,6 +56,17 @@ threshold. Age-related high-frequency loss (**presbycusis**) and
 SherlockEQ converts your entered thresholds into per-ear EQ bands and applies
 them through the same per-ear filter chain as the rest of the equalizer.
 
+## No audiogram? Run the Listening Check
+
+Most people don't have a clinical audiogram — the **Listening Check** (on the
+Audiogram screen) estimates your thresholds in about five minutes: quiet
+pulsing tones per ear, and you press a button whenever you hear one. It uses
+the same procedure an audiologist uses, minus the calibrated booth, and its
+result powers the correction exactly like manual entry. Requirements:
+headphones (built-in speakers are blocked), a quiet room, and leaving the
+volume alone during the check. It is an **estimate** — it cannot diagnose
+anything, and persistent hearing concerns belong with a professional.
+
 ## Acclimatization
 
 The first time an audiogram is applied to a profile, the correction starts at
