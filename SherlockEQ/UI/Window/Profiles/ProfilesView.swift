@@ -95,58 +95,62 @@ struct ProfilesView: View {
     }
 
     @ViewBuilder private var listToolbar: some View {
-        HStack(spacing: 6) {
-            toolbarButton(systemName: "plus", help: "New profile", action: createNew)
-            toolbarButton(
-                systemName: "plus.square.on.square",
-                help: "Duplicate selected profile",
-                isEnabled: selectedProfile != nil,
-                action: duplicateSelected
-            )
-            toolbarButton(
-                systemName: "minus",
-                help: "Delete selected profile",
-                isEnabled: selectedProfile != nil && profileStore.profiles.count > 1,
-                action: deleteSelected
-            )
-            Divider().frame(height: 16)
-            toolbarButton(
-                systemName: "square.and.arrow.down",
-                help: "Import profile from JSON file…",
-                action: importProfiles
-            )
-            toolbarButton(
-                systemName: "square.and.arrow.up",
-                help: "Export selected profile to JSON file…",
-                isEnabled: selectedProfile != nil,
-                action: exportSelected
-            )
-            Divider().frame(height: 16)
-            toolbarButton(
-                systemName: "arrow.clockwise",
-                help: "Restore the four built-in listening presets to their original settings",
-                action: { showRestoreConfirm = true }
-            )
-            Spacer()
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-        .background(.bar)
-    }
+        HStack(spacing: 8) {
+            // Primary action is labeled; the rest live in a clearly-labeled
+            // overflow menu (the old row of bare icons was hard to read).
+            Button(action: createNew) {
+                Label("New Profile", systemImage: "plus")
+            }
+            .controlSize(.small)
 
-    private func toolbarButton(
-        systemName: String,
-        help: String,
-        isEnabled: Bool = true,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .frame(width: 22, height: 20)
+            Spacer()
+
+            Menu {
+                Button {
+                    duplicateSelected()
+                } label: {
+                    Label("Duplicate", systemImage: "plus.square.on.square")
+                }
+                .disabled(selectedProfile == nil)
+
+                Button(role: .destructive) {
+                    deleteSelected()
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+                .disabled(selectedProfile == nil || profileStore.profiles.count <= 1)
+
+                Divider()
+
+                Button {
+                    importProfiles()
+                } label: {
+                    Label("Import from JSON…", systemImage: "square.and.arrow.down")
+                }
+                Button {
+                    exportSelected()
+                } label: {
+                    Label("Export to JSON…", systemImage: "square.and.arrow.up")
+                }
+                .disabled(selectedProfile == nil)
+
+                Divider()
+
+                Button {
+                    showRestoreConfirm = true
+                } label: {
+                    Label("Restore built-in presets…", systemImage: "arrow.clockwise")
+                }
+            } label: {
+                Label("More", systemImage: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Duplicate, delete, import, export, or restore presets")
         }
-        .buttonStyle(.borderless)
-        .disabled(!isEnabled)
-        .help(help)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(.bar)
     }
 
     // MARK: - Detail column

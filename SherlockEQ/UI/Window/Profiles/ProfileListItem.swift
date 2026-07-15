@@ -1,7 +1,10 @@
 import SwiftUI
 
-/// Row in the profiles list. Shows symbol, name, and a subtle "active" dot
-/// when this profile is the currently-active one in `AudioState`.
+/// Row in the profiles list. The row's **selection highlight** means
+/// "currently being edited"; a single green **Active** pill means "currently
+/// processing audio". Those are the only two status signals — the old
+/// competing green dot + footer are gone, and the built-in marker is a quiet
+/// trailing star.
 struct ProfileListItem: View {
     let profile: HearingProfile
     let isActive: Bool
@@ -18,7 +21,7 @@ struct ProfileListItem: View {
                     if profile.isBuiltIn {
                         Image(systemName: "star.fill")
                             .font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(.tint)
+                            .foregroundStyle(.secondary)
                             .help("Built-in preset")
                     }
                 }
@@ -28,9 +31,6 @@ struct ProfileListItem: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
-                // Tag pills are intentionally omitted here — they ate too much
-                // vertical room in the narrow sidebar. They still appear under
-                // the description on the profile detail screen.
                 if let uid = profile.linkedDeviceUID, !uid.isEmpty {
                     Text(uid)
                         .font(.caption)
@@ -40,10 +40,14 @@ struct ProfileListItem: View {
             }
             Spacer()
             if isActive {
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 7, height: 7)
-                    .help("Active profile")
+                Text("Active")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.green))
+                    .help("Currently processing audio")
+                    .accessibilityLabel("Active — currently processing audio")
             }
         }
         .padding(.vertical, 2)
