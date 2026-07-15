@@ -325,7 +325,13 @@ struct GraphicEQView: View {
             showResultCurve: showResultLayer,
             showSafetyOverlay: showSafetyLayer,
             safetyCeilingDBA: profile.safeListeningCeilingDB,
-            calibrationOffsetDBA: audioState.effectiveCalibrationOffsetDBA
+            calibrationOffsetDBA: audioState.effectiveCalibrationOffsetDBA,
+            // Adaptive Correction live response (phase4 §6.2), left ear
+            // (this preview's primary bands are left-ear too).
+            adaptiveMonitor: audioState.adaptiveActivity,
+            adaptiveEar: .left,
+            showAdaptiveOverlay: profile.correctionMode == .adaptive
+                && !(profile.leftEar.correctionBands.isEmpty && profile.rightEar.correctionBands.isEmpty)
         )
         .frame(height: 180)
     }

@@ -273,6 +273,30 @@ from their audiologist. Lives in the main window's Audiogram section.
 - User adjusts `compensationFactor` via the "Compensation Strength" slider in both
   the popover (quick) and the main window (in context with the EQ curve preview).
 
+**Correction style — Steady vs Adaptive (phase 4):** a segmented selector on
+the Audiogram screen (below the chart, shown only when correction exists)
+writes `profile.correctionMode` (`.steady` default / `.adaptive`, tolerant
+decode). Steady applies the stored correction as fixed EQ in the static
+cascade; Adaptive routes it through the `AdaptiveCorrectionProcessor`
+(6-band level-following gains anchored to the NAL-R curve at 65 dB SPL —
+see phase4-adaptive-correction.md). Supporting UI:
+- **Level-aware preview** (`AdaptivePreviewView`): in Adaptive mode the
+  Audiogram preview card draws the correction *family* for the displayed
+  ear — three curves at 50/65/85 dB SPL input (quiet/moderate/loud), the
+  65 dB anchor emphasized (it equals the Steady curve). Pure math: the §1
+  prescription's gains through `AdaptiveFilterbank.compositeMagnitudeDB`
+  (the drawing-side twin of `process`, test-pinned to the time-domain
+  response) plus the user-EQ biquad composite.
+- **Live overlay** (`AdaptiveActivityMonitor` → both EQ canvases): the
+  stage's current per-band gains, polled at 15 Hz from the processor's
+  `AudioCounter`s (the DynamicActivityMonitor pattern — refcounted,
+  screen-sleep-paused, never rebroadcast through AudioState) and drawn as
+  a dashed ear-tinted stroke; hidden while all gains are within 0.1 dB of
+  unity.
+- **Reduced-depth honesty line**: when Adaptive is selected without a user
+  playback calibration, a warning under the selector says it is running in
+  reduced-depth mode (§7.3 of the phase-4 spec).
+
 **Caveat messaging (non-clinical):**
 > "For losses above 40 dB, an EQ alone may not fully restore clarity — a hearing
 > professional can discuss additional options. SherlockEQ is not a substitute for hearing aids."
@@ -1078,6 +1102,7 @@ SherlockEQ/
 │   ├── EngineParameters.swift              ← masterGain + limiter knobs
 │   ├── AppPreferences.swift                ← Per-ear colors, dock, launch-at-login, hotkey
 │   ├── AutoEQPreferences.swift             ← AutoEQ library folder
+│   ├── AdaptiveActivityMonitor.swift       ← 15 Hz adaptive-gain telemetry for canvases (phase 4)
 │   ├── NoticeCenter.swift                  ← Shared notice banner state
 │   ├── NotificationManager.swift           ← UNUserNotificationCenter wrapper
 │   └── SafeListeningTracker.swift          ← NIOSH dose accumulator
@@ -1125,7 +1150,8 @@ SherlockEQ/
 │   │   │   ├── ListeningCheckView.swift    ← Guided threshold-estimate flow (§5.2)
 │   │   │   ├── AudiogramChartView.swift
 │   │   │   ├── ThresholdEditor.swift
-│   │   │   └── EQPreviewView.swift
+│   │   │   ├── EQPreviewView.swift
+│   │   │   └── AdaptivePreviewView.swift   ← 50/65/85 dB correction family (phase 4)
 │   │   ├── Equalizer/
 │   │   │   ├── EqualizerView.swift         ← Switches on profile.eqMode
 │   │   │   ├── GraphicEQView.swift         ← 12-band graphic surface + "Other filters" row

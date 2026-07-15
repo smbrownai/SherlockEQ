@@ -241,3 +241,82 @@ final class AdaptiveFilterbank {
         return (lp, hp, ap)
     }
 }
+
+// MARK: - Drawing-side twin (spec §6.2: drawn = heard, extended)
+
+extension AdaptiveFilterbank {
+
+    /// The exact complex composite response of the compensated cascade at
+    /// `hz` for the given per-band gains (dB) — pure math mirroring
+    /// `process`'s topology section for section, so previews and the live
+    /// overlay can never disagree with the audio. A test pins this
+    /// evaluator against the time-domain probe.
+    static func compositeMagnitudeDB(
+        atHz hz: Double,
+        gainsDB: [Double],
+        sampleRate: Double
+    ) -> Double {
+        guard gainsDB.count == bandCount, sampleRate > 0, hz > 0 else { return 0 }
+        let w = 2 * Double.pi * min(hz, sampleRate * 0.499) / sampleRate
+        // z⁻¹ = e^{−jω}
+        let z1 = Complex(re: cos(w), im: -sin(w))
+        let z2 = z1 * z1
+
+        func response(_ s: Section) -> Complex {
+            let num = Complex(re: Double(s.b0), im: 0)
+                + Complex(re: Double(s.b1), im: 0) * z1
+                + Complex(re: Double(s.b2), im: 0) * z2
+            let den = Complex(re: 1, im: 0)
+                + Complex(re: Double(s.a1), im: 0) * z1
+                + Complex(re: Double(s.a2), im: 0) * z2
+            return num / den
+        }
+
+        // Per-crossover responses (LR4 = the Butterworth-2 section squared).
+        var lp4: [Complex] = []
+        var hp4: [Complex] = []
+        var ap2: [Complex] = []
+        for fc in crossoverHz {
+            let (lp, hp, ap) = crossoverSections(fc: fc, sampleRate: sampleRate)
+            let lpR = response(lp), hpR = response(hp)
+            lp4.append(lpR * lpR)
+            hp4.append(hpR * hpR)
+            ap2.append(response(ap))
+        }
+
+        // Band b's path — exactly `process`'s: HP⁴ of stages 0..<b, then
+        // LP⁴ of stage b (except the top band, which IS the remainder),
+        // then the compensation allpasses of every later crossover.
+        var sum = Complex(re: 0, im: 0)
+        let stages = crossoverHz.count
+        for b in 0..<bandCount {
+            var path = Complex(re: 1, im: 0)
+            for k in 0..<min(b, stages) { path = path * hp4[k] }
+            if b < stages { path = path * lp4[b] }
+            let firstLater = min(b + 1, stages)
+            if b < bandCount - 1 {
+                for c in firstLater..<stages { path = path * ap2[c] }
+            }
+            let gain = pow(10.0, gainsDB[b] / 20.0)
+            sum = sum + path * Complex(re: gain, im: 0)
+        }
+        return 20 * log10(max(sum.magnitude, 1e-12))
+    }
+
+    private struct Complex {
+        var re: Double
+        var im: Double
+        var magnitude: Double { (re * re + im * im).squareRoot() }
+        static func + (a: Complex, b: Complex) -> Complex {
+            Complex(re: a.re + b.re, im: a.im + b.im)
+        }
+        static func * (a: Complex, b: Complex) -> Complex {
+            Complex(re: a.re * b.re - a.im * b.im, im: a.re * b.im + a.im * b.re)
+        }
+        static func / (a: Complex, b: Complex) -> Complex {
+            let d = b.re * b.re + b.im * b.im
+            return Complex(re: (a.re * b.re + a.im * b.im) / d,
+                           im: (a.im * b.re - a.re * b.im) / d)
+        }
+    }
+}

@@ -127,7 +127,14 @@ struct ExpertEQView: View {
                 dynamicsMonitor: audioState.dynamicActivity,
                 dynamicsEar: tab == .left ? .left : .right,
                 dynamicsKinds: enabledDynamicsKinds(profile),
-                showDynamicsOverlay: showDynamicsLayer && !enabledDynamicsKinds(profile).isEmpty
+                showDynamicsOverlay: showDynamicsLayer && !enabledDynamicsKinds(profile).isEmpty,
+                // Adaptive Correction live response (phase4 §6.2) — shown
+                // whenever the profile's correction is Adaptive; the canvas
+                // hides it while the stage idles at unity.
+                adaptiveMonitor: audioState.adaptiveActivity,
+                adaptiveEar: tab == .left ? .left : .right,
+                showAdaptiveOverlay: profile.correctionMode == .adaptive
+                    && !(profile.leftEar.correctionBands.isEmpty && profile.rightEar.correctionBands.isEmpty)
             )
             // Roomier canvas — there's plenty of vertical real estate
             // below the canvas on Expert, and the spectrum + EQ curve

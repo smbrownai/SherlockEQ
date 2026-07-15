@@ -77,6 +77,28 @@ currently applied; **Skip to full strength** ends the ramp any time. The
 Compensation slider sets your long-term target — the ramp scales it, never
 overrides it.
 
+## Correction style: Steady vs Adaptive
+
+Below the threshold chart you can choose how the correction is applied:
+
+- **Steady** (the default) applies the same correction at every volume — a
+  fixed EQ shape derived from your thresholds.
+- **Adaptive** gives quiet sounds more help and loud sounds less — closer to
+  how hearing actually works. Sensorineural loss compresses the range between
+  "can't hear it" and "plenty loud" (recruitment), so a fixed boost that
+  rescues quiet detail can make loud passages uncomfortable. Adaptive follows
+  the level in six frequency bands and eases the boost off as content gets
+  louder, anchored so that at moderate levels it equals the Steady curve.
+
+Adaptive judges "quiet" and "loud" using your **playback calibration** from
+Safe Listening. Until you calibrate, it runs in a reduced-depth mode — the
+level-dependent part is kept small because its level estimate is a guess. The
+preview chart switches to a family of three curves (quiet / moderate / loud)
+so you can see exactly how the correction moves with level.
+
+Start with Steady; try Adaptive when your calibration is set and you notice
+quiet passages need more help than loud ones.
+
 ## How it interacts with other settings
 
 - Feeds [Per-Ear EQ](help:per-ear-eq); left and right are shaped independently.

@@ -304,4 +304,38 @@ struct AdaptiveFilterbankTests {
         let level = 20 * log10(rms * 2.0.squareRoot())
         #expect(abs(level) <= 0.5)
     }
+
+    // MARK: Drawn = heard — the drawing-side evaluator matches the DSP
+
+    @Test func compositeEvaluatorIsFlatAtUnity() {
+        for hz in [30.0, 100, 355, 710, 1000, 1400, 2800, 5600, 12_000, 18_000] {
+            let dB = AdaptiveFilterbank.compositeMagnitudeDB(
+                atHz: hz, gainsDB: [0, 0, 0, 0, 0, 0], sampleRate: sampleRate
+            )
+            #expect(abs(dB) < 0.01, "\(Int(hz)) Hz: \(dB) dB")
+        }
+    }
+
+    @Test func compositeEvaluatorMatchesTheTimeDomainProbe() {
+        // Two gain profiles: the adversarial lone boost (maximum skirt
+        // dilution) and a smooth audiogram-like slope. The evaluator must
+        // reproduce what the running filterbank measurably does — including
+        // the dilution — or the overlay would draw a curve nobody hears.
+        let profiles: [[Double]] = [
+            [0, 0, 12, 0, 0, 0],
+            [0, 2, 5, 9, 12, 14],
+        ]
+        let bank = AdaptiveFilterbank(sampleRate: sampleRate)
+        for gainsDB in profiles {
+            let linear = gainsDB.map { Float(pow(10.0, $0 / 20.0)) }
+            for hz in [100.0, 500, 1000, 2000, 4000, 8000, 12_000] {
+                let measured = probeGainDB(bank, frequency: hz, gains: linear)
+                let drawn = AdaptiveFilterbank.compositeMagnitudeDB(
+                    atHz: hz, gainsDB: gainsDB, sampleRate: sampleRate
+                )
+                #expect(abs(drawn - measured) < 0.3,
+                        "\(Int(hz)) Hz: drawn \(drawn) vs measured \(measured) dB")
+            }
+        }
+    }
 }
