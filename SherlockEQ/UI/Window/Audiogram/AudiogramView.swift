@@ -34,6 +34,9 @@ struct AudiogramView: View {
                 header(profile)
                 earPicker
                 chartCard(profile)
+                // Acclimatization ramp status (spec §5) — the correction
+                // below is intentionally running at partial strength.
+                AcclimatizationChip()
                 // Notch-vs-correction conflict (spec §6): the derived
                 // correction below may be boosting exactly where the
                 // user's tinnitus notch cuts.
@@ -155,11 +158,13 @@ struct AudiogramView: View {
     @ViewBuilder private func previewCard(_ profile: HearingProfile) -> some View {
         card {
             // "Combined across all tabs" = the Result the listener hears:
-            // hearing correction summed with the user/preset EQ, per ear.
+            // EFFECTIVE hearing correction (target strength × acclimatization
+            // ramp — same helper the engine consumes, phase3 §5) summed with
+            // the user/preset EQ, per ear.
             EQPreviewView(
-                leftBands: profile.leftEar.correctionBands + profile.leftEar.bands,
-                rightBands: profile.rightEar.correctionBands + profile.rightEar.bands,
-                compensationFactor: profile.compensationFactor
+                leftBands: profile.effectiveCorrectionBands().left + profile.leftEar.bands,
+                rightBands: profile.effectiveCorrectionBands().right + profile.rightEar.bands,
+                compensationFactor: profile.effectiveCorrectionStrength()
             )
         }
     }
@@ -188,9 +193,14 @@ struct AudiogramView: View {
             get: { tab == .left ? profile.leftEar.thresholds : profile.rightEar.thresholds },
             set: { newPoints in
                 var updated = profile
+                // Derived at FULL strength — the user's target strength ×
+                // the acclimatization ramp is applied at consumption time
+                // via effectiveCorrectionBands (phase3 §5).
+                let hadCorrectionBefore = !profile.leftEar.correctionBands.isEmpty
+                    || !profile.rightEar.correctionBands.isEmpty
                 let derived = AudiogramConversion.bands(
                     for: newPoints,
-                    compensationFactor: updated.compensationFactor
+                    compensationFactor: 1.0
                 )
                 // The hearing correction lands in its OWN `correctionBands`
                 // layer — never in `bands` — so EQ presets/edits layer on top
@@ -207,6 +217,7 @@ struct AudiogramView: View {
                     updated.rightEar.correctionBands = derived
                     updated.rightEar.bands = EQBandLookup.removingAudiogramBands(matching: derived, from: updated.rightEar.bands)
                 }
+                updated.startAcclimatizationIfFirstAudiogram(hadCorrectionBefore: hadCorrectionBefore)
                 try? profileStore.save(updated)
             }
         )

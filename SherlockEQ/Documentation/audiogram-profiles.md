@@ -56,6 +56,16 @@ threshold. Age-related high-frequency loss (**presbycusis**) and
 SherlockEQ converts your entered thresholds into per-ear EQ bands and applies
 them through the same per-ear filter chain as the rest of the equalizer.
 
+## Acclimatization
+
+The first time an audiogram is applied to a profile, the correction starts at
+**60 % strength and rises to 100 % over 21 days** — the same gradual easing
+hearing-care professionals use, because an unaccustomed ear finds a full
+prescription harsh at first. A chip shows which day you're on and the strength
+currently applied; **Skip to full strength** ends the ramp any time. The
+Compensation slider sets your long-term target — the ramp scales it, never
+overrides it.
+
 ## How it interacts with other settings
 
 - Feeds [Per-Ear EQ](help:per-ear-eq); left and right are shaped independently.

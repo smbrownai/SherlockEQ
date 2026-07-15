@@ -510,6 +510,7 @@ final class AudioState: ObservableObject {
     private var didBecomeActiveObserverToken: NSObjectProtocol?
     private var sessionResignObserverToken: NSObjectProtocol?
     private var sessionActiveObserverToken: NSObjectProtocol?
+    private var dayChangedObserverToken: NSObjectProtocol?
     private var wasRunningBeforeSleep = false
     private var wasRunningBeforeSessionResign = false
     private let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "AudioState")
@@ -742,6 +743,19 @@ final class AudioState: ObservableObject {
             }
 
         installSleepWakeObservers()
+
+        // Acclimatization ramp (phase3 §5): the effective correction
+        // strength moves once per calendar day, so re-apply the active
+        // profile when the day changes. One step is ≤ ~0.7 dB on any
+        // band — inaudible as a transition (cascade state-zeroing covers
+        // the coefficient swap).
+        dayChangedObserverToken = NotificationCenter.default.addObserver(
+            forName: .NSCalendarDayChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.applyActiveProfile() }
+        }
     }
 
     deinit {
@@ -759,6 +773,9 @@ final class AudioState: ObservableObject {
         }
         if let t = sessionActiveObserverToken {
             NSWorkspace.shared.notificationCenter.removeObserver(t)
+        }
+        if let t = dayChangedObserverToken {
+            NotificationCenter.default.removeObserver(t)
         }
     }
 

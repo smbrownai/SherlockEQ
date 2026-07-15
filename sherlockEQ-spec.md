@@ -225,7 +225,23 @@ on audiograms). Left/right tab on the same screen.
   > strength multiplier on the whole prescription (not the gain fraction). The
   > ceiling, disable-threshold, band count, and slider below still hold.
 - `gain_at_freq = threshold_dBHL × compensation_factor` *(original design; superseded by NAL-R)*
-- Default `compensationFactor` = 0.5; range `0.25…1.0`
+- `compensationFactor` range `0.25…1.0` is the user's TARGET strength,
+  applied at **consumption time** (phase-3 §5): stored `correctionBands`
+  carry the full NAL-R prescription, and every consumer — engine, previews,
+  canvases, conflict check — reads `effectiveCorrectionBands(now:)` =
+  stored × (target × acclimatization ramp). (Previously the factor was
+  baked in at derivation, which left the strength sliders writing a value
+  nothing re-derived from — an inaudible no-op. Legacy stored corrections
+  re-derive to full strength on decode; net audio unchanged.)
+- **Acclimatization ramp** (`AcclimatizationRamp`): the FIRST audiogram
+  applied to a profile sets the target to 1.0 (full prescription) and stamps
+  `acclimatizationStartDate`; effective strength rises 60 % → 100 % linearly
+  over 21 days (re-applied on `NSCalendarDayChanged`; ≤ ~0.7 dB per day —
+  inaudible as a transition). Ongoing audiogram edits never restamp. A
+  labeled chip (Audiogram screen + Profile Detail) shows "day N of 21 —
+  correction at X %" with "Skip to full strength" (clears the stamp).
+  Legacy profiles (no stamp) ramp at 1.0 — nothing changes until their next
+  first-application.
 - Hard ceiling: no single band boosted more than **+20 dB** regardless of loss
   (`AudiogramConversion.perBandCeilingDB`)
 - Bands disabled when pre-compensation loss is < 5 dB HL (no audible boost needed)
@@ -1006,6 +1022,7 @@ SherlockEQ/
 │   ├── StereoMonitor.swift                 ← L/R peak metering for the monitor surfaces
 │   ├── VUMeter.swift                       ← Analog VU ballistics
 │   ├── AudiogramConversion.swift           ← dB HL → EQBand
+│   ├── AcclimatizationRamp.swift           ← 60→100 % over 21 days (§5.2)
 │   ├── CorrectionConflict.swift            ← Notch ↔ correction collision check (§5.3)
 │   ├── EQBandLookup.swift                  ← Mode → slot mapping for hidden-band hints
 │   ├── SineToneGenerator.swift             ← Tone Finder + diagnostic test tones
@@ -1098,6 +1115,7 @@ SherlockEQ/
 │       ├── NotchControlView.swift
 │       ├── AutoEQMismatchRow.swift         ← Mismatch warning row (popover + Equalizer)
 │       ├── CorrectionConflictChip.swift    ← Notch/correction conflict chip (§5.3)
+│       ├── AcclimatizationChip.swift       ← Ramp status + skip (§5.2)
 │       ├── NoticeBannerView.swift
 │       ├── BuiltInProfileBanner.swift
 │       ├── EQBypassButton.swift

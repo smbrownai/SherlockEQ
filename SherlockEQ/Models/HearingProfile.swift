@@ -48,7 +48,19 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     var autoEQDeviceUID: String?
     var autoEQDeviceName: String?
     var safeListeningCeilingDB: Double          // user-set, default 85.0
+    /// Target correction strength (0.25–1.0), applied at CONSUMPTION time:
+    /// `correctionBands` store the FULL NAL-R prescription and every
+    /// consumer (engine + previews) reads `effectiveCorrectionBands(now:)`,
+    /// which scales gains by `compensationFactor × AcclimatizationRamp`.
+    /// (Previously the factor was baked in at derivation time — which left
+    /// the strength sliders writing a value nothing re-derived from: a
+    /// silent no-op. Consumption-time scaling fixes that structurally.)
     var compensationFactor: Double              // 0.25–1.0 — audiogram→EQ strength
+    /// When the profile's FIRST audiogram was applied — starts the 21-day
+    /// 60→100 % acclimatization ramp (phase3 §5). Nil = no ramp (legacy
+    /// profiles, or the user hit "Skip to full strength"). Ongoing
+    /// audiogram edits deliberately do NOT restamp.
+    var acclimatizationStartDate: Date?
     /// When true, EQ tabs show per-ear sliders; when false, every edit
     /// applies to both ears in lockstep. Lives on the profile because
     /// the audiogram itself is per-ear — symmetric-hearing users keep
@@ -122,6 +134,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.autoEQDeviceName       = try c.decodeIfPresent(String.self, forKey: .autoEQDeviceName)
         self.safeListeningCeilingDB = try c.decode(Double.self, forKey: .safeListeningCeilingDB)
         self.compensationFactor     = try c.decode(Double.self, forKey: .compensationFactor)
+        self.acclimatizationStartDate = try c.decodeIfPresent(Date.self, forKey: .acclimatizationStartDate)
         self.separateChannels       = try c.decodeIfPresent(Bool.self, forKey: .separateChannels) ?? false
         // Legacy profiles default to .expert so users who edited bands
         // across multiple tabs in the old multi-tab world still see
@@ -140,19 +153,87 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         // stored thresholds and strip any baked-in correction from `bands` so
         // it can't apply twice. Flat / zero-compensation audiograms derive to
         // all-disabled bands and are skipped, so normal hearing stays inert.
-        Self.backfillCorrection(&self.leftEar, compensationFactor: compensationFactor)
-        Self.backfillCorrection(&self.rightEar, compensationFactor: compensationFactor)
+        Self.backfillCorrection(&self.leftEar)
+        Self.backfillCorrection(&self.rightEar)
+        // Normalize legacy corrections to full strength: profiles written
+        // before consumption-time scaling stored bands with the (then-
+        // current) compensationFactor baked in. correctionBands are pure
+        // derived data — always recomputable from thresholds — so re-derive
+        // at 1.0. Idempotent for profiles already stored at full strength.
+        Self.normalizeCorrectionToFullStrength(&self.leftEar)
+        Self.normalizeCorrectionToFullStrength(&self.rightEar)
     }
 
     /// Populate `ear.correctionBands` from its thresholds when the layer is
     /// empty (legacy profile or deleted bands). No-op once populated, so it's
     /// idempotent across loads. See [[audiogram-correction-layer]].
-    private static func backfillCorrection(_ ear: inout EarProfile, compensationFactor: Double) {
+    private static func backfillCorrection(_ ear: inout EarProfile) {
         guard ear.correctionBands.isEmpty else { return }
-        let derived = AudiogramConversion.bands(for: ear.thresholds, compensationFactor: compensationFactor)
+        let derived = AudiogramConversion.bands(for: ear.thresholds, compensationFactor: 1.0)
         guard derived.contains(where: { $0.enabled }) else { return }
         ear.correctionBands = derived
         ear.bands = EQBandLookup.removingAudiogramBands(matching: derived, from: ear.bands)
+    }
+
+    /// Re-derive a populated correction layer at full strength. Replaces
+    /// only `correctionBands` (never touches `bands` — the legacy
+    /// bands-stripping belongs to the empty-layer backfill above, and
+    /// repeating it could eat user-authored bands at audiogram slots).
+    /// Conservative when thresholds are flat but a correction exists
+    /// (shouldn't happen; leave the stored layer alone rather than guess).
+    private static func normalizeCorrectionToFullStrength(_ ear: inout EarProfile) {
+        guard !ear.correctionBands.isEmpty else { return }
+        let derived = AudiogramConversion.bands(for: ear.thresholds, compensationFactor: 1.0)
+        guard derived.contains(where: { $0.enabled }) else { return }
+        ear.correctionBands = derived
+    }
+
+    /// The applied strength right now: the user's target
+    /// (`compensationFactor`) × the acclimatization ramp.
+    func effectiveCorrectionStrength(now: Date = Date()) -> Double {
+        compensationFactor * AcclimatizationRamp.factor(start: acclimatizationStartDate, now: now)
+    }
+
+    /// The correction the listener should actually get right now — the
+    /// stored full-strength prescription scaled by
+    /// `effectiveCorrectionStrength`. THE single source of truth (spec
+    /// Design note 1): the audio engine, the audiogram preview, and both
+    /// EQ canvases all consume this, so drawn always equals heard. Scaling
+    /// realised band gains is equivalent to re-deriving at the effective
+    /// strength within the overlap-fit's linearity (≲0.2 dB).
+    func effectiveCorrectionBands(now: Date = Date()) -> (left: [EQBand], right: [EQBand]) {
+        let strength = effectiveCorrectionStrength(now: now)
+        guard strength < 1.0 else { return (leftEar.correctionBands, rightEar.correctionBands) }
+        func scaled(_ bands: [EQBand]) -> [EQBand] {
+            bands.map { band in
+                var copy = band
+                copy.gaindB *= strength
+                return copy
+            }
+        }
+        return (scaled(leftEar.correctionBands), scaled(rightEar.correctionBands))
+    }
+
+    /// True while the acclimatization ramp is still short of full strength.
+    func isAcclimatizing(now: Date = Date()) -> Bool {
+        AcclimatizationRamp.isRamping(start: acclimatizationStartDate, now: now)
+    }
+
+    /// Call after (re)writing thresholds + correction. The FIRST time an
+    /// audiogram populates this profile (no prior correction on either
+    /// ear), start at the full prescription with the ramp providing the
+    /// gentle entry: target strength 1.0, stamp now. Ongoing audiogram
+    /// edits keep the user's strength and the running ramp — retuning one
+    /// threshold mid-ramp must not restart the clock or override a chosen
+    /// strength.
+    mutating func startAcclimatizationIfFirstAudiogram(
+        hadCorrectionBefore: Bool, now: Date = Date()
+    ) {
+        guard !hadCorrectionBefore,
+              !leftEar.correctionBands.isEmpty || !rightEar.correctionBands.isEmpty
+        else { return }
+        compensationFactor = 1.0
+        acclimatizationStartDate = now
     }
 
     init(
@@ -165,6 +246,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         autoEQSourcePath: String? = nil,
         autoEQDeviceUID: String? = nil, autoEQDeviceName: String? = nil,
         safeListeningCeilingDB: Double, compensationFactor: Double,
+        acclimatizationStartDate: Date? = nil,
         separateChannels: Bool = false,
         eqMode: EQMode = .advanced,
         isBuiltIn: Bool = false,
@@ -187,6 +269,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.autoEQDeviceName = autoEQDeviceName
         self.safeListeningCeilingDB = safeListeningCeilingDB
         self.compensationFactor = compensationFactor
+        self.acclimatizationStartDate = acclimatizationStartDate
         self.separateChannels = separateChannels
         self.eqMode = eqMode
         self.isBuiltIn = isBuiltIn

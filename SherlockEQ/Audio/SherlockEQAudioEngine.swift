@@ -596,8 +596,12 @@ final class SherlockEQAudioEngine: ObservableObject {
         // sync, so leftNotch and rightNotch carry the same values.
         let leftNotchBand = Self.notchAsBand(profile.leftNotch)
         let rightNotchBand = Self.notchAsBand(profile.rightNotch)
-        let combinedLeftBands = autoBands + profile.leftEar.correctionBands + profile.leftEar.bands + leftNotchBand
-        let combinedRightBands = autoBands + profile.rightEar.correctionBands + profile.rightEar.bands + rightNotchBand
+        // Correction at its EFFECTIVE strength (target compensationFactor ×
+        // acclimatization ramp) — the same helper the previews draw from,
+        // so heard always equals drawn (phase3 §5).
+        let correction = profile.effectiveCorrectionBands()
+        let combinedLeftBands = autoBands + correction.left + profile.leftEar.bands + leftNotchBand
+        let combinedRightBands = autoBands + correction.right + profile.rightEar.bands + rightNotchBand
         let combinedPreampDB = (profile.autoEQPreampDB ?? 0) + profile.globalTrimDB
 
         leftEQCascade?.setBands(combinedLeftBands, preampDB: combinedPreampDB, sampleRate: tapSampleRate)
