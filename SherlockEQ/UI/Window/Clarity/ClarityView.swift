@@ -20,11 +20,11 @@ struct ClarityView: View {
                 ContentUnavailableView(
                     "No active profile",
                     systemImage: "waveform.badge.magnifyingglass",
-                    description: Text("Make a profile active to use the Listening Comfort tools.")
+                    description: Text("Make a profile active to use the Adaptive Comfort tools.")
                 )
             }
         }
-        .navigationTitle("Listening Comfort")
+        .navigationTitle("Adaptive Comfort")
         // The activity meters poll the dynamic processors at ~15 Hz only
         // while this panel is on screen.
         .onAppear { audioState.dynamicActivity.subscribe() }
@@ -36,6 +36,7 @@ struct ClarityView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 introCard
+                presetRow(profile)
                 separateToggleRow(profile)
                 featureCards(profile)
                 disclaimer
@@ -43,6 +44,50 @@ struct ClarityView: View {
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    // MARK: - Quick-setup presets
+
+    /// One-tap whole-panel setups (Dialogue / Gentle / Off), applied to both
+    /// ears. The matching preset is highlighted; a custom mix shows none.
+    @ViewBuilder
+    private func presetRow(_ profile: HearingProfile) -> some View {
+        let current = ComfortPreset.matching(profile.dynamics)
+        HStack(spacing: 8) {
+            Text("Quick setup")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            ForEach(ComfortPreset.allCases) { preset in
+                Button {
+                    apply(preset, to: profile)
+                } label: {
+                    Label(preset.label, systemImage: preset.symbol)
+                }
+                .buttonStyle(.bordered)
+                .tint(current == preset ? .accentColor : .secondary)
+                .accessibilityLabel("\(preset.label) comfort preset")
+                .accessibilityAddTraits(current == preset ? [.isSelected] : [])
+            }
+            Spacer()
+            if current == nil {
+                Text("Custom")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    /// Apply a preset's settings to every feature on both ears (one undoable
+    /// save). Presets are a quick global setup, so they write both ears
+    /// regardless of the Separate-L/R toggle.
+    private func apply(_ preset: ComfortPreset, to profile: HearingProfile) {
+        var updated = profile
+        for kind in DynamicFeatureKind.allCases {
+            let settings = preset.settings(for: kind)
+            updated.dynamics.setSettings(settings, for: kind, ear: .left)
+            updated.dynamics.setSettings(settings, for: kind, ear: .right)
+        }
+        try? profileStore.save(updated, actionName: "Adaptive Comfort: \(preset.label)")
     }
 
     // MARK: - Cards
@@ -59,7 +104,6 @@ struct ClarityView: View {
                         ear: .left,
                         earLabel: "Left ear",
                         tint: audioState.preferences.leftEarColor,
-                        showHelp: true,
                         activity: audioState.dynamicActivity
                     )
                     DynamicFeatureCard(
@@ -68,7 +112,6 @@ struct ClarityView: View {
                         ear: .right,
                         earLabel: "Right ear",
                         tint: audioState.preferences.rightEarColor,
-                        showHelp: false,
                         activity: audioState.dynamicActivity
                     )
                 } else {
@@ -78,7 +121,6 @@ struct ClarityView: View {
                         ear: .left,
                         earLabel: nil,
                         tint: .accentColor,
-                        showHelp: true,
                         activity: audioState.dynamicActivity
                     )
                 }

@@ -22,7 +22,7 @@ struct ListeningComfortRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text("Listening Comfort")
+            Text("Adaptive Comfort")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
                 .frame(minWidth: 100, alignment: .leading)

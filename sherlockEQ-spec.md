@@ -673,7 +673,7 @@ controls share one screen so the user reads identify-then-dial as one task.
 │      correction in that mode)                                          │
 │    → Stage-B cascade: steady correction (when `.steady`) + profile     │
 │      EQ bands + tinnitus notch (+ global trim)                         │
-│    → DynamicBandProcessor (Listening Comfort)                          │
+│    → DynamicBandProcessor (Adaptive Comfort)                           │
 │                                                                        │
 └────────────────────────────────────────────────────────────────────────┘
                               │ (stereo with one channel zeroed each)
@@ -993,7 +993,7 @@ sidebar (220pt) toggleable from the toolbar.
 
 **Sidebar groups** (`SidebarView`):
 
-- **Audio Processor** — Audiogram, Equalizer, Tinnitus Notch, Listening Comfort, Safe Listening
+- **Audio Processor** — Audiogram, Equalizer, Tinnitus Notch, Adaptive Comfort, Safe Listening
 - **App** — Settings, Debug
 - Bottom safe-area inset: active profile name (read-only label) + "Manage
   Profiles" button (selects the Profiles section). Profiles is reachable via this
