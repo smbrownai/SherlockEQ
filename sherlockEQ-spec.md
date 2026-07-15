@@ -72,7 +72,7 @@ listeners hear. Uses Reference Mode to A/B their mix against their hearing profi
 ## 4. UI Surface Map
 
 SherlockEQ has two primary surfaces — a menu-bar popover for quick operation, and a
-main window for configuration — plus an on-demand right-hand monitor inspector inside the
+main window for configuration — plus an on-demand right-hand monitor panel inside the
 main window (collapsed by default, opened from a compact toolbar status).
 
 ### Menu Bar Popover (380pt wide)
@@ -105,7 +105,7 @@ What does **not** belong here:
 ### Main Window (default 1480 × 880pt, minimum 1126 × 716pt)
 Opened deliberately from the popover. Appears in the Dock and CMD+Tab while open.
 Uses `NavigationSplitView` with a left sidebar and an on-demand right monitor
-**inspector** (opened from the toolbar's compact status glance — see below).
+**panel** (opened from the toolbar's compact status glance — see below).
 
 What belongs here:
 - All profile management (create, duplicate, delete, reorder, import, export)
@@ -117,12 +117,15 @@ What belongs here:
 - All Settings
 - Debug diagnostics
 
-### Monitor Panel (inspector, collapsed by default)
+### Monitor Panel (collapsed by default)
 Opened from the toolbar's **compact status glance** — a `MonitorStatusButton`
 reading `Output: <app master gain>  •  Dose: <today's exposure>  •  <active-
 profile balance>` (dose tinted by severity). The glance reads only slow state,
 so the 60 Hz VU loop stays idle until the panel is open. Clicking it toggles
-the panel as a native `.inspector`. Contents, each with an **explicit scope
+the panel as an in-layout trailing column that slides in within the detail
+area (chosen over SwiftUI's native `.inspector`, which resized/shifted the
+whole window and animated jerkily — the in-layout slide keeps both gutters
+aligned and moves nothing outside the detail). Contents, each with an **explicit scope
 label** (so it's never ambiguous whether a value is app-wide or per-profile —
 the sliders also appear on the popover / Settings / Profile Detail):
 1. Output level VU — vertical L/R peak meter. Triple-tap the header to swap
@@ -1148,7 +1151,7 @@ SherlockEQ/
 │   │   └── ReferenceButton.swift
 │   │
 │   ├── Window/
-│   │   ├── MainWindowView.swift            ← NavigationSplitView + monitor inspector + toolbar status glance
+│   │   ├── MainWindowView.swift            ← NavigationSplitView + sliding monitor panel + toolbar status glance
 │   │   ├── Sidebar/
 │   │   │   ├── SidebarView.swift
 │   │   │   └── SidebarSection.swift        ← profiles, audiogram, equalizer, toneFinder, safeListening, settings, debug
@@ -1264,4 +1267,4 @@ distributed (Core Audio Taps requires `audio-input` outside the sandbox).
 | Spectrogram visualisation | **Removed** (2026-07 scope-reduction pass) along with the 1/3-octave bars mode, peak callouts, lens presets, vectorscope, and waveform scope. These were mixing-engineer instruments serving no hearing-accommodation purpose; the code was deleted rather than left dormant. The Analog Control Unit and analog VU dial were deliberately kept (nostalgia is their purpose). Git history has the deleted implementations if ever needed. |
 | Onboarding wizard | Implemented as a lean three-step first-launch wizard (§8.4): welcome + upstream-EQ note → permission priming (defers the system-audio + notification prompts so they arrive with context) → starter-profile pick with optional deep-links. Replayable from Settings → About. The deeper guided audiogram / tinnitus / calibration steps the original spec imagined were deliberately left as deep-link pointers to the now-first-class screens. |
 | AutoEQ license | AutoEQ data is MIT licensed. Credit lives in Settings → About → Acknowledgments with a link to the upstream repo. |
-| Window sizing | ✅ Resolved: the right monitor panel is now a collapsed-by-default inspector, so the minimum dropped from 1366 to 1126 pt (its former 240 pt gutter). The Expert layer-chip strip still fits without the panel; opening the inspector may transiently compress the detail on a minimum-width window. |
+| Window sizing | ✅ Resolved: the right monitor panel is now collapsed by default (a slide-in trailing column), so the minimum dropped from 1366 to 1126 pt (its former 240 pt gutter). The Expert layer-chip strip still fits without the panel; opening it may transiently compress the detail on a minimum-width window. |

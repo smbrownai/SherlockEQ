@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// Right-hand monitoring panel — opened on demand as an inspector from the
-/// toolbar's `MonitorStatusButton` (it used to be a persistent gutter, but
-/// its usual state was an idle low-information repeat, so it's collapsed by
-/// default now). Its visibility flag `monitorSidebarVisible` persists in
-/// @AppStorage. Each control here carries an explicit scope label so it's
-/// unambiguous whether a value is app-wide or per-profile.
+/// Right-hand monitoring panel — a slide-in trailing column opened on demand
+/// from the toolbar's `MonitorStatusButton` (it used to be a persistent
+/// gutter, but its usual state was an idle low-information repeat, so it's
+/// collapsed by default now). Its visibility flag `monitorSidebarVisible`
+/// persists in @AppStorage. Each control here carries an explicit scope
+/// label so it's unambiguous whether a value is app-wide or per-profile.
 ///
 /// Contents (top → bottom):
 ///   1. Output level VU — vertical L/R peak meter. Triple-tap the

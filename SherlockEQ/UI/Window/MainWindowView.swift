@@ -50,26 +50,35 @@ struct MainWindowView: View {
                     .padding(.bottom, 4)
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
-                detail
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // The monitor panel slides in as an in-layout trailing
+                // column — collapsed by default, opened from the toolbar
+                // status. Kept inside the detail area (rather than SwiftUI's
+                // native `.inspector`, which resized/shifted the whole
+                // window and animated jerkily): here nothing outside the
+                // detail moves, so both gutters stay aligned and the slide
+                // is smooth. The StereoMonitor 60 Hz loop stays refcount-
+                // gated on the panel's onAppear/onDisappear, idle while
+                // collapsed.
+                HStack(spacing: 0) {
+                    detail
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if monitorSidebarVisible {
+                        Divider()
+                        MonitorSidebar()
+                            .frame(width: 260)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
+                }
             }
-            // Skip the banner drop-in animation when Reduce Motion is on —
+            // Skip the slide / banner animations when Reduce Motion is on —
             // the System Settings toggle exists exactly so users prone to
-            // vestibular triggers can disable transitions like this.
+            // vestibular triggers can disable transitions like these.
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: monitorSidebarVisible)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: audioState.noticeCenter.userVisibleNotice)
             // Soft scroll-edge fade where detail content (the EQ screens'
             // ScrollViews) passes under the Liquid Glass toolbar (Tahoe+).
             .softTopScrollEdge()
             .navigationSplitViewColumnWidth(min: 760, ideal: 820)
-            // The monitor panel is now an on-demand inspector rather than a
-            // persistent gutter (opened from the toolbar status). The
-            // StereoMonitor's 60 Hz VU loop stays refcount-gated on the
-            // panel's onAppear/onDisappear, so it idles while closed.
-            .inspector(isPresented: $monitorSidebarVisible) {
-                MonitorSidebar()
-                    .inspectorColumnWidth(min: 240, ideal: 260, max: 320)
-                    .toolbar(removing: .sidebarToggle)
-            }
         }
         .toolbar {
             // Reference Mode lives globally in the title bar so the user
