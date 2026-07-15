@@ -47,6 +47,11 @@ final class AudioState: ObservableObject {
     /// wired in `init` once `tap` exists.
     let dynamicActivity = DynamicActivityMonitor()
 
+    /// Display-rate telemetry for the Adaptive Correction stage's live
+    /// per-band gains (phase4 §6.2) — same plain-`let` discipline; the
+    /// canvas overlay observes it directly.
+    let adaptiveActivity = AdaptiveActivityMonitor()
+
     /// dBFS level of the calibration tone, exposed so the UI can compute
     /// the offset between the meter reading and the slider value. Always
     /// matches `SherlockEQAudioEngine.calibrationToneDBFS`.
@@ -566,6 +571,11 @@ final class AudioState: ObservableObject {
             guard let tap else { return 0 }
             let proc = ear == .left ? tap.leftDynamics : tap.rightDynamics
             return proc.currentDeltaMilliDB(kind)
+        }
+        adaptiveActivity.gainMilliDBProvider = { [weak tap] ear, band in
+            guard let tap else { return 0 }
+            let proc = ear == .left ? tap.leftAdaptive : tap.rightAdaptive
+            return proc.currentGainMilliDB(band: band)
         }
 
         tap.onOutputDeviceChanged = { [weak self] deviceID in

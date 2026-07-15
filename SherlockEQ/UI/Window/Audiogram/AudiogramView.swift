@@ -35,6 +35,11 @@ struct AudiogramView: View {
                 header(profile)
                 earPicker
                 chartCard(profile)
+                // Correction style — Steady vs Adaptive (phase4 §6.1).
+                // Only meaningful once an audiogram exists.
+                if hasAudiogram(profile) {
+                    correctionStyleCard(profile)
+                }
                 // Acclimatization ramp status (spec §5) — the correction
                 // below is intentionally running at partial strength.
                 AcclimatizationChip()
@@ -175,17 +180,90 @@ struct AudiogramView: View {
         }
     }
 
+    /// Whether the profile has any audiogram-derived correction to style.
+    private func hasAudiogram(_ profile: HearingProfile) -> Bool {
+        !profile.leftEar.correctionBands.isEmpty || !profile.rightEar.correctionBands.isEmpty
+    }
+
+    /// Steady vs Adaptive selector (phase4 §6.1). Writes
+    /// `profile.correctionMode`; saving the active profile re-applies it to
+    /// the engine, which swaps the correction between the static cascade
+    /// and the adaptive stage.
+    @ViewBuilder private func correctionStyleCard(_ profile: HearingProfile) -> some View {
+        card {
+            HStack(spacing: 12) {
+                Text("Correction style")
+                    .font(.subheadline.weight(.semibold))
+                Picker("Correction style", selection: correctionModeBinding(for: profile)) {
+                    Text("Steady").tag(CorrectionMode.steady)
+                    Text("Adaptive").tag(CorrectionMode.adaptive)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: 240)
+                Spacer()
+            }
+            Text("Steady applies the same correction at every volume. Adaptive gives quiet sounds more help and loud sounds less — closer to how hearing actually works — using your playback calibration to judge levels. Start with Steady; try Adaptive when your calibration is set.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            // Honesty line (§6.3): Adaptive's accuracy depends on the
+            // playback calibration; reduced-depth mode (§7.3) when unset.
+            if profile.correctionMode == .adaptive && !audioState.hasUserCalibration {
+                Label {
+                    Text("Playback calibration hasn't been set — Adaptive is running in its reduced-depth mode. Calibrate in Safe Listening for the full effect.")
+                        .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.caption)
+                }
+                .foregroundStyle(.orange)
+            }
+        }
+    }
+
+    private func correctionModeBinding(for profile: HearingProfile) -> Binding<CorrectionMode> {
+        Binding(
+            get: { profile.correctionMode },
+            set: { newMode in
+                guard newMode != profile.correctionMode else { return }
+                var updated = profile
+                updated.correctionMode = newMode
+                try? profileStore.save(
+                    updated,
+                    actionName: "Set correction style to \(newMode == .adaptive ? "Adaptive" : "Steady")"
+                )
+            }
+        )
+    }
+
     @ViewBuilder private func previewCard(_ profile: HearingProfile) -> some View {
         card {
-            // "Combined across all tabs" = the Result the listener hears:
-            // EFFECTIVE hearing correction (target strength × acclimatization
-            // ramp — same helper the engine consumes, phase3 §5) summed with
-            // the user/preset EQ, per ear.
-            EQPreviewView(
-                leftBands: profile.effectiveCorrectionBands().left + profile.leftEar.bands,
-                rightBands: profile.effectiveCorrectionBands().right + profile.rightEar.bands,
-                compensationFactor: profile.effectiveCorrectionStrength()
-            )
+            if profile.correctionMode == .adaptive && hasAudiogram(profile) {
+                // Adaptive preview (phase4 §6.2): the level-dependent
+                // correction family for the displayed ear — the single
+                // combined curve below can't represent a correction that
+                // changes with input level.
+                AdaptivePreviewView(
+                    thresholds: tab == .left ? profile.leftEar.thresholds : profile.rightEar.thresholds,
+                    correctionBands: tab == .left ? profile.leftEar.correctionBands : profile.rightEar.correctionBands,
+                    userBands: tab == .left ? profile.leftEar.bands : profile.rightEar.bands,
+                    strength: profile.effectiveCorrectionStrength(),
+                    earLabel: tab == .left ? "left ear" : "right ear",
+                    earColor: earColor
+                )
+            } else {
+                // "Combined across all tabs" = the Result the listener hears:
+                // EFFECTIVE hearing correction (target strength × acclimatization
+                // ramp — same helper the engine consumes, phase3 §5) summed with
+                // the user/preset EQ, per ear.
+                EQPreviewView(
+                    leftBands: profile.effectiveCorrectionBands().left + profile.leftEar.bands,
+                    rightBands: profile.effectiveCorrectionBands().right + profile.rightEar.bands,
+                    compensationFactor: profile.effectiveCorrectionStrength()
+                )
+            }
         }
     }
 

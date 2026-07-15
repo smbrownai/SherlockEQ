@@ -80,6 +80,12 @@ struct ParametricCanvasView: View {
     var dynamicOverlays: [DynamicOverlay] = []
     var showDynamicsOverlay: Bool = false
 
+    /// Live Adaptive Correction gains (dB, one per filterbank band) —
+    /// drawn as a dashed moving stroke via the filterbank's exact
+    /// complex-response evaluator, so the overlay IS what the audio
+    /// stage applies (phase4 §6.2). Empty = overlay off.
+    var adaptiveGainsDB: [Double] = []
+
     /// Safe-listening dBA ceiling from the active profile. Drives the
     /// safety-overlay threshold curve via the closed-form
     /// `dBFS = ceiling − calibration − A_weight(f)`. 85 dBA matches NIOSH.
@@ -197,6 +203,8 @@ struct ParametricCanvasView: View {
                     }
                     // Live dynamic-feature bells — under the static curves.
                     if showDynamicsOverlay { drawDynamicsOverlay(context, size: size) }
+                    // Live adaptive-correction response — same layer slot.
+                    if !adaptiveGainsDB.isEmpty { drawAdaptiveOverlay(context, size: size) }
                     if showEQCurve {
                         if drawOtherEar {
                             drawTypedCurve(context, size: size, cachedDB: cachedShadowDB, color: shadowColor, kind: .eq)
@@ -556,6 +564,31 @@ struct ParametricCanvasView: View {
     /// Vertical marker + label at the notch frequency. Drawn only while the
     /// notch is actually on — when it's off there's nothing in the curve to
     /// point at, so a stray marker just reads as phantom UI.
+    /// The adaptive stage's current composite response (its six live band
+    /// gains through the real filterbank math). Dashed, ear-tinted, under
+    /// the static curves — the "drawn = heard" invariant on a moving
+    /// target. Recomputes only when the telemetry publishes (≤ 15 Hz) and
+    /// only while non-empty.
+    private func drawAdaptiveOverlay(_ context: GraphicsContext, size: CGSize) {
+        guard adaptiveGainsDB.count == AdaptiveFilterbank.bandCount else { return }
+        let samples = 96
+        var path = Path()
+        let axis = freqAxis
+        for i in 0..<samples {
+            let frac = Double(i) / Double(samples - 1)
+            let hz = axis.hz(forFrac: frac)
+            let db = AdaptiveFilterbank.compositeMagnitudeDB(
+                atHz: hz, gainsDB: adaptiveGainsDB, sampleRate: spectrumSampleRate)
+            let pt = CGPoint(x: CGFloat(frac) * size.width, y: yForDB(db, height: size.height))
+            if i == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
+        }
+        context.stroke(
+            path,
+            with: .color(earColor.opacity(a11yOpacity(0.55, reduceFactor: 1.5))),
+            style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round, dash: [4, 3])
+        )
+    }
+
     private func drawNotchMarker(_ context: GraphicsContext, size: CGSize) {
         guard let notch, notch.enabled else { return }
         let x = xForFreq(notch.frequencyHz, width: size.width)
@@ -1220,17 +1253,31 @@ struct LiveParametricCanvas: View {
     /// Master gate for the overlay (the Dynamics layer chip).
     var showDynamicsOverlay: Bool = false
 
+    /// Adaptive Correction live telemetry (phase4 §6.2). When supplied and
+    /// `showAdaptiveOverlay` is on, an inner observer feeds the displayed
+    /// ear's live band gains into the canvas as the dashed moving-response
+    /// stroke — scoped like the dynamics observer so only the canvas
+    /// subtree re-renders at telemetry rate.
+    var adaptiveMonitor: AdaptiveActivityMonitor? = nil
+    var adaptiveEar: EQBandLookup.Ear = .left
+    var showAdaptiveOverlay: Bool = false
+
     /// Tracks whether *this view instance* has currently subscribed to each
     /// analyzer. Prevents double-subscribe across re-renders and double-
     /// unsubscribe on teardown.
     @State private var subscribedToSpectrum: Bool = false
     @State private var subscribedToPreSpectrum: Bool = false
     @State private var subscribedToDynamics: Bool = false
+    @State private var subscribedToAdaptive: Bool = false
 
     /// True when the overlay is wanted and wired — gates both the inner
     /// observer and the monitor subscription.
     private var dynamicsActive: Bool {
         showDynamicsOverlay && dynamicsMonitor != nil && !dynamicsKinds.isEmpty
+    }
+
+    private var adaptiveActive: Bool {
+        showAdaptiveOverlay && adaptiveMonitor != nil
     }
 
     var body: some View {
@@ -1243,10 +1290,10 @@ struct LiveParametricCanvas: View {
                 // Inner observer re-renders at the monitor's 15 Hz only —
                 // the host (ExpertEQView) stays off that cadence.
                 DynObserver(monitor: monitor) {
-                    preWrappedCanvas(overlays: currentOverlays(from: monitor))
+                    adaptiveWrapped(overlays: currentOverlays(from: monitor))
                 }
             } else {
-                preWrappedCanvas(overlays: [])
+                adaptiveWrapped(overlays: [])
             }
         }
         // Lifecycle: drive both analyzers' subscriber counts from view
@@ -1258,16 +1305,38 @@ struct LiveParametricCanvas: View {
         .onDisappear { releaseSubscriptions() }
         .onChange(of: showInputSpectrum) { _, _ in syncSubscriptions() }
         .onChange(of: dynamicsActive) { _, _ in syncSubscriptions() }
+        .onChange(of: adaptiveActive) { _, _ in syncSubscriptions() }
     }
 
     @ViewBuilder
-    private func preWrappedCanvas(overlays: [ParametricCanvasView.DynamicOverlay]) -> some View {
-        if let preSpectrum, showInputSpectrum {
-            PreObserver(preSpectrum: preSpectrum) { preBins in
-                canvas(preBins: preBins, overlays: overlays)
+    private func adaptiveWrapped(overlays: [ParametricCanvasView.DynamicOverlay]) -> some View {
+        if adaptiveActive, let monitor = adaptiveMonitor {
+            AdaptiveObserver(monitor: monitor) {
+                preWrappedCanvas(overlays: overlays, adaptiveGains: activeAdaptiveGains(from: monitor))
             }
         } else {
-            canvas(preBins: [], overlays: overlays)
+            preWrappedCanvas(overlays: overlays, adaptiveGains: [])
+        }
+    }
+
+    /// The displayed ear's live gains — empty (overlay hidden) while the
+    /// stage is idle at unity, so a flat zero line never clutters the view.
+    private func activeAdaptiveGains(from monitor: AdaptiveActivityMonitor) -> [Double] {
+        let gains = monitor.gains(for: adaptiveEar)
+        return gains.contains { abs($0) >= 0.1 } ? gains : []
+    }
+
+    @ViewBuilder
+    private func preWrappedCanvas(
+        overlays: [ParametricCanvasView.DynamicOverlay],
+        adaptiveGains: [Double]
+    ) -> some View {
+        if let preSpectrum, showInputSpectrum {
+            PreObserver(preSpectrum: preSpectrum) { preBins in
+                canvas(preBins: preBins, overlays: overlays, adaptiveGains: adaptiveGains)
+            }
+        } else {
+            canvas(preBins: [], overlays: overlays, adaptiveGains: adaptiveGains)
         }
     }
 
@@ -1302,6 +1371,15 @@ struct LiveParametricCanvas: View {
                 subscribedToDynamics = false
             }
         }
+        if let monitor = adaptiveMonitor {
+            if adaptiveActive && !subscribedToAdaptive {
+                monitor.subscribe()
+                subscribedToAdaptive = true
+            } else if !adaptiveActive && subscribedToAdaptive {
+                monitor.unsubscribe()
+                subscribedToAdaptive = false
+            }
+        }
 
         guard let preSpectrum else { return }
         if showInputSpectrum && !subscribedToPreSpectrum {
@@ -1326,9 +1404,17 @@ struct LiveParametricCanvas: View {
             monitor.unsubscribe()
             subscribedToDynamics = false
         }
+        if let monitor = adaptiveMonitor, subscribedToAdaptive {
+            monitor.unsubscribe()
+            subscribedToAdaptive = false
+        }
     }
 
-    private func canvas(preBins: [Float], overlays: [ParametricCanvasView.DynamicOverlay] = []) -> some View {
+    private func canvas(
+        preBins: [Float],
+        overlays: [ParametricCanvasView.DynamicOverlay] = [],
+        adaptiveGains: [Double] = []
+    ) -> some View {
         ParametricCanvasView(
             bands: $bands,
             shadowBands: shadowBands,
@@ -1352,6 +1438,7 @@ struct LiveParametricCanvas: View {
             showSafetyOverlay: showSafetyOverlay,
             dynamicOverlays: overlays,
             showDynamicsOverlay: showDynamicsOverlay,
+            adaptiveGainsDB: adaptiveGains,
             safetyCeilingDBA: safetyCeilingDBA,
             calibrationOffsetDBA: calibrationOffsetDBA,
             gainRangeDB: gainRangeDB
@@ -1372,6 +1459,13 @@ struct LiveParametricCanvas: View {
     /// when a value actually changes, so at rest this never re-renders.
     private struct DynObserver<Content: View>: View {
         @ObservedObject var monitor: DynamicActivityMonitor
+        let content: () -> Content
+        var body: some View { content() }
+    }
+
+    /// Same scoping for the adaptive-correction telemetry.
+    private struct AdaptiveObserver<Content: View>: View {
+        @ObservedObject var monitor: AdaptiveActivityMonitor
         let content: () -> Content
         var body: some View { content() }
     }

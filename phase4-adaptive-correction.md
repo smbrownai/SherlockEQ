@@ -3,7 +3,7 @@
 **Feature:** Level-dependent hearing correction — per-band gains that follow the input level, prescribed from the audiogram
 **For:** Claude Code implementation sessions (see §9 for the split)
 **Scope:** New per-ear DSP stage (Linkwitz–Riley filterbank + per-band gain computers), prescription math anchored to NAL-R, engine integration, correction-mode selector + level-aware previews, safety analysis
-**Status:** 📋 Specified — awaiting product review (this feature was explicitly flagged in the dynamic-EQ design record as requiring "explicit max-boost safety rules and product framing review before any engineering starts")
+**Status:** ✅ Implemented — steps 1–4 shipped (step 1: filterbank + prescription; step 2: realtime processor; step 3: engine integration; step 4: UI — correction-style selector, 50/65/85 dB preview family, live canvas overlay — + docs). Remaining: the release-gating listening pass (§9's step-4 tail; tracked on the step-4 PR checklist)
 **Spec date:** 2026-07-15
 
 ---
