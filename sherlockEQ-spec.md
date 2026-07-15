@@ -391,8 +391,26 @@ NIOSH constants (`SafeListeningTracker`):
 
 **Popover:** compact dose bar (green → amber → red), remaining-time label.
 
-**Main window — Safe Listening view:** full detail — current level estimate, session
-history, ceiling configuration, notification preferences, SPL-calibration workflow.
+**Main window — Safe Listening view:** organised around the two live questions —
+**"How loud is it now?"** and **"Today's exposure"** — at the top, each carrying a
+calibration-confidence badge so the presented precision never implies more
+certainty than exists:
+- **Confidence badge** next to the live dBA: **Not calibrated** (no user
+  calibration → rough default), **Approximate** (calibrated but volume unreadable
+  / different device), or **Calibrated** (calibrated and volume-tracking active),
+  derived from `hasUserCalibration` + `volumeTrackingStatus`.
+- **Waiting for audio** — when the level reading is below the meter floor the live
+  card shows "Waiting for audio" rather than a misleading "Safe" verdict.
+- **Remaining safe time** is surfaced as the actionable figure once calibrated
+  (dose % otherwise).
+- The profile's limit is labelled **"Listening limit"** (was "Ceiling").
+- **Calibration** (an SPL-meter setup task, not a daily one) lives in its own
+  **sheet** opened from a short "Calibrate for more accurate level estimates" row;
+  the tone + meter-reading workflow and the volume-tracking status line moved
+  there.
+- **Quiet threshold**, the 80/100 % notification toggle, and **Reset today's
+  dose** (now confirmation-gated and de-emphasised) sit under an **Advanced**
+  disclosure.
 
 **Behavior:**
 - Dose accumulates at all levels (NIOSH self-regulates — permissible duration at
@@ -625,18 +643,34 @@ control in the Equalizer screen's toolbar (`eqMode = .expert`). Rendered by `Exp
 Lives inside the Tinnitus Notch view in the main window — Tone Finder and notch
 controls share one screen so the user reads identify-then-dial as one task.
 
-- Large frequency readout (Hz)
-- Sine-tone generator (`SineToneGenerator`) routed directly into `mainMixerNode`
-  upstream of master gain, bypassing per-ear EQ so the reference pitch isn't
-  coloured by the profile. The generator also serves the Listening Check via a
-  per-channel mask (single-ear presentation) and a pulsed mode (200 ms on/off,
-  5 ms raised-cosine edges — sample-accurate in the render block)
-- Drag/swipe target to sweep frequency (log scale, **1 kHz – 16 kHz**)
-- Fine-tune stepper (±1 Hz)
-- Volume row
-- "Set as notch frequency" action — writes into the active profile's notch and
-  flips it on. With `separateNotch` on, the user picks Left / Right / Both.
-- Non-clinical copy: "Drag to find the pitch closest to your ringing."
+The screen is organised as a **four-step guided flow** (level → sweep → compare
+→ use) so pitch matching, notch configuration, and the symptom check-in read as
+distinct jobs rather than one long form:
+
+- **Step 1 — level:** Play/Stop transport (prominent red **Stop** while playing)
+  + volume row. Sine-tone generator (`SineToneGenerator`) routed directly into
+  `mainMixerNode` upstream of master gain, bypassing per-ear EQ so the reference
+  pitch isn't coloured by the profile. The generator also serves the Listening
+  Check via a per-channel mask (single-ear presentation) and a pulsed mode
+  (200 ms on/off, 5 ms raised-cosine edges — sample-accurate in the render block).
+- **Step 2 — sweep:** large frequency readout (Hz) + note approximation, drag to
+  sweep (log scale, **1 kHz – 16 kHz**), and a **Step-size selector** (1 / 10 /
+  100 Hz) with large **−** / **+** controls (replaced the six fixed-increment
+  buttons).
+- **Step 3 — compare:** "a bit lower / higher" nudges + octave down/up, plus an
+  optional *Average a few matches* aid (capture → average/range).
+- **Step 4 — use this pitch:** the **"Use this pitch"** action (renamed from
+  "Set as Notch Frequency") writes the current tone into the active profile's
+  notch and flips it on; with `separateNotch` on, the user picks Left / Right /
+  Both. Applying briefly **highlights the notch card** so cause and effect read
+  as connected.
+- **Notch filter:** collapsed to a preview + **Enable at N Hz** button when off
+  (no greyed-out form); when on, shows the preview, a Strength-first control, and
+  a **Fine-tune notch** disclosure for depth/width. A hint offers to snap the
+  notch to the finder pitch if the two drift apart.
+- **Symptom check-in** is separated into its own **sheet** (opened from a footer
+  button) — it tracks, it doesn't configure the processor.
+- Non-clinical copy throughout.
 
 ---
 

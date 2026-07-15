@@ -1,13 +1,12 @@
 import SwiftUI
 
-/// Tinnitus Notch screen — sweep a pure sine to identify the pitch
-/// closest to your ringing (Tone Finder), then dial in the notch
-/// filter that de-emphasises it on the active profile.
-/// (spec §5.3 + §5.10: large freq display, log-scale sweep, fine-tune
-/// stepper, on/off + frequency + depth + width controls, non-clinical
-/// copy. Tone Finder used to live on its own screen and the notch
-/// settings under Expert EQ; consolidated here so they read as one
-/// task — identify, then dial in.)
+/// Tinnitus Notch screen. Three separable jobs, now visually separated:
+///   1. **Pitch matching** — a short guided flow (level → sweep → compare →
+///      use) to find the tone closest to your ringing.
+///   2. **Notch configuration** — the filter that de-emphasises that pitch.
+///      Collapsed to a preview + enable when off; full controls when on.
+///   3. **Symptom check-in** — a tracking feature, moved into its own sheet
+///      because it doesn't configure the processor.
 struct ToneFinderView: View {
     @EnvironmentObject private var audioState: AudioState
     @EnvironmentObject private var profileStore: ProfileStore
@@ -16,147 +15,48 @@ struct ToneFinderView: View {
     private let maxHz: Double = 16_000
 
     @State private var lastConfirmedFrequency: Double?
-    /// Captured pitch matches for the guided flow. Tinnitus pitch matching is
-    /// imprecise and octave-confusable, so a repeatable average/range is more
-    /// honest than a single "definitive" number.
+    /// Captured pitch matches for the optional averaging aid. Tinnitus pitch
+    /// matching is imprecise and octave-confusable, so a repeatable
+    /// average/range is more honest than a single "definitive" number.
     @State private var matches: [Double] = []
+    /// Fine-tune step size (Hz) for the − / + controls.
+    @State private var stepHz: Int = 10
+    /// Briefly highlights the notch card right after "Use this pitch", so the
+    /// cause (finder) and effect (notch) read as connected.
+    @State private var highlightNotch = false
+    @State private var showCheckIn = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 20) {
                 introCard
-                frequencyReadout
-                sweepSurface
-                fineTuneControls
-                guidedMatchingSection
-                volumeRow
-                actionsRow
+                step1Level
+                step2Sweep
+                step3Compare
+                step4Use
                 notchSection
-                TinnitusCheckInView(store: audioState.tinnitusCheckIns)
+                checkInFooter
                 disclaimer
             }
             .padding(28)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Tinnitus Notch")
+        .onChange(of: lastConfirmedFrequency) { _, newValue in
+            guard newValue != nil else { return }
+            highlightNotch = true
+            Task {
+                try? await Task.sleep(for: .seconds(1.6))
+                highlightNotch = false
+            }
+        }
+        .sheet(isPresented: $showCheckIn) {
+            checkInSheet
+        }
         .onDisappear { generator.stop() }
     }
 
-    /// Notch filter controls — frequency / depth / width — bound to
-    /// the active profile. When `separateNotch` is on, two panels
-    /// stack so the user can dial in independent L / R notches (e.g.
-    /// unilateral tinnitus). When off, one panel writes both ears in
-    /// lockstep — every edit on the visible Left binding mirrors to
-    /// Right so the audio chain sees identical values. Hidden when
-    /// no profile is loaded.
-    @ViewBuilder private var notchSection: some View {
-        if let profile = audioState.activeProfile(in: profileStore) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Label("Notch filter", systemImage: "bandage")
-                        .font(.title3.weight(.semibold))
-                    Spacer()
-                }
-                // Notch-vs-correction conflict (spec §6): warn when this
-                // notch cuts where the audiogram correction boosts.
-                CorrectionConflictChip(crossLink: .audiogram)
-                // Honest preview of the band being reduced — the same
-                // parametric dip the audio applies, both ears when separate.
-                NotchPreviewView(
-                    leftNotch: profile.leftNotch,
-                    rightNotch: profile.rightNotch,
-                    separate: profile.separateNotch,
-                    leftColor: audioState.preferences.leftEarColor,
-                    rightColor: audioState.preferences.rightEarColor
-                )
-                separateToggleRow(profile)
-                if profile.separateNotch {
-                    NotchControlView(
-                        notch: leftNotchBinding(for: profile),
-                        title: "Left ear",
-                        symbol: "ear"
-                    )
-                    NotchControlView(
-                        notch: rightNotchBinding(for: profile),
-                        title: "Right ear",
-                        symbol: "ear"
-                    )
-                } else {
-                    // Linked: edits flow to both notches in one
-                    // write so the engine never sees an asymmetric
-                    // intermediate state during a slider drag.
-                    NotchControlView(notch: linkedNotchBinding(for: profile))
-                }
-            }
-        }
-    }
-
-    @ViewBuilder private func separateToggleRow(_ profile: HearingProfile) -> some View {
-        HStack {
-            Toggle("Separate L + R notch", isOn: Binding(
-                get: { profile.separateNotch },
-                set: { newValue in
-                    var updated = profile
-                    updated.separateNotch = newValue
-                    // Snap the right notch to the left when turning
-                    // separate off, so the linked-mode panel reflects
-                    // the value the user has been working with.
-                    if !newValue {
-                        updated.rightNotch = updated.leftNotch
-                    }
-                    try? profileStore.save(updated)
-                }
-            ))
-            .toggleStyle(.switch)
-            .controlSize(.small)
-            Spacer()
-            Text("Useful for unilateral tinnitus or asymmetric pitch.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    /// Linked binding — every write goes to both ears so the engine
-    /// applies identical notches L and R.
-    private func linkedNotchBinding(for profile: HearingProfile) -> Binding<TinnitusNotch> {
-        Binding(
-            get: { profile.leftNotch },
-            set: { newValue in
-                var updated = profile
-                updated.leftNotch = newValue
-                updated.rightNotch = newValue
-                try? profileStore.save(updated)
-            }
-        )
-    }
-
-    private func leftNotchBinding(for profile: HearingProfile) -> Binding<TinnitusNotch> {
-        Binding(
-            get: { profile.leftNotch },
-            set: { newValue in
-                var updated = profile
-                updated.leftNotch = newValue
-                try? profileStore.save(updated)
-            }
-        )
-    }
-
-    private func rightNotchBinding(for profile: HearingProfile) -> Binding<TinnitusNotch> {
-        Binding(
-            get: { profile.rightNotch },
-            set: { newValue in
-                var updated = profile
-                updated.rightNotch = newValue
-                try? profileStore.save(updated)
-            }
-        )
-    }
-
-    private var generator: SineToneGenerator { audioState.audio.toneGenerator }
-
-    private var currentHz: Double { generator.targetFrequencyHz }
-
-    // MARK: - Cards
+    // MARK: - Intro
 
     private var introCard: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -167,7 +67,7 @@ struct ToneFinderView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Find the pitch closest to your ringing")
                     .font(.title3.weight(.semibold))
-                Text("Tap Play, then drag the bar below to sweep the sine through your hearing range. When the tone sits at the same pitch as your tinnitus, hit \u{201C}Set as Notch.\u{201D}")
+                Text("Work through the four steps below to match your tinnitus pitch, then use it to place the notch filter.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -176,11 +76,59 @@ struct ToneFinderView: View {
         }
     }
 
+    // MARK: - Step 1 — level + transport (prominent stop while playing)
+
+    private var step1Level: some View {
+        stepCard(1, "Set a comfortable tone level") {
+            HStack(spacing: 14) {
+                Button {
+                    generator.toggle()
+                } label: {
+                    Label(generator.isPlaying ? "Stop" : "Play tone",
+                          systemImage: generator.isPlaying ? "stop.fill" : "play.fill")
+                        .frame(minWidth: 96)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(generator.isPlaying ? .red : .accentColor)
+                .controlSize(.large)
+                .keyboardShortcut(.space, modifiers: [])
+
+                Image(systemName: "speaker.wave.1").foregroundStyle(.secondary)
+                Slider(
+                    value: Binding(
+                        get: { Double(generator.amplitude) },
+                        set: { generator.amplitude = Float($0) }
+                    ),
+                    in: 0.005...0.2
+                )
+                Image(systemName: "speaker.wave.3").foregroundStyle(.secondary)
+                Text(amplitudeLabel)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 72, alignment: .trailing)
+            }
+            Text("Keep it quiet — just loud enough to compare against your ringing. You'll match pitch first, loudness doesn't matter.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - Step 2 — sweep + fine-tune
+
+    private var step2Sweep: some View {
+        stepCard(2, "Sweep for the closest pitch") {
+            frequencyReadout
+            sweepSurface
+            stepControls
+        }
+    }
+
     private var frequencyReadout: some View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(formattedFrequency)
-                    .font(.system(size: 60, weight: .semibold, design: .rounded))
+                    .font(.system(size: 54, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                 Text("Hz")
                     .font(.title3)
@@ -239,20 +187,13 @@ struct ToneFinderView: View {
                         generator.targetFrequencyHz = hzFor(x: value.location.x, width: geo.size.width)
                     }
             )
-            // Tone Finder's whole purpose is "what frequency matches
-            // my tinnitus" — without an adjustable accessibility
-            // surface, VO users and no-mouse users couldn't operate
-            // the screen at all. .accessibilityAdjustableAction wires
-            // arrow keys / VO swipes to ±10 Hz coarse nudges (matches
-            // the fine-tune buttons below); the +/− 1 / 100 buttons
-            // remain as standard controls for finer / coarser steps.
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Tone frequency")
             .accessibilityValue("\(Int(currentHz.rounded())) hertz")
             .accessibilityAdjustableAction { direction in
                 switch direction {
-                case .increment: nudge(10)
-                case .decrement: nudge(-10)
+                case .increment: nudge(stepHz)
+                case .decrement: nudge(-stepHz)
                 @unknown default: break
                 }
             }
@@ -260,380 +201,99 @@ struct ToneFinderView: View {
         .frame(height: 120)
     }
 
-    private var fineTuneControls: some View {
-        HStack(spacing: 8) {
-            Text("Fine tune")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-
-            Button { nudge(-100) } label: { Text("−100") }
-            Button { nudge(-10) }  label: { Text("−10")  }
-            Button { nudge(-1) }   label: { Text("−1")   }
-
-            Text("Hz")
-                .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
-
-            Button { nudge(+1) }   label: { Text("+1")   }
-            Button { nudge(+10) }  label: { Text("+10")  }
-            Button { nudge(+100) } label: { Text("+100") }
+    /// Step-size selector + two large − / + controls (replaces the old row of
+    /// six fixed-increment buttons).
+    private var stepControls: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 6) {
+                Text("Step")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Picker("Step", selection: $stepHz) {
+                    Text("1 Hz").tag(1)
+                    Text("10 Hz").tag(10)
+                    Text("100 Hz").tag(100)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+            }
 
             Spacer()
+
+            Button { nudge(-stepHz) } label: {
+                Image(systemName: "minus").frame(minWidth: 34)
+            }
+            .accessibilityLabel("Lower by \(stepHz) hertz")
+            Text("\(stepHz) Hz")
+                .font(.callout.monospaced())
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 56)
+            Button { nudge(stepHz) } label: {
+                Image(systemName: "plus").frame(minWidth: 34)
+            }
+            .accessibilityLabel("Raise by \(stepHz) hertz")
         }
         .buttonStyle(.bordered)
-        .controlSize(.small)
+        .controlSize(.large)
     }
 
-    private var volumeRow: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "speaker.wave.1")
-                .foregroundStyle(.secondary)
-            Slider(
-                value: Binding(
-                    get: { Double(generator.amplitude) },
-                    set: { generator.amplitude = Float($0) }
-                ),
-                in: 0.005...0.2
-            )
-            Image(systemName: "speaker.wave.3")
-                .foregroundStyle(.secondary)
-            Text(amplitudeLabel)
-                .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
-                .frame(width: 80, alignment: .trailing)
-        }
-    }
+    // MARK: - Step 3 — compare nearby / octave
 
-    private var actionsRow: some View {
-        HStack(spacing: 12) {
-            Button {
-                generator.toggle()
-            } label: {
-                Label(
-                    generator.isPlaying ? "Stop" : "Play",
-                    systemImage: generator.isPlaying ? "stop.fill" : "play.fill"
-                )
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .keyboardShortcut(.space, modifiers: [])
-
-            setAsNotchButton
-
-            Spacer()
-
-            if let confirmed = lastConfirmedFrequency {
-                Label("Notch updated to \(Int(confirmed)) Hz", systemImage: "checkmark.circle.fill")
-                    .font(.callout)
-                    .foregroundStyle(.green)
-            }
-        }
-    }
-
-    private var disclaimer: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // Best-for / not-best-for: a notch suits steady tonal ringing and
-            // does little for non-tonal sounds. Framed as suitability, not a
-            // diagnosis.
-            VStack(alignment: .leading, spacing: 8) {
-                Label("When a notch may help", systemImage: "checkmark.circle")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                bestForRow(
-                    symbol: "checkmark",
-                    tint: .green,
-                    lead: "Best for",
-                    text: "steady, tone-like ringing at a pitch you can find again."
-                )
-                bestForRow(
-                    symbol: "minus",
-                    tint: .secondary,
-                    lead: "Less suited",
-                    text: "hissing, roaring, clicking, pulsing, or tinnitus that changes pitch often."
-                )
-            }
-
-            Divider()
-
-            // Distinct medical-referral callout — deliberately stronger styling
-            // than the suitability rows so red-flag symptoms don't read as just
-            // more audio guidance.
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "stethoscope")
-                    .foregroundStyle(.orange)
-                    .font(.title3)
-                    .frame(width: 24)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("See a hearing professional")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Pulsatile (heartbeat-like) tinnitus, a sudden change in one ear, new hearing loss, dizziness, or pain deserve medical evaluation — not more audio tweaking.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.orange.opacity(0.10))
-            )
-
-            // Non-clinical framing.
-            VStack(alignment: .leading, spacing: 6) {
-                Label("Non-clinical", systemImage: "info.circle")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text("SherlockEQ doesn't diagnose, measure, or treat tinnitus. The notch simply reduces audio energy around the pitch you selected — a way to explore whether listening feels less fatiguing. Evidence for notched-sound approaches is mixed, and hearing-aid evaluation or CBT have stronger support for persistent, bothersome tinnitus.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.secondary.opacity(0.05))
-        )
-    }
-
-    @ViewBuilder
-    private func bestForRow(symbol: String, tint: Color, lead: String, text: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: symbol)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(tint)
-                .frame(width: 16)
-            (Text(lead + ": ").font(.callout.weight(.semibold))
-                + Text(text).font(.callout))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    // MARK: - Helpers
-
-    private var formattedFrequency: String {
-        Int(currentHz.rounded()).formatted()
-    }
-
-    private var amplitudeLabel: String {
-        // Convert linear amplitude → approximate dBFS RMS for a sine
-        // (RMS = amp / sqrt(2))
-        let amp = Double(generator.amplitude)
-        let rms = amp / 2.squareRoot()
-        let dbfs = 20 * log10(max(rms, 1e-6))
-        return String(format: "%.0f dBFS", dbfs)
-    }
-
-    private struct NoteApprox {
-        let label: String
-        let detail: String
-    }
-
-    private var noteApproximation: NoteApprox {
-        // A4 = 440 Hz. semitones from A4 = 12 * log2(f / 440)
-        let semis = 12 * log2(currentHz / 440)
-        let nearest = Int(semis.rounded())
-        let cents = (semis - Double(nearest)) * 100
-        let noteNames = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"]
-        // nearest = 0 → A4; positive moves up.
-        let nameIdx = ((nearest % 12) + 12) % 12
-        // Octaves: A4 is octave 4. A5 (nearest=12) is octave 5. Note that
-        // C4 is 3 semitones above A3 → handle wrap.
-        let absSemis = nearest + 9               // shift so 0 = C0
-        let octave = absSemis >= 0 ? absSemis / 12 : (absSemis - 11) / 12
-        let centsString = String(format: "%+d¢", Int(cents.rounded()))
-        return NoteApprox(
-            label: "\(noteNames[nameIdx])\(octave)",
-            detail: centsString
-        )
-    }
-
-    private var majorTicks: [Double] {
-        [1000, 2000, 4000, 8000, 16000]
-    }
-
-    private func formatTick(_ hz: Double) -> String {
-        let k = hz / 1000
-        return "\(Int(k))k"
-    }
-
-    private var freqAxis: LogFreqAxis { LogFreqAxis(minHz: minHz, maxHz: maxHz) }
-
-    private func xFor(hz: Double, width: CGFloat) -> CGFloat {
-        freqAxis.x(forHz: hz, width: width)
-    }
-
-    private func hzFor(x: CGFloat, width: CGFloat) -> Double {
-        freqAxis.hz(forX: x, width: width)
-    }
-
-    private func nudge(_ delta: Int) {
-        let target = generator.targetFrequencyHz + Double(delta)
-        generator.targetFrequencyHz = max(minHz, min(maxHz, target))
-    }
-
-    /// Action button next to Play. Single bordered button in the
-    /// linked-notch case, three-way Menu (Left / Right / Both) when
-    /// the user has turned on per-ear notch. The menu form keeps the
-    /// same affordance (still a bandage-labelled control) but lets
-    /// the user pick a target without leaving the tone-finder flow.
-    @ViewBuilder private var setAsNotchButton: some View {
-        let profile = audioState.activeProfile(in: profileStore)
-        if profile?.separateNotch == true {
-            Menu {
-                Button("Set as Left ear notch")  { setAsNotch(.left) }
-                Button("Set as Right ear notch") { setAsNotch(.right) }
-                Divider()
-                Button("Set as Both notches")    { setAsNotch(.both) }
-            } label: {
-                Label("Set as Notch Frequency", systemImage: "bandage")
-            }
-            .menuStyle(.borderedButton)
-            .controlSize(.large)
-            .disabled(profile == nil)
-        } else {
-            Button {
-                setAsNotch(.both)
-            } label: {
-                Label("Set as Notch Frequency", systemImage: "bandage")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            .disabled(profile == nil)
-        }
-    }
-
-    private enum NotchTarget { case left, right, both }
-
-    private func setAsNotch(_ target: NotchTarget) {
-        applyNotch(frequency: currentHz, target: target)
-    }
-
-    /// Commit a notch frequency for the target ear(s), enabling the notch.
-    /// Shared by the "Set as Notch" button (current tone) and the guided
-    /// flow (matched-average tone).
-    private func applyNotch(frequency: Double, target: NotchTarget) {
-        guard var profile = audioState.activeProfile(in: profileStore) else { return }
-        switch target {
-        case .left:
-            profile.leftNotch.frequencyHz = frequency
-            profile.leftNotch.enabled = true
-        case .right:
-            profile.rightNotch.frequencyHz = frequency
-            profile.rightNotch.enabled = true
-        case .both:
-            profile.leftNotch.frequencyHz = frequency
-            profile.leftNotch.enabled = true
-            profile.rightNotch.frequencyHz = frequency
-            profile.rightNotch.enabled = true
-        }
-        try? profileStore.save(profile)
-        lastConfirmedFrequency = frequency
-    }
-
-    // MARK: - Guided matching
-
-    /// Optional, collapsed-by-default protocol that treats pitch matching as
-    /// the imprecise, octave-confusable task it is: sweep, compare octaves,
-    /// capture a few matches, then use their average/range rather than one
-    /// "definitive" number.
-    @ViewBuilder private var guidedMatchingSection: some View {
-        DisclosureGroup {
-            VStack(alignment: .leading, spacing: 16) {
-                matchProtocolSteps
-                octaveCheckRow
-                matchCaptureRow
-            }
-            .padding(.top, 10)
-        } label: {
-            Label("Guided matching (optional)", systemImage: "list.number")
-                .font(.subheadline.weight(.medium))
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.secondary.opacity(0.05))
-        )
-    }
-
-    private var matchProtocolSteps: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(Self.protocolSteps.enumerated()), id: \.offset) { idx, step in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("\(idx + 1)")
-                        .font(.caption.monospaced().weight(.bold))
-                        .foregroundStyle(.tint)
-                        .frame(width: 16, alignment: .trailing)
-                    Text(step)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-    }
-
-    private static let protocolSteps: [String] = [
-        "Start a bit below where your ringing sits.",
-        "Sweep slowly upward and stop when the tone feels closest.",
-        "Compare a few nearby tones — small moves change the match.",
-        "Check for octave confusion (below), a common trap.",
-        "Match the pitch first; adjust loudness separately.",
-        "Capture the match a few times — save only what you can repeat."
-    ]
-
-    /// Octave-confusion check: jump the tone down/up an octave so the user can
-    /// tell whether the match is really at f, or an octave off (very common).
-    private var octaveCheckRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Octave check")
-                .font(.callout.weight(.semibold))
-            Text("A tone one octave away can sound deceptively similar. Compare, then return.")
+    private var step3Compare: some View {
+        stepCard(3, "Compare slightly higher and lower") {
+            Text("Small moves change the match. Nudge a little each way and settle on the closest. A tone one octave off can sound deceptively similar — check that too.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
-                Button { jumpOctave(-1) } label: { Label("Down 1 octave", systemImage: "arrow.down") }
-                Button { jumpOctave(+1) } label: { Label("Up 1 octave", systemImage: "arrow.up") }
+                Button { nudgePercent(-0.03) } label: { Label("A bit lower", systemImage: "arrow.down") }
+                Button { nudgePercent(0.03) } label: { Label("A bit higher", systemImage: "arrow.up") }
+                Divider().frame(height: 18)
+                Button { jumpOctave(-1) } label: { Label("Octave down", systemImage: "arrow.down.to.line") }
+                Button { jumpOctave(1) } label: { Label("Octave up", systemImage: "arrow.up.to.line") }
                 Spacer()
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+            matchCaptureDisclosure
         }
     }
 
-    private var matchCaptureRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Your matches")
-                    .font(.callout.weight(.semibold))
-                Spacer()
-                Button { recordMatch() } label: {
-                    Label("Capture match \(matches.count + 1)", systemImage: "plus.circle")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                if !matches.isEmpty {
-                    Button(role: .destructive) { matches.removeAll() } label: {
-                        Label("Clear", systemImage: "trash")
+    /// Optional averaging aid — capture the pitch a few times and use the
+    /// average. Collapsed by default so it doesn't crowd the primary flow.
+    private var matchCaptureDisclosure: some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Button { recordMatch() } label: {
+                        Label("Capture match \(matches.count + 1)", systemImage: "plus.circle")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.borderedProminent)
                     .controlSize(.small)
+                    if !matches.isEmpty {
+                        Button(role: .destructive) { matches.removeAll() } label: {
+                            Label("Clear", systemImage: "trash")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                    Spacer()
+                }
+                if matches.isEmpty {
+                    Text("Capture the same pitch a few times to see a suggested average and range.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    matchChips
+                    matchSummary
                 }
             }
-
-            if matches.isEmpty {
-                Text("No matches yet. Capture the same pitch a few times to see a suggested average and range.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                matchChips
-                matchSummary
-            }
+            .padding(.top, 8)
+        } label: {
+            Label("Average a few matches (optional)", systemImage: "list.number")
+                .font(.subheadline.weight(.medium))
         }
     }
 
@@ -644,9 +304,7 @@ struct ToneFinderView: View {
                     .font(.caption.monospaced())
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(
-                        Capsule().fill(Color.secondary.opacity(0.12))
-                    )
+                    .background(Capsule().fill(Color.secondary.opacity(0.12)))
             }
             Spacer()
         }
@@ -668,27 +326,422 @@ struct ToneFinderView: View {
                     .foregroundStyle(.secondary)
             }
             Button {
-                let target = Int(avg.rounded())
-                generator.targetFrequencyHz = Double(target)
-                applyNotch(frequency: Double(target), target: .both)
+                generator.targetFrequencyHz = avg.rounded()
             } label: {
-                Label("Use average as notch (both ears)", systemImage: "bandage")
+                Label("Move tone to the average", systemImage: "arrow.right.circle")
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
         }
     }
 
-    private func recordMatch() {
-        // Cap at a small, sane number — more than a handful adds noise, not
-        // signal, for a subjective match.
-        guard matches.count < 6 else { return }
-        matches.append(currentHz.rounded())
+    // MARK: - Step 4 — use this pitch
+
+    private var step4Use: some View {
+        stepCard(4, "Use this pitch") {
+            HStack(spacing: 12) {
+                useThisPitchButton
+                Spacer()
+                if let confirmed = lastConfirmedFrequency {
+                    Label("Notch set to \(Int(confirmed)) Hz", systemImage: "checkmark.circle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.green)
+                }
+            }
+            Text("Places the notch filter at \(Int(currentHz.rounded())) Hz and turns it on. You can fine-tune it in the notch below.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// "Use this pitch" — single button for the linked notch, a Left/Right/Both
+    /// menu when per-ear notches are on.
+    @ViewBuilder private var useThisPitchButton: some View {
+        let profile = audioState.activeProfile(in: profileStore)
+        if profile?.separateNotch == true {
+            Menu {
+                Button("Left ear notch")  { setAsNotch(.left) }
+                Button("Right ear notch") { setAsNotch(.right) }
+                Divider()
+                Button("Both notches")    { setAsNotch(.both) }
+            } label: {
+                Label("Use this pitch", systemImage: "bandage")
+            }
+            .menuStyle(.borderedButton)
+            .controlSize(.large)
+            .disabled(profile == nil)
+        } else {
+            Button {
+                setAsNotch(.both)
+            } label: {
+                Label("Use this pitch", systemImage: "bandage")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(profile == nil)
+        }
+    }
+
+    // MARK: - Notch configuration
+
+    @ViewBuilder private var notchSection: some View {
+        if let profile = audioState.activeProfile(in: profileStore) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Label("Notch filter", systemImage: "bandage")
+                        .font(.title3.weight(.semibold))
+                    Spacer()
+                }
+                CorrectionConflictChip(crossLink: .audiogram)
+
+                if profile.separateNotch {
+                    // Per-ear (advanced): show both full controls + preview.
+                    NotchPreviewView(
+                        leftNotch: profile.leftNotch,
+                        rightNotch: profile.rightNotch,
+                        separate: true,
+                        leftColor: audioState.preferences.leftEarColor,
+                        rightColor: audioState.preferences.rightEarColor
+                    )
+                    separateToggleRow(profile)
+                    NotchControlView(notch: leftNotchBinding(for: profile), title: "Left ear", symbol: "ear")
+                    NotchControlView(notch: rightNotchBinding(for: profile), title: "Right ear", symbol: "ear")
+                } else if profile.leftNotch.enabled {
+                    // On (linked): preview + full controls.
+                    NotchPreviewView(
+                        leftNotch: profile.leftNotch,
+                        rightNotch: profile.rightNotch,
+                        separate: false,
+                        leftColor: audioState.preferences.leftEarColor,
+                        rightColor: audioState.preferences.rightEarColor
+                    )
+                    finderPitchHint(profile)
+                    separateToggleRow(profile)
+                    NotchControlView(notch: linkedNotchBinding(for: profile))
+                } else {
+                    // Off (linked): concise preview + enable, not a greyed form.
+                    notchOffCard(profile)
+                    separateToggleRow(profile)
+                }
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(highlightNotch ? Color.accentColor.opacity(0.10) : Color.secondary.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(highlightNotch ? Color.accentColor : .clear, lineWidth: 2)
+            )
+            .animation(.easeInOut(duration: 0.3), value: highlightNotch)
+        }
+    }
+
+    /// Compact card shown when the (linked) notch is off — a one-line preview
+    /// of what it would do plus a single enable button at the finder's pitch,
+    /// so the finder and notch stay visibly connected.
+    private func notchOffCard(_ profile: HearingProfile) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "bandage")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Notch is off")
+                    .font(.callout.weight(.semibold))
+                Text("Turn it on to gently reduce a narrow band around \(Int(currentHz.rounded())) Hz — the pitch above.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Button {
+                setAsNotch(.both)
+            } label: {
+                Label("Enable at \(Int(currentHz.rounded())) Hz", systemImage: "power")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
+    /// When the notch is on but the finder has since moved, offer to snap the
+    /// notch to the current tone — so "1,000 Hz above, notch at 4,000" never
+    /// looks broken.
+    @ViewBuilder private func finderPitchHint(_ profile: HearingProfile) -> some View {
+        let notchHz = profile.leftNotch.frequencyHz
+        if abs(notchHz - currentHz) >= 1 {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.up.circle")
+                    .foregroundStyle(.tint)
+                Text("Tone Finder is at \(Int(currentHz.rounded())) Hz; the notch is at \(Int(notchHz.rounded())) Hz.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Use this pitch") { setAsNotch(.both) }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.accentColor.opacity(0.06)))
+        }
+    }
+
+    @ViewBuilder private func separateToggleRow(_ profile: HearingProfile) -> some View {
+        HStack {
+            Toggle("Separate L + R notch", isOn: Binding(
+                get: { profile.separateNotch },
+                set: { newValue in
+                    var updated = profile
+                    updated.separateNotch = newValue
+                    if !newValue { updated.rightNotch = updated.leftNotch }
+                    try? profileStore.save(updated)
+                }
+            ))
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            Spacer()
+            Text("Useful for unilateral tinnitus or asymmetric pitch.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Symptom check-in (tracking, moved to its own sheet)
+
+    private var checkInFooter: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "chart.line.uptrend.xyaxis")
+                .foregroundStyle(.secondary)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Tinnitus check-in")
+                    .font(.callout.weight(.semibold))
+                Text("Track how bothersome it feels over time. This doesn't change the notch.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Button {
+                showCheckIn = true
+            } label: {
+                Label("Open check-in", systemImage: "square.and.pencil")
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.05)))
+    }
+
+    private var checkInSheet: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Tinnitus check-in")
+                    .font(.title3.weight(.semibold))
+                Spacer()
+                Button("Done") { showCheckIn = false }
+                    .keyboardShortcut(.defaultAction)
+            }
+            TinnitusCheckInView(store: audioState.tinnitusCheckIns)
+        }
+        .padding(24)
+        .frame(minWidth: 460, minHeight: 380)
+    }
+
+    // MARK: - Disclaimer
+
+    private var disclaimer: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("When a notch may help", systemImage: "checkmark.circle")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                bestForRow(symbol: "checkmark", tint: .green, lead: "Best for",
+                           text: "steady, tone-like ringing at a pitch you can find again.")
+                bestForRow(symbol: "minus", tint: .secondary, lead: "Less suited",
+                           text: "hissing, roaring, clicking, pulsing, or tinnitus that changes pitch often.")
+            }
+
+            Divider()
+
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "stethoscope")
+                    .foregroundStyle(.orange)
+                    .font(.title3)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("See a hearing professional")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Pulsatile (heartbeat-like) tinnitus, a sudden change in one ear, new hearing loss, dizziness, or pain deserve medical evaluation — not more audio tweaking.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color.orange.opacity(0.10)))
+
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Non-clinical", systemImage: "info.circle")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text("SherlockEQ doesn't diagnose, measure, or treat tinnitus. The notch simply reduces audio energy around the pitch you selected — a way to explore whether listening feels less fatiguing. Evidence for notched-sound approaches is mixed, and hearing-aid evaluation or CBT have stronger support for persistent, bothersome tinnitus.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.05)))
+    }
+
+    @ViewBuilder
+    private func bestForRow(symbol: String, tint: Color, lead: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: symbol)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(tint)
+                .frame(width: 16)
+            (Text(lead + ": ").font(.callout.weight(.semibold))
+                + Text(text).font(.callout))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - Step scaffold
+
+    @ViewBuilder
+    private func stepCard<Content: View>(_ number: Int, _ title: String, @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Text("\(number)")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 22, height: 22)
+                    .background(Circle().fill(Color.accentColor))
+                Text(title)
+                    .font(.headline)
+            }
+            content()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.06)))
+    }
+
+    // MARK: - Generator + notch plumbing
+
+    private var generator: SineToneGenerator { audioState.audio.toneGenerator }
+    private var currentHz: Double { generator.targetFrequencyHz }
+
+    private func linkedNotchBinding(for profile: HearingProfile) -> Binding<TinnitusNotch> {
+        Binding(
+            get: { profile.leftNotch },
+            set: { newValue in
+                var updated = profile
+                updated.leftNotch = newValue
+                updated.rightNotch = newValue
+                try? profileStore.save(updated)
+            }
+        )
+    }
+
+    private func leftNotchBinding(for profile: HearingProfile) -> Binding<TinnitusNotch> {
+        Binding(
+            get: { profile.leftNotch },
+            set: { newValue in
+                var updated = profile
+                updated.leftNotch = newValue
+                try? profileStore.save(updated)
+            }
+        )
+    }
+
+    private func rightNotchBinding(for profile: HearingProfile) -> Binding<TinnitusNotch> {
+        Binding(
+            get: { profile.rightNotch },
+            set: { newValue in
+                var updated = profile
+                updated.rightNotch = newValue
+                try? profileStore.save(updated)
+            }
+        )
+    }
+
+    private enum NotchTarget { case left, right, both }
+
+    private func setAsNotch(_ target: NotchTarget) {
+        applyNotch(frequency: currentHz, target: target)
+    }
+
+    private func applyNotch(frequency: Double, target: NotchTarget) {
+        guard var profile = audioState.activeProfile(in: profileStore) else { return }
+        switch target {
+        case .left:
+            profile.leftNotch.frequencyHz = frequency
+            profile.leftNotch.enabled = true
+        case .right:
+            profile.rightNotch.frequencyHz = frequency
+            profile.rightNotch.enabled = true
+        case .both:
+            profile.leftNotch.frequencyHz = frequency
+            profile.leftNotch.enabled = true
+            profile.rightNotch.frequencyHz = frequency
+            profile.rightNotch.enabled = true
+        }
+        try? profileStore.save(profile)
+        lastConfirmedFrequency = frequency
+    }
+
+    // MARK: - Helpers
+
+    private var formattedFrequency: String { Int(currentHz.rounded()).formatted() }
+
+    private var amplitudeLabel: String {
+        let amp = Double(generator.amplitude)
+        let rms = amp / 2.squareRoot()
+        let dbfs = 20 * log10(max(rms, 1e-6))
+        return String(format: "%.0f dBFS", dbfs)
+    }
+
+    private struct NoteApprox { let label: String; let detail: String }
+
+    private var noteApproximation: NoteApprox {
+        let semis = 12 * log2(currentHz / 440)
+        let nearest = Int(semis.rounded())
+        let cents = (semis - Double(nearest)) * 100
+        let noteNames = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"]
+        let nameIdx = ((nearest % 12) + 12) % 12
+        let absSemis = nearest + 9
+        let octave = absSemis >= 0 ? absSemis / 12 : (absSemis - 11) / 12
+        let centsString = String(format: "%+d¢", Int(cents.rounded()))
+        return NoteApprox(label: "\(noteNames[nameIdx])\(octave)", detail: centsString)
+    }
+
+    private var majorTicks: [Double] { [1000, 2000, 4000, 8000, 16000] }
+    private func formatTick(_ hz: Double) -> String { "\(Int(hz / 1000))k" }
+    private var freqAxis: LogFreqAxis { LogFreqAxis(minHz: minHz, maxHz: maxHz) }
+    private func xFor(hz: Double, width: CGFloat) -> CGFloat { freqAxis.x(forHz: hz, width: width) }
+    private func hzFor(x: CGFloat, width: CGFloat) -> Double { freqAxis.hz(forX: x, width: width) }
+
+    private func nudge(_ delta: Int) {
+        generator.targetFrequencyHz = max(minHz, min(maxHz, generator.targetFrequencyHz + Double(delta)))
+    }
+
+    private func nudgePercent(_ fraction: Double) {
+        generator.targetFrequencyHz = max(minHz, min(maxHz, generator.targetFrequencyHz * (1 + fraction)))
     }
 
     private func jumpOctave(_ direction: Int) {
         let factor = direction >= 0 ? 2.0 : 0.5
-        let target = generator.targetFrequencyHz * factor
-        generator.targetFrequencyHz = max(minHz, min(maxHz, target))
+        generator.targetFrequencyHz = max(minHz, min(maxHz, generator.targetFrequencyHz * factor))
+    }
+
+    private func recordMatch() {
+        guard matches.count < 6 else { return }
+        matches.append(currentHz.rounded())
     }
 }

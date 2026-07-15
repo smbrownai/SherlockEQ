@@ -1,16 +1,25 @@
 import SwiftUI
 
-/// Detail surface for safe-listening (spec §8.3). Five blocks:
-///   1. Live level meter — A-weighted dBA estimate, color-zoned.
-///   2. Today's dose — big bar + percentage + remaining minutes.
-///   3. Settings — ceiling (per active profile), warning threshold,
-///      notification toggle, manual reset.
-///   4. Educational disclaimer — what this estimate is and isn't.
-///   5. 7-day history (placeholder — persistence lands in a focused
-///      follow-up session).
+/// Safe Listening detail surface. The top answers the two questions that
+/// matter minute to minute — **how loud is it now** and **how much have I
+/// used today** — with a calibration-confidence badge so the precision never
+/// implies more measurement certainty than exists. Calibration itself (a
+/// setup task, not a daily one) lives in its own sheet; quiet-threshold,
+/// notifications, and the dose reset sit under Advanced.
 struct SafeListeningView: View {
     @EnvironmentObject private var state: AudioState
     @EnvironmentObject private var profileStore: ProfileStore
+
+    @State private var showCalibration = false
+    @State private var confirmingReset = false
+
+    /// Below this dBA the level reading is treated as "no audio" rather than a
+    /// real quiet reading — matches the meter's own floor.
+    private let audioFloorDBA: Double = 31
+
+    private var isReceivingAudio: Bool {
+        state.safeListening.currentLevelDBA >= audioFloorDBA
+    }
 
     var body: some View {
         ScrollView {
@@ -30,9 +39,17 @@ struct SafeListeningView: View {
                 HelpContextButton(.safetyLimits, label: "safety, limits, and listening responsibility")
             }
         }
-        // Safety: if the user navigates away while the calibration tone is
-        // playing, kill it so they don't return to find a 1 kHz tone still
-        // looping. Toggling the same flag is cheap if it's already off.
+        .sheet(isPresented: $showCalibration) { calibrationSheet }
+        .confirmationDialog(
+            "Reset today's dose to 0 %?",
+            isPresented: $confirmingReset,
+            titleVisibility: .visible
+        ) {
+            Button("Reset dose", role: .destructive) { state.safeListening.resetDose() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This clears the exposure counted so far today. It can't be undone.")
+        }
         .onDisappear {
             if state.eqChain.calibrationToneEnabled {
                 state.eqChain.calibrationToneEnabled = false
@@ -40,20 +57,80 @@ struct SafeListeningView: View {
         }
     }
 
-    // MARK: - Cards
+    // MARK: - Q1: How loud is it now?
 
     @ViewBuilder private var liveLevelCard: some View {
         card {
-            cardHeader("Live level", systemImage: "waveform")
-            LevelMeterView(levelDBA: state.safeListening.currentLevelDBA)
+            HStack {
+                cardHeader("How loud is it now?", systemImage: "waveform")
+                Spacer()
+                calibrationBadge
+            }
+            LevelMeterView(
+                levelDBA: state.safeListening.currentLevelDBA,
+                isReceivingAudio: isReceivingAudio
+            )
         }
     }
 
+    /// Not calibrated / Approximate / Calibrated — placed by the live value so
+    /// the reader knows how much to trust the number.
+    private var calibrationBadge: some View {
+        let c = calibrationConfidence
+        return Label(c.label, systemImage: c.symbol)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(c.color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(c.color.opacity(0.12)))
+            .help(c.help)
+    }
+
+    private enum CalibrationConfidence {
+        case notCalibrated, approximate, calibrated
+        var label: String {
+            switch self {
+            case .notCalibrated: return "Not calibrated"
+            case .approximate:   return "Approximate"
+            case .calibrated:    return "Calibrated"
+            }
+        }
+        var symbol: String {
+            switch self {
+            case .notCalibrated: return "questionmark.circle"
+            case .approximate:   return "circle.dotted"
+            case .calibrated:    return "checkmark.seal.fill"
+            }
+        }
+        var color: Color {
+            switch self {
+            case .notCalibrated: return .secondary
+            case .approximate:   return .orange
+            case .calibrated:    return .green
+            }
+        }
+        var help: String {
+            switch self {
+            case .notCalibrated: return "Levels use a rough default. Calibrate for accurate dBA."
+            case .approximate:   return "Calibrated, but current conditions (volume unreadable or a different device) reduce confidence."
+            case .calibrated:    return "Calibrated and tracking your system volume."
+            }
+        }
+    }
+
+    private var calibrationConfidence: CalibrationConfidence {
+        guard state.hasUserCalibration else { return .notCalibrated }
+        if case .active = state.volumeTrackingStatus { return .calibrated }
+        return .approximate
+    }
+
+    // MARK: - Q2: How much have I used today?
+
     @ViewBuilder private var doseCard: some View {
         card {
-            cardHeader("Today's dose", systemImage: "shield.lefthalf.filled")
+            cardHeader("Today's exposure", systemImage: "shield.lefthalf.filled")
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(String(format: "%.1f%%", state.safeListening.sessionDose * 100))
+                Text(String(format: "%.0f%%", state.safeListening.sessionDose * 100))
                     .font(.system(size: 44, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(doseColor)
@@ -64,15 +141,7 @@ struct SafeListeningView: View {
                          "Under safe limit")
                         .font(.callout.weight(.medium))
                         .foregroundStyle(doseColor)
-                    if let mins = state.safeListening.remainingMinutes {
-                        Text(formatRemaining(mins))
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("Level under threshold")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    remainingReadout
                 }
             }
 
@@ -83,14 +152,8 @@ struct SafeListeningView: View {
                         .fill(doseColor)
                         .frame(width: max(0, geo.size.width * min(1, state.safeListening.sessionDose)))
                         .animation(.easeOut(duration: 0.2), value: state.safeListening.sessionDose)
-                    Rectangle()
-                        .fill(Color.orange.opacity(0.3))
-                        .frame(width: 1)
-                        .offset(x: geo.size.width * 0.8)
-                    Rectangle()
-                        .fill(Color.red.opacity(0.4))
-                        .frame(width: 1)
-                        .offset(x: geo.size.width)
+                    Rectangle().fill(Color.orange.opacity(0.3)).frame(width: 1).offset(x: geo.size.width * 0.8)
+                    Rectangle().fill(Color.red.opacity(0.4)).frame(width: 1).offset(x: geo.size.width)
                 }
             }
             .frame(height: 14)
@@ -105,13 +168,33 @@ struct SafeListeningView: View {
         }
     }
 
+    /// Remaining safe time is the actionable figure — but only meaningful once
+    /// calibrated. Otherwise defer to the dose percentage above.
+    @ViewBuilder private var remainingReadout: some View {
+        if state.hasUserCalibration, let mins = state.safeListening.remainingMinutes {
+            Text(formatRemaining(mins))
+                .font(.callout.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.secondary)
+        } else if state.hasUserCalibration {
+            Text("Level under threshold")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else {
+            Text("Calibrate to see time left")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Settings
+
     @ViewBuilder private var settingsCard: some View {
         card {
             cardHeader("Settings", systemImage: "slider.horizontal.3")
 
             if let profile = state.activeProfile(in: profileStore) {
                 sliderRow(
-                    "Ceiling (active profile)",
+                    "Listening limit (active profile)",
                     value: profile.safeListeningCeilingDB,
                     range: 70...100,
                     format: { String(format: "%.0f dBA", $0) },
@@ -121,68 +204,121 @@ struct SafeListeningView: View {
                         try? profileStore.save(copy)
                     }
                 )
-                Text("Ceiling lives on each profile — switching profiles can change this.")
+                Text("The level SherlockEQ treats as your daily limit. It lives on each profile — switching profiles can change it.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             } else {
-                Text("No active profile — make one active in the Profiles section to set a ceiling.")
+                Text("No active profile — make one active in the Profiles section to set a listening limit.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
 
             Divider()
 
-            sliderRow(
-                "Quiet threshold",
-                value: state.safeListening.quietThresholdDBA,
-                range: 30...70,
-                format: { String(format: "%.0f dBA", $0) },
-                set: { state.safeListening.quietThresholdDBA = $0 }
-            )
-            Text("Below this level, SherlockEQ stops counting remaining time and treats sustained quiet as a break.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            calibrationRow
 
             Divider()
 
-            sliderRow(
-                "Playback calibration",
-                value: state.calibrationOffsetDBA,
-                range: 80...115,
-                format: { String(format: "%.0f dB SPL @ 0 dBFS", $0) },
-                set: { state.calibrationOffsetDBA = $0 }
-            )
-            Text("The dB SPL produced at your ear when a full-scale (0 dBFS) digital sample plays through your current output device, at the volume you calibrate at. Used to convert dBFS into dBA for dose tracking AND to anchor the Loudness lens's safety overlay to real SPL. SherlockEQ records the system volume when you set this, then tracks later volume changes into the estimate automatically. Default 100 is a rough estimate for consumer headphones at moderate volume — for accurate values use the reference tone below.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            advancedDisclosure
+        }
+    }
 
-            volumeTrackingRow
-
-            calibrationToneRow
-
-            Divider()
-
-            Toggle("Send notifications at 80 % and 100 %", isOn: Binding(
-                get: { state.safeListening.notificationsEnabled },
-                set: { state.safeListening.notificationsEnabled = $0 }
-            ))
-            .toggleStyle(.switch)
-
-            HStack {
-                Spacer()
-                Button(role: .destructive) {
-                    state.safeListening.resetDose()
-                } label: {
-                    Label("Reset today's dose", systemImage: "arrow.counterclockwise")
-                }
+    /// Short calibration entry point — the long explanation lives in the sheet.
+    private var calibrationRow: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Calibrate for more accurate level estimates")
+                    .font(.callout.weight(.medium))
+                Text("Requires an SPL meter or supported phone app.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button {
+                showCalibration = true
+            } label: {
+                Label(state.hasUserCalibration ? "Recalibrate…" : "Calibrate…", systemImage: "target")
             }
         }
     }
 
-    /// Live volume-tracking status under the calibration slider — tells the
-    /// user whether the estimate is following the system volume right now,
-    /// and why not when it can't (see `volume-aware-dose.md` §7). Symbol +
-    /// text together (never color alone) per the colorblind convention.
+    private var advancedDisclosure: some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 12) {
+                sliderRow(
+                    "Quiet threshold",
+                    value: state.safeListening.quietThresholdDBA,
+                    range: 30...70,
+                    format: { String(format: "%.0f dBA", $0) },
+                    set: { state.safeListening.quietThresholdDBA = $0 }
+                )
+                Text("Below this level, SherlockEQ stops counting remaining time and treats sustained quiet as a break.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Toggle("Send notifications at 80 % and 100 %", isOn: Binding(
+                    get: { state.safeListening.notificationsEnabled },
+                    set: { state.safeListening.notificationsEnabled = $0 }
+                ))
+                .toggleStyle(.switch)
+
+                HStack {
+                    Button {
+                        confirmingReset = true
+                    } label: {
+                        Label("Reset today's dose", systemImage: "arrow.counterclockwise")
+                    }
+                    .controlSize(.small)
+                    Spacer()
+                }
+            }
+            .padding(.top, 8)
+        } label: {
+            Text("Advanced")
+                .font(.subheadline.weight(.medium))
+        }
+    }
+
+    // MARK: - Calibration sheet
+
+    @State private var meterReadingText: String = ""
+
+    private var calibrationSheet: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    Text("Calibrate playback level")
+                        .font(.title3.weight(.semibold))
+                    Spacer()
+                    Button("Done") { showCalibration = false }
+                        .keyboardShortcut(.defaultAction)
+                }
+
+                Text("Match SherlockEQ's dBA estimate to a real measurement so dose tracking and the safety overlay reflect your actual output. You'll need an SPL meter or a supported phone app.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                sliderRow(
+                    "Playback calibration",
+                    value: state.calibrationOffsetDBA,
+                    range: 80...115,
+                    format: { String(format: "%.0f dB SPL @ 0 dBFS", $0) },
+                    set: { state.calibrationOffsetDBA = $0 }
+                )
+
+                volumeTrackingRow
+
+                Divider()
+
+                calibrationToneRow
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(minWidth: 520, minHeight: 460)
+    }
+
     @ViewBuilder private var volumeTrackingRow: some View {
         let status = state.volumeTrackingStatus
         Label {
@@ -222,12 +358,6 @@ struct SafeListeningView: View {
         }
     }
 
-    /// Local state for the meter-reading text field — kept here instead of
-    /// pushed into AudioState because it's a transient UI value, not a
-    /// persisted setting. The persisted value is `calibrationOffsetDBA`,
-    /// which we recompute from this reading + the tone's known dBFS level.
-    @State private var meterReadingText: String = ""
-
     @ViewBuilder private var calibrationToneRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
@@ -242,11 +372,9 @@ struct SafeListeningView: View {
                 .buttonStyle(.bordered)
                 .tint(state.eqChain.calibrationToneEnabled ? .red : .accentColor)
 
-                Text(String(format: "Tone level: %.0f dBFS",
-                            Double(state.calibrationToneLevelDBFS)))
+                Text(String(format: "Tone level: %.0f dBFS", Double(state.calibrationToneLevelDBFS)))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
-
                 Spacer()
             }
 
@@ -258,26 +386,20 @@ struct SafeListeningView: View {
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 90)
                     .monospacedDigit()
-                Text("dBA")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Button("Apply") {
-                    applyMeterReading()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(parsedMeterReading == nil)
+                Text("dBA").font(.callout).foregroundStyle(.secondary)
+                Button("Apply") { applyMeterReading() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(parsedMeterReading == nil)
                 Spacer()
             }
 
-            Text("Play the tone with your usual output device at your usual volume. Hold a phone-based SPL meter (NIOSH SLM is recommended on iPhone — it's been NIOSH-validated within ±2 dB) at your listening position. Type the dBA reading and tap Apply — the slider above will jump to the matching calibration. For headphones, cup the earcup over the phone mic; results are within a few dB. Don't forget to stop the tone before measuring music!")
+            Text("Play the tone with your usual output device at your usual volume. Hold a phone-based SPL meter (NIOSH SLM is recommended on iPhone — NIOSH-validated within ±2 dB) at your listening position. Type the dBA reading and tap Apply — the slider above jumps to the matching calibration. For headphones, cup the earcup over the phone mic; results are within a few dB. Stop the tone before measuring music.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    /// `nil` when the field is empty or unparseable. Constrained to a
-    /// sensible dBA range (40–130) so junk input doesn't slide through.
     private var parsedMeterReading: Double? {
         let trimmed = meterReadingText.trimmingCharacters(in: .whitespaces)
         guard let v = Double(trimmed), v >= 40, v <= 130 else { return nil }
@@ -286,16 +408,12 @@ struct SafeListeningView: View {
 
     private func applyMeterReading() {
         guard let reading = parsedMeterReading else { return }
-        // The tone plays at `calibrationToneLevelDBFS` (negative dBFS). The
-        // slider stores "dB SPL at 0 dBFS." So we ADD the tone's absolute
-        // dBFS level to the meter reading: a tone at -12 dBFS measured at
-        // 78 dBA implies 90 dB SPL at 0 dBFS.
         let toneOffset = Double(abs(state.calibrationToneLevelDBFS))
         let inferred = reading + toneOffset
-        // Clamp to the slider's published range so we never silently push
-        // a value the slider would reject.
         state.calibrationOffsetDBA = min(115, max(80, inferred))
     }
+
+    // MARK: - History + disclaimer
 
     @ViewBuilder private var historyCard: some View {
         card {
@@ -352,12 +470,12 @@ struct SafeListeningView: View {
     ) -> some View {
         HStack {
             Text(label)
-                .frame(width: 200, alignment: .leading)
+                .frame(width: 220, alignment: .leading)
             Slider(value: Binding(get: { value }, set: set), in: range)
                 .controlSize(.small)
             Text(format(value))
                 .font(.callout.monospaced())
-                .frame(width: 72, alignment: .trailing)
+                .frame(width: 128, alignment: .trailing)
         }
     }
 
@@ -369,15 +487,13 @@ struct SafeListeningView: View {
     }
 
     private func formatRemaining(_ minutes: Double) -> String {
-        // Past 24 hours the exact number stops being meaningful — the
-        // user has all day at this level. Collapse to a plain label.
         if minutes >= 24 * 60 { return "All day remaining" }
         if minutes >= 60 {
             let h = Int(minutes) / 60
             let m = Int(minutes) % 60
-            return "\(h)h \(m)m remaining"
+            return "\(h)h \(m)m left"
         }
-        return "\(Int(minutes))m remaining"
+        return "\(Int(minutes))m left"
     }
 
     private var doseColor: Color {
