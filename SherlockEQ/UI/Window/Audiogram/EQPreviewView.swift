@@ -50,7 +50,7 @@ struct EQPreviewView: View {
     private var header: some View {
         HStack {
             Text("EQ preview").font(.subheadline.weight(.semibold))
-            Text("— combined across all tabs")
+            Text("— your full result, both ears")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()

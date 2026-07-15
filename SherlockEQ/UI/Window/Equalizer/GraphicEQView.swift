@@ -31,6 +31,11 @@ struct GraphicEQView: View {
     @AppStorage("sherlockeq.layer.audiogram") private var showAudiogramLayer = false
     @AppStorage("sherlockeq.layer.safety")    private var showSafetyLayer    = false
 
+    /// Perceptual "tone guide" captions under each band (Rumble, Bass,
+    /// Warmth, …). On by default — they're what make the surface
+    /// approachable rather than a test panel; power users can hide them.
+    @AppStorage("sherlockeq.graphic.toneGuide") private var showToneGuide = true
+
     var body: some View {
         if let profile = audioState.activeProfile(in: profileStore) {
             content(profile)
@@ -52,7 +57,7 @@ struct GraphicEQView: View {
         let rightCorrection = correction.right
         let hasAudiogram = !leftCorrection.isEmpty || !rightCorrection.isEmpty
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 18) {
                 topBar
                 CanvasLayerChipStrip(
                     showInputSpectrum: $showInputLayer,
@@ -69,9 +74,12 @@ struct GraphicEQView: View {
                     earColor: audioState.preferences.leftEarColor
                 )
                 previewCanvas(profile, leftCorrection: leftCorrection, rightCorrection: rightCorrection)
-                // Between curve and sliders (spec §1.4): the row explains
-                // that the curve ABOVE includes filters the sliders BELOW
-                // can't represent — its copy depends on this position.
+                // The layers beneath the graphic bands that the curve above
+                // also includes. Correction layer (audiogram + headphone) is
+                // an explicit, plain-language note; the off-grid-filters row
+                // (spec §1.4) sits between curve and sliders because its copy
+                // references the curve ABOVE and the sliders BELOW.
+                correctionLayerNote(profile)
                 otherFiltersRow(profile)
                 slidersRow(profile)
                 resetButton(profile)
@@ -82,9 +90,17 @@ struct GraphicEQView: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 12) {
-            presetMenu
+        HStack(spacing: 10) {
+            presetButton
+            toneFlavorButton
             Spacer()
+            Toggle(isOn: $showToneGuide) {
+                Label("Tone guide", systemImage: "text.below.photo")
+            }
+            .toggleStyle(.button)
+            .controlSize(.large)
+            .help("Show what each band affects — Rumble, Bass, Warmth, Voice body, Clarity, Sibilance, Air.")
+            .accessibilityLabel("Tone guide labels")
         }
     }
 
@@ -103,11 +119,11 @@ struct GraphicEQView: View {
     }
 
     /// The purpose-preset selector (spec §3.2): a small outcome-named set —
-    /// what the user wants to improve, not a genre or a skill level — with
-    /// the genre curves demoted to a clearly-labeled "Tone flavors" submenu.
-    /// The label reflects the current state, including "Custom" whenever the
-    /// sliders diverge from every curve.
-    private var presetMenu: some View {
+    /// what the user wants to improve, not a genre or a skill level. Rendered
+    /// as a real bordered menu button (previously a borderless capsule that
+    /// read as a link / status). The label reflects the current state,
+    /// including "Custom" whenever the sliders diverge from every curve.
+    private var presetButton: some View {
         Menu {
             ForEach(PresetCurve.allCases) { curve in
                 Button {
@@ -122,54 +138,50 @@ struct GraphicEQView: View {
                 }
                 .accessibilityLabel("\(curve.label) preset. \(curve.tagline)")
             }
-            Divider()
-            Menu("Tone flavors") {
-                Section("Taste presets — not hearing correction. They stack with your profile's correction.") {
-                    ForEach(ToneFlavorPreset.allCases) { preset in
-                        Button {
-                            apply(preset)
-                        } label: {
-                            VStack(alignment: .leading) {
-                                Label(preset.label, systemImage: preset.symbol)
-                                Text(preset.tagline)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .accessibilityLabel("\(preset.label) tone flavor. \(preset.tagline)")
-                    }
-                }
-            }
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: currentCurve?.symbol ?? "slider.horizontal.3")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.tint)
-                Text("Preset: \(currentCurve?.label ?? "Custom")")
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(.tint)
-                Image(systemName: "chevron.down")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.tint)
-            }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(Color.accentColor.opacity(0.16))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 7)
-                    .stroke(Color.accentColor.opacity(0.55), lineWidth: 1)
-            )
-            .contentShape(Rectangle())
+            Label("Preset: \(currentCurve?.label ?? "Custom")",
+                  systemImage: currentCurve?.symbol ?? "slider.horizontal.3")
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
+        .menuStyle(.button)
+        .buttonStyle(.bordered)
+        .controlSize(.large)
         .fixedSize()
         .help("Outcome presets for the graphic bands — pick what you want to improve.")
         .accessibilityLabel("Graphic EQ preset")
         .accessibilityValue(currentCurve?.label ?? "Custom")
+    }
+
+    /// Genre / taste curves, as their OWN top-level menu button. Previously a
+    /// nested submenu inside the preset menu — SwiftUI's nested `Menu` on
+    /// macOS flashed open then auto-dismissed after ~1 s, so the flavors were
+    /// effectively unreachable. A sibling button sidesteps the nesting bug
+    /// entirely and reads as clearly clickable.
+    private var toneFlavorButton: some View {
+        Menu {
+            Section("Taste presets — not hearing correction. They stack with your profile's correction.") {
+                ForEach(ToneFlavorPreset.allCases) { preset in
+                    Button {
+                        apply(preset)
+                    } label: {
+                        VStack(alignment: .leading) {
+                            Label(preset.label, systemImage: preset.symbol)
+                            Text(preset.tagline)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .accessibilityLabel("\(preset.label) tone flavor. \(preset.tagline)")
+                }
+            }
+        } label: {
+            Label("Tone flavors", systemImage: "guitars")
+        }
+        .menuStyle(.button)
+        .buttonStyle(.bordered)
+        .controlSize(.large)
+        .fixedSize()
+        .help("Genre and taste curves — a matter of preference, not hearing correction. They stack on top of your profile's correction.")
+        .accessibilityLabel("Tone flavor presets")
     }
 
     /// Apply a purpose preset: writes every slider on both ears AND the
@@ -199,6 +211,52 @@ struct GraphicEQView: View {
             }
         }
         try? profileStore.save(updated, actionName: "Apply \(preset.label)")
+    }
+
+    // MARK: - Correction layer note (audiogram + headphone)
+
+    /// Plain-language note that a correction layer is running *beneath* the
+    /// graphic bands — the audiogram-derived NAL-R prescription and/or the
+    /// headphone (AutoEQ) correction. Both are included in the curve above
+    /// but aren't editable on these sliders, so the surface says so outright
+    /// instead of leaving the user to wonder why the result differs from the
+    /// bands. Informational only (no action) — editing lives on the Audiogram
+    /// screen and Profile Detail respectively.
+    @ViewBuilder private func correctionLayerNote(_ profile: HearingProfile) -> some View {
+        let hasAudiogram = !profile.leftEar.correctionBands.isEmpty
+            || !profile.rightEar.correctionBands.isEmpty
+        let hasHeadphone = !(profile.autoEQBands?.isEmpty ?? true)
+        if hasAudiogram || hasHeadphone {
+            let sources: [String] = {
+                var s: [String] = []
+                if hasAudiogram { s.append("Audiogram") }
+                if hasHeadphone { s.append("headphone correction") }
+                return s
+            }()
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(.tint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Additional correction is active")
+                        .font(.callout.weight(.semibold))
+                    Text("\(sources.joined(separator: " + ")) — included in the curve above, beneath your graphic bands.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.accentColor.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(Color.accentColor.opacity(0.30))
+            )
+            .accessibilityElement(children: .combine)
+        }
     }
 
     // MARK: - Other filters (the "nothing invisible" invariant)
@@ -333,15 +391,17 @@ struct GraphicEQView: View {
             showAdaptiveOverlay: profile.correctionMode == .adaptive
                 && !(profile.leftEar.correctionBands.isEmpty && profile.rightEar.correctionBands.isEmpty)
         )
-        .frame(height: 180)
+        // Taller graph (was 180) — the response curve is the surface's
+        // most legible readout, so give it room; slider travel shrank to
+        // compensate.
+        .frame(height: 230)
     }
 
     @ViewBuilder
     private func slidersRow(_ profile: HearingProfile) -> some View {
-        // Spacing 4 (was 6): twelve 60 pt columns + 11 gaps + row padding
-        // = 788 pt, which fits the detail column even at the minimum
-        // window width with the monitor sidebar visible and the nav
-        // sidebar dragged to its 300 pt maximum (~806 pt available).
+        // Twelve 62 pt columns + 11 gaps + row padding ≈ 812 pt, which fits
+        // the detail column at the minimum window width now that the monitor
+        // panel collapses by default (the nav sidebar is a fixed 240 pt).
         HStack(alignment: .top, spacing: 4) {
             ForEach(Array(Self.frequencies.enumerated()), id: \.offset) { _, freq in
                 bandColumn(profile: profile, frequency: freq)
@@ -354,10 +414,12 @@ struct GraphicEQView: View {
         )
     }
 
-    /// Fixed column width regardless of channel mode. Two narrow sliders
-    /// (28+4+28 = 60) or one centered wide slider both fit inside the same
-    /// envelope, so toggling Link doesn't reflow the whole row.
-    private static let columnWidth: CGFloat = 60
+    /// Fixed column width regardless of channel mode. Sized to hold the
+    /// enlarged frequency readout and the tone-guide caption ("Voice body",
+    /// "Sibilance") without either reflowing when Link toggles. The monitor
+    /// panel now collapses by default, so the detail column has room for the
+    /// wider grid.
+    private static let columnWidth: CGFloat = 62
 
     @ViewBuilder
     private func bandColumn(profile: HearingProfile, frequency: Double) -> some View {
@@ -390,14 +452,44 @@ struct GraphicEQView: View {
                     .frame(width: 26)
                 }
             }
-            .frame(width: Self.columnWidth, height: 220)
+            // Shorter travel (was 220) — frees vertical space for the
+            // enlarged graph and the tone-guide captions without losing
+            // usable slider resolution.
+            .frame(width: Self.columnWidth, height: 176)
 
             Text(formatFreq(frequency))
-                .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
+                .font(.callout.monospaced().weight(.medium))
+                .foregroundStyle(.primary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+            if showToneGuide {
+                Text(Self.perceptualLabel(forHz: frequency))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.75)
+                    .frame(height: 26)
+                    .accessibilityHidden(true)
+            }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// Perceptual role of each band — the "tone guide" (spec §Graphic EQ
+    /// polish). Grouped so adjacent bands in the same region share a word,
+    /// which reads as "this area is Bass" rather than 12 unrelated terms.
+    static func perceptualLabel(forHz hz: Double) -> String {
+        switch hz {
+        case ..<45:    return "Rumble"       // 31.5
+        case ..<200:   return "Bass"         // 63, 125
+        case ..<350:   return "Warmth"       // 250
+        case ..<1500:  return "Voice body"   // 500, 1k
+        case ..<3500:  return "Clarity"      // 2k, 3k
+        case ..<7000:  return "Sibilance"    // 4k, 6k
+        default:       return "Air"          // 8k, 16k
+        }
     }
 
     @ViewBuilder
@@ -408,28 +500,39 @@ struct GraphicEQView: View {
                     value: gainBinding(profile: profile, frequency: frequency, ear: .left),
                     range: -12...12,
                     tint: audioState.preferences.leftEarColor,
-                    accessibilityLabel: "\(formatFreq(frequency)) hertz, both ears, gain"
+                    accessibilityLabel: "\(formatFreq(frequency)) hertz, both ears, gain",
+                    valueFont: Self.chipFont,
+                    height: Self.chipHeight
                 )
-                .frame(width: 40)
+                .frame(width: 46)
             } else {
                 EQGainChip(
                     value: gainBinding(profile: profile, frequency: frequency, ear: .left),
                     range: -12...12,
                     tint: audioState.preferences.leftEarColor,
-                    accessibilityLabel: "\(formatFreq(frequency)) hertz, left ear, gain"
+                    accessibilityLabel: "\(formatFreq(frequency)) hertz, left ear, gain",
+                    valueFont: Self.chipFont,
+                    height: Self.chipHeight
                 )
-                .frame(width: 26)
+                .frame(width: 29)
                 EQGainChip(
                     value: gainBinding(profile: profile, frequency: frequency, ear: .right),
                     range: -12...12,
                     tint: audioState.preferences.rightEarColor,
-                    accessibilityLabel: "\(formatFreq(frequency)) hertz, right ear, gain"
+                    accessibilityLabel: "\(formatFreq(frequency)) hertz, right ear, gain",
+                    valueFont: Self.chipFont,
+                    height: Self.chipHeight
                 )
-                .frame(width: 26)
+                .frame(width: 29)
             }
         }
         .frame(width: Self.columnWidth)
     }
+
+    /// Larger gain readout than Expert's compact chip — this is the
+    /// approachable default surface, so the numbers read at a glance.
+    private static let chipFont: Font = .callout.monospaced().weight(.semibold)
+    private static let chipHeight: CGFloat = 22
 
     private typealias Ear = EQBandLookup.Ear
 
@@ -439,8 +542,9 @@ struct GraphicEQView: View {
             Button(role: .destructive) {
                 reset(profile)
             } label: {
-                Label("Flatten Graphic bands", systemImage: "arrow.counterclockwise")
+                Label("Reset to Flat", systemImage: "arrow.counterclockwise")
             }
+            .controlSize(.large)
         }
     }
 
