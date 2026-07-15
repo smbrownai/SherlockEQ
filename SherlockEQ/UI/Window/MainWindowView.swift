@@ -118,6 +118,12 @@ struct MainWindowView: View {
         // gutter — it opens as an inspector — so the minimum drops by its
         // former 240 pt; the ideal keeps room for the inspector open.
         .frame(minWidth: 1126, idealWidth: 1400, minHeight: 716, idealHeight: 800)
+        // Consolidated Health & Safety disclosure — presented at the window
+        // level so it's reachable identically from the sidebar item and every
+        // screen's compact disclosure chip (all set `audioState.showHealthSafety`).
+        .sheet(isPresented: $audioState.showHealthSafety) {
+            HealthSafetySheet()
+        }
         .linkUndoManagerToProfileStore()
         // Honor cross-window deep-link requests (e.g. the onboarding wizard's
         // "next steps" cards). `onAppear` catches an intent set before this

@@ -102,6 +102,16 @@ to your per-ear EQ chain — it does not change the tone generator.
 - It often **fluctuates** day to day, so a match today may not hold tomorrow.[^2]
 - Self-matching is approximate and prone to **octave confusion** (matching a tone one octave off).[^2]
 
+## When a notch may help
+
+A notch is **best for** steady, tone-like ringing at a pitch you can find again.
+It is **less suited** to hissing, roaring, clicking, pulsing, or tinnitus that
+changes pitch often. The notch simply reduces audio energy around the pitch you
+selected — a way to explore whether listening feels less fatiguing. It is **not
+a treatment** and does not remove tinnitus; evidence for notched-sound
+approaches is mixed, and hearing-aid evaluation or CBT have stronger support for
+persistent, bothersome tinnitus.
+
 ## Recommended uses
 
 - Personal exploration of an approximate perceived pitch.

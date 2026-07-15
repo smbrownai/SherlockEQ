@@ -102,6 +102,11 @@ final class AudioState: ObservableObject {
     /// it back to nil. Not persisted — it's a one-shot navigation intent.
     @Published var pendingMainSection: SidebarSection?
 
+    /// Presents the consolidated Health & Safety disclosure sheet. Set from
+    /// the persistent sidebar item and every compact disclosure chip, observed
+    /// by `MainWindowView` which owns the `.sheet`. Not persisted.
+    @Published var showHealthSafety = false
+
     /// Throttled mirrors of `safeListening.sessionDose` / `.remainingMinutes`
     /// for views that re-render on every `AudioState` tick. Populated at 1 Hz
     /// from `mirrorTrackerState()` — see the throttle wiring in init.

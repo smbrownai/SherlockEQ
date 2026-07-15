@@ -82,10 +82,29 @@ struct GraphicEQView: View {
                 correctionLayerNote(profile)
                 otherFiltersRow(profile)
                 slidersRow(profile)
+                largeBoostNote(profile)
                 resetButton(profile)
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// Just-in-time note when a band is boosted unusually hard — large boosts
+    /// can clip and be fatiguing. Only shows past a threshold so it never
+    /// nags at ordinary settings.
+    @ViewBuilder private func largeBoostNote(_ profile: HearingProfile) -> some View {
+        let maxBoost = Self.frequencies
+            .flatMap { [gain(profile: profile, frequency: $0, ear: .left),
+                        gain(profile: profile, frequency: $0, ear: .right)] }
+            .max() ?? 0
+        if maxBoost >= 9 {
+            SafetyNote(
+                text: "A boost this large (\(Int(maxBoost.rounded())) dB) can clip and be fatiguing. Keep the overall level comfortable and back off if listening feels harsh.",
+                symbol: "speaker.wave.3",
+                tint: .orange,
+                learnMoreTopic: .gainVolume
+            )
         }
     }
 

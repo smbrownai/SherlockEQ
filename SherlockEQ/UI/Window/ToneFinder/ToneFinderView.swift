@@ -107,7 +107,7 @@ struct ToneFinderView: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 72, alignment: .trailing)
             }
-            Text("Keep it quiet — just loud enough to compare against your ringing. You'll match pitch first, loudness doesn't matter.")
+            Text("Start quiet — just loud enough to compare against your ringing — and stop the tone if it becomes uncomfortable. You're matching pitch, not loudness.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -551,63 +551,18 @@ struct ToneFinderView: View {
 
     // MARK: - Disclaimer
 
+    /// Contextual (kept): the red-flag "see a professional" note is
+    /// timing-relevant on the tinnitus screen and stays. The general
+    /// non-clinical statement and the deeper "when a notch helps / evidence"
+    /// background move to the shared chip and the tinnitus Help article.
     private var disclaimer: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                Label("When a notch may help", systemImage: "checkmark.circle")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                bestForRow(symbol: "checkmark", tint: .green, lead: "Best for",
-                           text: "steady, tone-like ringing at a pitch you can find again.")
-                bestForRow(symbol: "minus", tint: .secondary, lead: "Less suited",
-                           text: "hissing, roaring, clicking, pulsing, or tinnitus that changes pitch often.")
-            }
-
-            Divider()
-
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "stethoscope")
-                    .foregroundStyle(.orange)
-                    .font(.title3)
-                    .frame(width: 24)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("See a hearing professional")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Pulsatile (heartbeat-like) tinnitus, a sudden change in one ear, new hearing loss, dizziness, or pain deserve medical evaluation — not more audio tweaking.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color.orange.opacity(0.10)))
-
-            VStack(alignment: .leading, spacing: 6) {
-                Label("Non-clinical", systemImage: "info.circle")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text("SherlockEQ doesn't diagnose, measure, or treat tinnitus. The notch simply reduces audio energy around the pitch you selected — a way to explore whether listening feels less fatiguing. Evidence for notched-sound approaches is mixed, and hearing-aid evaluation or CBT have stronger support for persistent, bothersome tinnitus.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.05)))
-    }
-
-    @ViewBuilder
-    private func bestForRow(symbol: String, tint: Color, lead: String, text: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: symbol)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(tint)
-                .frame(width: 16)
-            (Text(lead + ": ").font(.callout.weight(.semibold))
-                + Text(text).font(.callout))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 12) {
+            SafetyNote(
+                text: "Pulsatile (heartbeat-like) tinnitus, a sudden change in one ear, new hearing loss, dizziness, or pain deserve medical evaluation — not more audio tweaking.",
+                symbol: "stethoscope",
+                tint: .orange
+            )
+            HealthSafetyChip()
         }
     }
 

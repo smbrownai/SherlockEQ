@@ -29,7 +29,46 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .safeAreaInset(edge: .bottom) { profileShortcut }
+        .safeAreaInset(edge: .bottom) { footer }
+    }
+
+    /// Footer: the active-profile control plus a persistent, compact
+    /// Health & Safety row. Health & Safety is a thin secondary row under the
+    /// profile button so it never crowds or obscures the profile control —
+    /// even at the app's minimum window height.
+    @ViewBuilder private var footer: some View {
+        VStack(spacing: 0) {
+            profileShortcut
+            Divider()
+            healthSafetyRow
+        }
+    }
+
+    /// Persistent Health & Safety access — reachable from every main screen,
+    /// keyboard-operable, and understandable from its label alone (the icon is
+    /// decorative). Opens the consolidated disclosure sheet.
+    private var healthSafetyRow: some View {
+        Button {
+            audioState.showHealthSafety = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "heart.text.square")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18)
+                Text("Health & Safety")
+                    .font(.callout)
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .help("What SherlockEQ is and isn't, safe use, and when to see a professional")
+        .accessibilityLabel("Health and Safety")
+        .accessibilityHint("Opens the health and safety information sheet")
     }
 
     /// The active-profile footer is itself the clickable control that opens

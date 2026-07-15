@@ -39,7 +39,9 @@ struct ClarityView: View {
                 presetRow(profile)
                 separateToggleRow(profile)
                 featureCards(profile)
-                disclaimer
+                // The former "not a medical device" card is now the shared
+                // compact chip → Health & Safety sheet (single source).
+                HealthSafetyChip()
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -174,22 +176,6 @@ struct ClarityView: View {
         }
     }
 
-    private var disclaimer: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label("Comfort and clarity, not a medical device", systemImage: "info.circle")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text("These tools shape audio for comfort and clarity. SherlockEQ is not a hearing aid or a medical device.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.secondary.opacity(0.05))
-        )
-    }
 
     // MARK: - Bindings
 
