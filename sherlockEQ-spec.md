@@ -213,9 +213,31 @@ from their audiologist. Lives in the main window's Audiogram section.
 **Standard audiogram frequencies (Hz):**
 `250, 500, 1000, 2000, 3000, 4000, 6000, 8000` (`AudiogramPoint.standardFrequencies`)
 
-**Entry method:** interactive chart with draggable threshold points per ear, plus
-numeric fields alongside. Values entered in **dB HL** (hearing level, as reported
-on audiograms). Left/right tab on the same screen.
+**Entry methods:**
+1. Interactive chart with draggable threshold points per ear, plus numeric
+   fields alongside. Values entered in **dB HL** (hearing level, as reported
+   on audiograms). Left/right tab on the same screen.
+2. Audiogram interchange import (JSON), via the Manage Audiogram menu.
+3. **The Listening Check** (phase-3 §4, `ListeningCheckSession` +
+   `ListeningCheckView`): a guided in-app estimate using the modified
+   Hughson–Westlake staircase (descend 10 / ascend 5; threshold = lowest
+   level with 2 ascending responses) at the 8 audiogram frequencies per ear —
+   1k → 2k → 3k → 4k → 6k → 8k → 500 → 250 → 1 kHz retest (validity probe,
+   never averaged; > 10 dB divergence flags low reliability). Pulsed tones
+   (3 × 200 ms, 5 ms raised-cosine edges) through the Tone Finder generator
+   (bypasses EQ; per-ear channel mask), ~15 % silent catch trials (> 2 false
+   alarms flag reliability), **hard safety ceiling**
+   `min(−25 dBFS, 80 dBA − effectiveCalibrationOffsetDBA)` — no response at
+   the ceiling records *unmeasurable* (excluded from NAL-R) rather than ever
+   presenting louder. dBFS → dB HL via the volume-anchored calibration plus a
+   generic supra-aural RETSPL table; the ±5–10 dB anchor uncertainty is
+   disclosed (shape survives; NAL-R is shape-dominated). Volume changes
+   mid-run pause the check; a device change invalidates and restarts it;
+   built-in speakers are blocked outright. Apply feeds the exact manual-entry
+   path (full-strength derivation + acclimatization ramp) and stamps
+   provenance: `audiogramSource` (.manual / .listeningCheck / .imported) +
+   `audiogramDate`, shown on the Audiogram screen. Framed everywhere as a
+   "listening check" / estimate — never a hearing test, never diagnostic.
 
 **Conversion to EQ** (`AudiogramConversion.bands(for:compensationFactor:)`):
 - > **Implemented (updated after this spec):** the linear half-gain formula below
@@ -534,7 +556,9 @@ controls share one screen so the user reads identify-then-dial as one task.
 - Large frequency readout (Hz)
 - Sine-tone generator (`SineToneGenerator`) routed directly into `mainMixerNode`
   upstream of master gain, bypassing per-ear EQ so the reference pitch isn't
-  coloured by the profile
+  coloured by the profile. The generator also serves the Listening Check via a
+  per-channel mask (single-ear presentation) and a pulsed mode (200 ms on/off,
+  5 ms raised-cosine edges — sample-accurate in the render block)
 - Drag/swipe target to sweep frequency (log scale, **1 kHz – 16 kHz**)
 - Fine-tune stepper (±1 Hz)
 - Volume row
@@ -1052,6 +1076,7 @@ SherlockEQ/
 ├── Models/
 │   ├── HearingProfile.swift                ← incl. EQMode enum
 │   ├── EarProfile.swift
+│   ├── ListeningCheckSession.swift         ← Hughson–Westlake state machine (§5.2)
 │   ├── AudiogramPoint.swift
 │   ├── EQBand.swift                        ← incl. EQFilterType enum
 │   ├── AutoEQMismatch.swift                ← Correction ↔ output-device mismatch (§5.7)
@@ -1088,6 +1113,7 @@ SherlockEQ/
 │   │   │   └── AutoEQSearchView.swift      ← Remote catalog search + import
 │   │   ├── Audiogram/
 │   │   │   ├── AudiogramView.swift
+│   │   │   ├── ListeningCheckView.swift    ← Guided threshold-estimate flow (§5.2)
 │   │   │   ├── AudiogramChartView.swift
 │   │   │   ├── ThresholdEditor.swift
 │   │   │   └── EQPreviewView.swift

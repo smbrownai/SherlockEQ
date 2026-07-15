@@ -61,6 +61,13 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     /// profiles, or the user hit "Skip to full strength"). Ongoing
     /// audiogram edits deliberately do NOT restamp.
     var acclimatizationStartDate: Date?
+    /// Where this profile's audiogram came from — shown on the Audiogram
+    /// screen so provenance is never ambiguous ("From Listening Check,
+    /// Jul 15 2026"). decodeIfPresent; legacy profiles read `.manual`.
+    var audiogramSource: AudiogramSource
+    /// When the audiogram was last applied/edited (any source). Nil until
+    /// the profile first carries one.
+    var audiogramDate: Date?
     /// When true, EQ tabs show per-ear sliders; when false, every edit
     /// applies to both ears in lockstep. Lives on the profile because
     /// the audiogram itself is per-ear — symmetric-hearing users keep
@@ -135,6 +142,8 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.safeListeningCeilingDB = try c.decode(Double.self, forKey: .safeListeningCeilingDB)
         self.compensationFactor     = try c.decode(Double.self, forKey: .compensationFactor)
         self.acclimatizationStartDate = try c.decodeIfPresent(Date.self, forKey: .acclimatizationStartDate)
+        self.audiogramSource        = try c.decodeIfPresent(AudiogramSource.self, forKey: .audiogramSource) ?? .manual
+        self.audiogramDate          = try c.decodeIfPresent(Date.self, forKey: .audiogramDate)
         self.separateChannels       = try c.decodeIfPresent(Bool.self, forKey: .separateChannels) ?? false
         // Legacy profiles default to .expert so users who edited bands
         // across multiple tabs in the old multi-tab world still see
@@ -247,6 +256,8 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         autoEQDeviceUID: String? = nil, autoEQDeviceName: String? = nil,
         safeListeningCeilingDB: Double, compensationFactor: Double,
         acclimatizationStartDate: Date? = nil,
+        audiogramSource: AudiogramSource = .manual,
+        audiogramDate: Date? = nil,
         separateChannels: Bool = false,
         eqMode: EQMode = .advanced,
         isBuiltIn: Bool = false,
@@ -270,6 +281,8 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.safeListeningCeilingDB = safeListeningCeilingDB
         self.compensationFactor = compensationFactor
         self.acclimatizationStartDate = acclimatizationStartDate
+        self.audiogramSource = audiogramSource
+        self.audiogramDate = audiogramDate
         self.separateChannels = separateChannels
         self.eqMode = eqMode
         self.isBuiltIn = isBuiltIn
@@ -515,4 +528,53 @@ enum EQMode: String, Codable, CaseIterable, Identifiable {
 private struct EQSlot: Hashable {
     let frequencyHz: Double
     let filterType: EQFilterType
+}
+
+/// How a profile's audiogram was entered. Drives the provenance line on the
+/// Audiogram screen — an in-app Listening Check estimate is framed
+/// differently from a typed-in clinical audiogram (phase3 §4.5).
+enum AudiogramSource: String, Codable {
+    case manual
+    case listeningCheck
+    case imported
+
+    var label: String {
+        switch self {
+        case .manual:         return "manual entry"
+        case .listeningCheck: return "Listening Check"
+        case .imported:       return "imported file"
+        }
+    }
+}
+
+extension HearingProfile {
+    /// Apply a measured/entered audiogram: store thresholds, derive the
+    /// full-strength correction (strength applies at consumption time,
+    /// phase3 §5), strip legacy baked-in correction from `bands`, record
+    /// provenance, and start the acclimatization ramp on first
+    /// application. One shared path for the Listening Check and the
+    /// interchange import so the two can't drift.
+    mutating func applyMeasuredAudiogram(
+        left: [AudiogramPoint], right: [AudiogramPoint],
+        source: AudiogramSource, now: Date = Date()
+    ) {
+        let hadCorrectionBefore = !leftEar.correctionBands.isEmpty
+            || !rightEar.correctionBands.isEmpty
+        leftEar.thresholds = left
+        rightEar.thresholds = right
+        for ear in [\HearingProfile.leftEar, \HearingProfile.rightEar] {
+            let derived = AudiogramConversion.bands(
+                for: self[keyPath: ear].thresholds,
+                compensationFactor: 1.0
+            )
+            self[keyPath: ear].correctionBands = derived
+            self[keyPath: ear].bands = EQBandLookup.removingAudiogramBands(
+                matching: derived,
+                from: self[keyPath: ear].bands
+            )
+        }
+        audiogramSource = source
+        audiogramDate = now
+        startAcclimatizationIfFirstAudiogram(hadCorrectionBefore: hadCorrectionBefore, now: now)
+    }
 }

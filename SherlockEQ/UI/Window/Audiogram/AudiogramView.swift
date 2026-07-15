@@ -15,6 +15,7 @@ struct AudiogramView: View {
     }
     @State private var tab: EarTab = .left
     @State private var showingApplySheet = false
+    @State private var showingListeningCheck = false
 
     var body: some View {
         if let profile = audioState.activeProfile(in: profileStore) {
@@ -52,6 +53,11 @@ struct AudiogramView: View {
             ApplyAudiogramSheet(source: profile)
                 .environmentObject(profileStore)
         }
+        .sheet(isPresented: $showingListeningCheck) {
+            ListeningCheckView()
+                .environmentObject(audioState)
+                .environmentObject(profileStore)
+        }
     }
 
     // MARK: - Sections
@@ -65,11 +71,25 @@ struct AudiogramView: View {
                 .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
             VStack(alignment: .leading, spacing: 2) {
                 Text("Editing \(profile.name)").font(.title3.weight(.semibold))
-                Text("Enter the dB HL values from your audiologist report, or drag points on the chart.")
+                Text("Enter the dB HL values from your audiologist report, drag points on the chart — or run the Listening Check to estimate them here.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                // Provenance (spec §4.5): where this audiogram came from is
+                // never ambiguous — a Listening Check estimate is framed
+                // differently from a typed-in clinical report.
+                if let date = profile.audiogramDate {
+                    Text("Audiogram from \(profile.audiogramSource.label), \(date.formatted(date: .abbreviated, time: .omitted))")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
             }
             Spacer()
+            Button {
+                showingListeningCheck = true
+            } label: {
+                Label("Listening Check…", systemImage: "ear.badge.waveform")
+            }
+            .help("Estimate your thresholds with a guided tone check — no clinical audiogram needed.")
             Menu {
                 Button("Import Audiogram…", systemImage: "square.and.arrow.down") { importAudiogram(into: profile) }
                 Button("Export Audiogram…", systemImage: "square.and.arrow.up") { exportAudiogram(profile) }
@@ -218,6 +238,8 @@ struct AudiogramView: View {
                     updated.rightEar.bands = EQBandLookup.removingAudiogramBands(matching: derived, from: updated.rightEar.bands)
                 }
                 updated.startAcclimatizationIfFirstAudiogram(hadCorrectionBefore: hadCorrectionBefore)
+                updated.audiogramSource = .manual
+                updated.audiogramDate = Date()
                 try? profileStore.save(updated)
             }
         )
