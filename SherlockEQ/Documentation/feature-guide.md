@@ -35,7 +35,7 @@ write to the same per-ear band storage, so switching is non-destructive.
 - [Audiogram & Hearing Profiles](help:audiogram-profiles) — shape a profile from audiogram-like thresholds.
 - [Tinnitus Tone Matching](help:tinnitus-tone-matching) — sweep, identify a tone, set a notch.
 - [Headphone Correction / AutoEQ](help:headphone-correction-autoeq) — import or download correction curves.
-- [Listening Comfort](help:listening-comfort) — adaptive Speech Presence, Harshness Control, and Sibilance Tamer.
+- [Adaptive Comfort](help:listening-comfort) — bring voices forward, soften harsh moments, and reduce sharp “s” sounds, only when needed.
 
 ## Metering & visualization
 

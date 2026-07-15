@@ -24,7 +24,7 @@ related:
 
 A profile bundles a complete setup — EQ bands (per ear), EQ mode,
 [balance](help:balance), [tinnitus notch](help:tinnitus-tone-matching),
-[Listening Comfort](help:listening-comfort) settings, audiogram correction, a
+[Adaptive Comfort](help:listening-comfort) settings, audiogram correction, a
 per-profile Global trim, [headphone correction](help:headphone-correction-autoeq),
 and device link — under one name. Switching profiles swaps all of it at once.
 (Master [gain](help:gain-volume) is the exception — it's a single global output

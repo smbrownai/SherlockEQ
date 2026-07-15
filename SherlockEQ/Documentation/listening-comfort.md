@@ -1,9 +1,10 @@
 ---
-title: "Listening Comfort"
+title: "Adaptive Comfort"
 slug: "listening-comfort"
 category: "Hearing-Aware Features"
 summary: "Three adaptive processors that ease harshness and sibilance and lift speech only when it's needed."
 keywords:
+  - adaptive comfort
   - listening comfort
   - dynamic
   - speech presence
@@ -18,21 +19,21 @@ related:
   - safety-limits
 ---
 
-# Listening Comfort
+# Adaptive Comfort
 
 ## What it does
 
-Listening Comfort is a set of three **adaptive** processors. Unlike the EQ
-modes, which apply a fixed curve all the time, these watch the signal and act
-**only when their target appears** — then back off again. They're found under
-the **Listening Comfort** entry in the sidebar.
+Adaptive Comfort is a set of three processors that **shape sound only when it
+needs it**. Unlike the EQ, which applies a fixed curve all the time, these
+watch the signal and act **only when their target appears** — then back off
+again. They're under the **Adaptive Comfort** entry in the sidebar.
 
-- **Speech Presence** — gently lifts the speech range *while someone is talking*, then relaxes, so dialogue sits forward without permanently brightening music.
-- **Harshness Control** — tames hard, edgy peaks in the upper midrange as they occur, smoothing fatiguing material.
-- **Sibilance Tamer** — reduces harsh "ess" and "sh" sounds (a de-esser) only on the syllables that need it.
+- **Bring voices forward** — gently lifts dialogue *while someone is talking*, then relaxes, so voices sit forward without permanently brightening music.
+- **Soften harsh moments** — eases hard, edgy peaks in the upper midrange as they occur, smoothing fatiguing material.
+- **Reduce sharp "s" sounds** — softens harsh "ess" and "sh" sounds (a de-esser) only on the syllables that need it.
 
-Speech Presence is the one that **boosts**; Harshness Control and Sibilance
-Tamer only ever **reduce**.
+"Bring voices forward" is the one that **boosts**; the other two only ever
+**reduce**.
 
 ## Why it exists
 
@@ -43,16 +44,19 @@ rest of the audio alone.
 
 ## How to use it
 
-Each processor has the same simple controls:
+Fastest path: pick a **Quick setup** at the top — **Dialogue** (voices
+forward), **Gentle** (soften harshness and sibilance, no boost), or **Off**.
 
-- An **enable** toggle.
-- **Strength** — how much it can do at most (e.g. how many dB it pulls down, or lifts).
-- **Sensitivity** — how readily it engages: higher reacts to more material, lower only to the strongest cases.
-- An **activity meter** showing, live, how much it's working at this instant (in dB, with `idle` when it isn't) — so you can see it respond to the audio.
+Each card has:
 
-Start with a feature enabled at moderate strength, play typical material, and
-watch the meter. Raise **Sensitivity** if it isn't catching enough; lower
-**Strength** if the effect is audible on material that didn't need it.
+- A **switch**. Off, the card is just its name and a one-line description; on, it reveals its controls.
+- **Amount** — how much it can do at most. This is the one control most people ever touch.
+- A **status line** in plain language — "Waiting for speech", "Softening harshness", "Reducing sibilance" — so you can see it respond to the audio.
+- **Advanced → Sensitivity** — how readily it engages: higher reacts to more material, lower only to the strongest cases.
+
+Start from a Quick setup, play typical material, and watch the status line.
+Open **Advanced** and raise **Sensitivity** if it isn't catching enough; lower
+**Amount** if the effect is audible on material that didn't need it.
 
 ## What changes in the audio
 
@@ -66,22 +70,22 @@ goes with the audio rather than being baked into a fixed curve.
 - Runs alongside your chosen EQ mode and [headphone correction](help:headphone-correction-autoeq); it shapes dynamically on top of those static curves.
 - With [Per-Ear EQ](help:per-ear-eq) on, each feature can be set independently for the left and right ears; otherwise one control drives both.
 - For *static* speech shaping (always-on, not signal-following), shape the voice region on the [Graphic EQ](help:graphic-eq) instead — the two complement each other.
-- Reductions lower level on their moments; Speech Presence's lift interacts with master [gain](help:gain-volume) and [clipping](help:safety-limits) like any boost.
+- Reductions lower level on their moments; "Bring voices forward" interacts with master [gain](help:gain-volume) and [clipping](help:safety-limits) like any boost.
 
 ## Recommended uses
 
-- Sibilant podcasts and audiobooks (**Sibilance Tamer**).
-- Bright or harsh recordings and live streams (**Harshness Control**).
-- Dialogue that keeps slipping under the mix (**Speech Presence**).
+- Sibilant podcasts and audiobooks (**Reduce sharp "s" sounds**).
+- Bright or harsh recordings and live streams (**Soften harsh moments**).
+- Dialogue that keeps slipping under the mix (**Bring voices forward**).
 
 ## Things to avoid
 
-- Maxing **Strength** and **Sensitivity** together — the processing becomes audible (pumping, lisping) on material that didn't need it.
+- Maxing **Amount** and **Sensitivity** together — the processing becomes audible (pumping, lisping) on material that didn't need it.
 - Treating it as a fix for a consistently dull or bright source — that's a job for static [EQ](help:graphic-eq).
 
 ## Not a hearing aid
 
-Listening Comfort is a comfort and clarity tool for everyday listening. It is
+Adaptive Comfort is a comfort and clarity tool for everyday listening. It is
 **not** a hearing aid and not a medical device, and it does not diagnose or
 treat any hearing condition. See [Safety & Responsibility](help:safety-limits).
 

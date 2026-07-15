@@ -49,9 +49,50 @@ enum DynamicFeatureKind: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// One plain-language sentence pair for the Clarity card. Speaks to a
-    /// non-engineer: what it listens for, what it does, how the two
-    /// sliders behave.
+    // MARK: - Plain-language surface (Adaptive Comfort panel)
+
+    /// Card title named for the outcome, not the processor.
+    var comfortName: String {
+        switch self {
+        case .speechPresence:   return "Bring voices forward"
+        case .harshnessControl: return "Soften harsh moments"
+        case .sibilanceTamer:   return "Reduce sharp \u{201C}s\u{201D} sounds"
+        }
+    }
+
+    /// One short subtitle under the title — the whole explanation a card
+    /// needs, given the panel's single intro paragraph above.
+    var comfortSubtitle: String {
+        switch self {
+        case .speechPresence:
+            return "Lifts dialogue when it\u{2019}s buried under music or background noise."
+        case .harshnessControl:
+            return "Eases shouty, compressed midrange \u{2014} only while it\u{2019}s harsh."
+        case .sibilanceTamer:
+            return "Softens sharp \u{201C}sss\u{201D} energy \u{2014} only when it spikes."
+        }
+    }
+
+    /// Ordinary-language status while enabled but not currently engaging.
+    var idleStatus: String {
+        switch self {
+        case .speechPresence:   return "Waiting for speech"
+        case .harshnessControl: return "Waiting for harsh moments"
+        case .sibilanceTamer:   return "Waiting for sharp sounds"
+        }
+    }
+
+    /// Ordinary-language status while actively engaging.
+    var activeStatus: String {
+        switch self {
+        case .speechPresence:   return "Bringing voices forward"
+        case .harshnessControl: return "Softening harshness"
+        case .sibilanceTamer:   return "Reducing sibilance"
+        }
+    }
+
+    /// One plain-language sentence pair. Retained for the help article and
+    /// any surface that still wants the fuller two-slider description.
     var helpText: String {
         switch self {
         case .speechPresence:
@@ -238,5 +279,73 @@ struct DynamicProcessingSettings: Codable, Equatable, Hashable {
         [leftSpeechPresence, rightSpeechPresence,
          leftHarshness, rightHarshness,
          leftSibilance, rightSibilance].contains { $0.enabled }
+    }
+}
+
+/// One-tap whole-panel setups for Adaptive Comfort, named for the listening
+/// situation rather than the processors. Always applied to both ears.
+enum ComfortPreset: String, CaseIterable, Identifiable {
+    /// Voices forward — the everyday "make dialogue clearer" setup.
+    case dialogue
+    /// Take the edge off — soften harshness and sibilance, no boost.
+    case gentle
+    /// Everything off.
+    case off
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .dialogue: return "Dialogue"
+        case .gentle:   return "Gentle"
+        case .off:      return "Off"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .dialogue: return "person.wave.2"
+        case .gentle:   return "leaf"
+        case .off:      return "power"
+        }
+    }
+
+    /// The settings this preset writes for one feature (both ears identical).
+    /// Amount / sensitivity are the sensible starting points; the user tunes
+    /// from there.
+    func settings(for kind: DynamicFeatureKind) -> DynamicFeatureSettings {
+        switch self {
+        case .off:
+            return DynamicFeatureSettings(enabled: false)
+        case .dialogue:
+            switch kind {
+            case .speechPresence:   return DynamicFeatureSettings(enabled: true, strength: 0.6, sensitivity: 0.5)
+            case .harshnessControl: return DynamicFeatureSettings(enabled: false)
+            case .sibilanceTamer:   return DynamicFeatureSettings(enabled: false)
+            }
+        case .gentle:
+            switch kind {
+            case .speechPresence:   return DynamicFeatureSettings(enabled: false)
+            case .harshnessControl: return DynamicFeatureSettings(enabled: true, strength: 0.4, sensitivity: 0.5)
+            case .sibilanceTamer:   return DynamicFeatureSettings(enabled: true, strength: 0.4, sensitivity: 0.5)
+            }
+        }
+    }
+
+    /// Which preset the current enabled-pattern matches, or nil for a custom
+    /// mix. Only the enabled flags are compared (not Amount / sensitivity),
+    /// so nudging a slider keeps the preset highlighted.
+    static func matching(_ d: DynamicProcessingSettings) -> ComfortPreset? {
+        func on(_ kind: DynamicFeatureKind) -> Bool {
+            d.settings(for: kind, ear: .left).enabled
+                || d.settings(for: kind, ear: .right).enabled
+        }
+        let speech = on(.speechPresence)
+        let harsh = on(.harshnessControl)
+        let sib = on(.sibilanceTamer)
+        if !speech && !harsh && !sib { return .off }
+        if speech && !harsh && !sib { return .dialogue }
+        if !speech && harsh && sib { return .gentle }
+        return nil
     }
 }

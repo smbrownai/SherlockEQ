@@ -21,7 +21,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
         case .audiogram:     return "Audiogram"
         case .equalizer:     return "Equalizer"
         case .toneFinder:    return "Tinnitus Notch"
-        case .clarity:       return "Listening Comfort"
+        case .clarity:       return "Adaptive Comfort"
         case .safeListening: return "Safe Listening"
         case .settings:      return "Settings"
         case .debug:         return "Debug"
