@@ -182,10 +182,18 @@ chain splits around it:
 ```
 ring read → cascade A: AutoEQ bands (+ AutoEQ preamp)
           → AdaptiveCorrectionProcessor  (6-band WDRC)        ← NEW
-          → DynamicBandProcessor         (Listening Comfort)
           → cascade B: user/preset EQ + tinnitus notch (+ global trim)
+          → DynamicBandProcessor         (Listening Comfort)
           → source-node output → balance mixers → sum → AUPeakLimiter → …
 ```
+
+> **Implementation note (step 3):** the dynamics stage stays LAST — its
+> position relative to the user EQ/notch is unchanged from pre-phase-4,
+> so Listening Comfort behaves identically for every existing user. (The
+> original draft placed it between WDRC and cascade B, which would have
+> changed its detector input for all profiles, Steady included.) The
+> load-bearing placement — Adaptive after AutoEQ and before the user
+> EQ — is as specified.
 
 - **After AutoEQ:** the detector sees a headphone-flattened signal, so
   prescribed gains mean the same thing on every transducer (the same

@@ -61,6 +61,22 @@ final class CATapEngine: ObservableObject {
     let leftEQCascade = BiquadCascade()
     let rightEQCascade = BiquadCascade()
 
+    /// Stage-A cascades: the AutoEQ headphone correction (+ its preamp),
+    /// split out ahead of the adaptive stage so its detectors see a
+    /// headphone-flattened signal — prescribed gains mean the same thing
+    /// on every transducer (phase4-adaptive-correction.md §4.1). In
+    /// Steady mode this split is mathematically inert (an IIR cascade
+    /// commutes); it exists so Adaptive can sit between the two halves.
+    let leftAutoEQCascade = BiquadCascade()
+    let rightAutoEQCascade = BiquadCascade()
+
+    /// Per-ear Adaptive Correction (level-following WDRC). Enabled only
+    /// for profiles in `.adaptive` correction mode; bit-exact passthrough
+    /// otherwise. Owned here like the cascades — the render block captures
+    /// strongly, no isolation hop.
+    let leftAdaptive = AdaptiveCorrectionProcessor()
+    let rightAdaptive = AdaptiveCorrectionProcessor()
+
     /// Per-ear level-dependent ("dynamic") EQ stage, sitting in the
     /// render block immediately after the static cascade and before the
     /// peak counters / pre-spectrum side-channel. Owned here for the same
@@ -623,6 +639,16 @@ final class CATapEngine: ObservableObject {
         lDyn.setSampleRate(sourceSR)
         rDyn.setSampleRate(sourceSR)
 
+        // Stage-A (AutoEQ) cascades + adaptive processors, same strong-
+        // capture basis. The adaptive filterbank's crossovers are stamped
+        // at the delivered rate here — the render block isn't running yet.
+        let lPre = leftAutoEQCascade
+        let rPre = rightAutoEQCascade
+        let lAdaptive = leftAdaptive
+        let rAdaptive = rightAdaptive
+        lAdaptive.setSampleRate(sourceSR)
+        rAdaptive.setSampleRate(sourceSR)
+
         leftSourceNode = AVAudioSourceNode(format: stereoFormat) { [weak leftRing] _, _, frameCount, audioBufferList -> OSStatus in
             let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
             // Never trust the render block's frameCount argument alone — some
@@ -654,8 +680,14 @@ final class CATapEngine: ObservableObject {
                 preIngest.recordCallbackInvocation()
             }
             // EQ on the L channel only (R is held at 0 by the fill).
+            // Order (phase4 §4.1): AutoEQ (headphone-flatten) → Adaptive
+            // Correction (level-following, nonlinear — placement matters)
+            // → static cascade (steady correction when applicable + user
+            // EQ + notch + trim) → Listening Comfort dynamics.
             if buffers.count > 0,
                let lPtr = buffers[0].mData?.assumingMemoryBound(to: Float.self) {
+                lPre.process(samples: lPtr, count: safeFrames)
+                lAdaptive.process(lPtr, frameCount: safeFrames)
                 lEQ.process(samples: lPtr, count: safeFrames)
                 lDyn.process(samples: lPtr, count: safeFrames)
             }
@@ -681,6 +713,8 @@ final class CATapEngine: ObservableObject {
             // EQ on the R channel only (L is held at 0 by the fill).
             if buffers.count >= 2,
                let rPtr = buffers[1].mData?.assumingMemoryBound(to: Float.self) {
+                rPre.process(samples: rPtr, count: safeFrames)
+                rAdaptive.process(rPtr, frameCount: safeFrames)
                 rEQ.process(samples: rPtr, count: safeFrames)
                 rDyn.process(samples: rPtr, count: safeFrames)
             }

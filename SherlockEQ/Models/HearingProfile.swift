@@ -61,6 +61,11 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     /// profiles, or the user hit "Skip to full strength"). Ongoing
     /// audiogram edits deliberately do NOT restamp.
     var acclimatizationStartDate: Date?
+    /// How the audiogram correction is applied (phase4-adaptive-correction.md
+    /// §4.2): `.steady` = the static NAL-R layer (today's behavior, default);
+    /// `.adaptive` = the level-following 6-band WDRC stage anchored to NAL-R
+    /// at 65 dB SPL. decodeIfPresent → `.steady`; rides profile JSON.
+    var correctionMode: CorrectionMode
     /// Where this profile's audiogram came from — shown on the Audiogram
     /// screen so provenance is never ambiguous ("From Listening Check,
     /// Jul 15 2026"). decodeIfPresent; legacy profiles read `.manual`.
@@ -142,6 +147,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.safeListeningCeilingDB = try c.decode(Double.self, forKey: .safeListeningCeilingDB)
         self.compensationFactor     = try c.decode(Double.self, forKey: .compensationFactor)
         self.acclimatizationStartDate = try c.decodeIfPresent(Date.self, forKey: .acclimatizationStartDate)
+        self.correctionMode         = try c.decodeIfPresent(CorrectionMode.self, forKey: .correctionMode) ?? .steady
         self.audiogramSource        = try c.decodeIfPresent(AudiogramSource.self, forKey: .audiogramSource) ?? .manual
         self.audiogramDate          = try c.decodeIfPresent(Date.self, forKey: .audiogramDate)
         self.separateChannels       = try c.decodeIfPresent(Bool.self, forKey: .separateChannels) ?? false
@@ -256,6 +262,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         autoEQDeviceUID: String? = nil, autoEQDeviceName: String? = nil,
         safeListeningCeilingDB: Double, compensationFactor: Double,
         acclimatizationStartDate: Date? = nil,
+        correctionMode: CorrectionMode = .steady,
         audiogramSource: AudiogramSource = .manual,
         audiogramDate: Date? = nil,
         separateChannels: Bool = false,
@@ -281,6 +288,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.safeListeningCeilingDB = safeListeningCeilingDB
         self.compensationFactor = compensationFactor
         self.acclimatizationStartDate = acclimatizationStartDate
+        self.correctionMode = correctionMode
         self.audiogramSource = audiogramSource
         self.audiogramDate = audiogramDate
         self.separateChannels = separateChannels
@@ -576,5 +584,19 @@ extension HearingProfile {
         audiogramSource = source
         audiogramDate = now
         startAcclimatizationIfFirstAudiogram(hadCorrectionBefore: hadCorrectionBefore, now: now)
+    }
+}
+
+/// The correction-application mode (phase4-adaptive-correction.md).
+/// Named for behavior, not mechanism — user copy never says "compression"
+/// or "WDRC" (§6.3).
+enum CorrectionMode: String, Codable {
+    case steady
+    case adaptive
+
+    /// Tolerant decode: unknown future strings land on the safe default.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = CorrectionMode(rawValue: raw) ?? .steady
     }
 }
