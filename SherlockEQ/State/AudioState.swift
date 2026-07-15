@@ -383,6 +383,10 @@ final class AudioState: ObservableObject {
     /// a local copy so flipping a stage back on restores immediately
     /// without re-reading anything from disk.
     private func applyActiveProfile() {
+        // Every path that changes what's applied also re-evaluates the
+        // AutoEQ device-mismatch state (profile switch, correction edit,
+        // per-stage toggle flips all funnel through here).
+        defer { refreshAutoEQMismatch() }
         guard !eqChain.testCurveEnabled else { return }
         // The Analog Control Unit overrides the applied profile while open;
         // the store's active profile is left untouched and resumes on close.
@@ -396,6 +400,53 @@ final class AudioState: ObservableObject {
             return
         }
         audio.applyProfile(applyBypassMask(to: original))
+    }
+
+    // MARK: - AutoEQ device-mismatch warning (spec §7 / AutoEQMismatch)
+
+    /// Non-nil while the active profile's headphone correction is running
+    /// on an output device it wasn't attached on. Surfaced as a popover row
+    /// and an Equalizer chip; never auto-acts (no silent audio changes).
+    @Published private(set) var autoEQMismatch: AutoEQMismatch?
+
+    private static let autoEQDismissalsKey = "sherlockeq.autoEQMismatch.dismissed"
+
+    /// Per-(profile, device) dismissal memory — warn once per new
+    /// combination, never nag.
+    private var autoEQDismissals: Set<String> =
+        Set(UserDefaults.standard.stringArray(forKey: AudioState.autoEQDismissalsKey) ?? [])
+
+    /// Recompute from current facts. Cheap and idempotent; called from
+    /// `applyActiveProfile` and the tap's device-identity publisher.
+    private func refreshAutoEQMismatch() {
+        let profile = connectedStore.flatMap { activeProfile(in: $0) }
+        let next = AutoEQMismatch.evaluate(
+            profile: profile,
+            autoEQStageEnabled: eqChain.eqMasterEnabled && eqChain.autoEQEnabled,
+            currentDeviceUID: tap.currentOutputDeviceUID,
+            currentDeviceName: tap.currentOutputDeviceName,
+            currentIsBuiltInSpeakers: tap.currentOutputDeviceIsBuiltIn,
+            dismissedKeys: autoEQDismissals
+        )
+        if next != autoEQMismatch { autoEQMismatch = next }
+    }
+
+    /// "Dismiss" — remember this (profile, device) pair and hide the
+    /// warning until either changes to a new combination.
+    func dismissAutoEQMismatch() {
+        guard let mismatch = autoEQMismatch else { return }
+        autoEQDismissals.insert(mismatch.dismissalKey)
+        UserDefaults.standard.set(Array(autoEQDismissals), forKey: Self.autoEQDismissalsKey)
+        autoEQMismatch = nil
+    }
+
+    /// "Bypass here" — turn the AutoEQ stage off for this session via the
+    /// existing per-stage toggle. The toggle's sink re-applies the profile,
+    /// which clears the warning (stage disabled → no mismatch). Deliberately
+    /// NOT remembered as a dismissal: re-enabling the stage on the same
+    /// device should warn again.
+    func bypassAutoEQForSession() {
+        eqChain.autoEQEnabled = false
     }
 
     /// Return a copy of `profile` with the appropriate stages zeroed
@@ -443,6 +494,7 @@ final class AudioState: ObservableObject {
     private var tapObserver: AnyCancellable?
     private var audioObserver: AnyCancellable?
     private var systemVolumeObserver: AnyCancellable?
+    private var tapDeviceObserver: AnyCancellable?
     private var trackerObserver: AnyCancellable?
     private var noticeObserver: AnyCancellable?
     private var preferencesObserver: AnyCancellable?
@@ -536,6 +588,15 @@ final class AudioState: ObservableObject {
         systemVolume.start()
         systemVolumeObserver = systemVolume.objectWillChange.sink { [weak self] _ in
             Task { @MainActor in self?.refreshVolumeDelta() }
+        }
+
+        // AutoEQ device-mismatch check rides the tap's device-identity
+        // publisher — the UID lands when `applyTapPrep` finishes a rebuild,
+        // i.e. strictly after a device change has actually taken effect
+        // (`onOutputDeviceChanged` fires before the new identity resolves).
+        // Deferred one turn per the @Published willSet rule.
+        tapDeviceObserver = tap.$currentOutputDeviceUID.sink { [weak self] _ in
+            Task { @MainActor in self?.refreshAutoEQMismatch() }
         }
 
         // Spectrum analyzer → dose tracker.

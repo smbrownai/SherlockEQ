@@ -93,7 +93,9 @@ final class AutoEQSavedProfilesStore: ObservableObject {
         path: String,
         to profile: HearingProfile,
         service: AutoEQRemoteService,
-        profileStore: ProfileStore
+        profileStore: ProfileStore,
+        deviceUID: String? = nil,
+        deviceName: String? = nil
     ) -> Bool {
         guard let entry = entry(for: path) else { return false }
         let indexEntry = AutoEQIndexEntry(
@@ -110,6 +112,10 @@ final class AutoEQSavedProfilesStore: ObservableObject {
         copy.autoEQBands = cached.bands
         copy.autoEQPreampDB = cached.preampGain
         copy.autoEQSourcePath = entry.path   // unambiguous identity (see appliedPath)
+        // Attach-time output device — drives the device-mismatch warning
+        // (spec §7). Name only stored when the UID is known.
+        copy.autoEQDeviceUID = deviceUID
+        copy.autoEQDeviceName = deviceUID == nil ? nil : deviceName
         do {
             try profileStore.save(copy)
             return true

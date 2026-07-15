@@ -398,6 +398,19 @@ User-selected library folder is stored in `AutoEQPreferences.libraryFolder`
 (UserDefaults; the app runs without sandbox, so no security-scoped bookmarks
 needed).
 
+**Device-mismatch detection** (phase-3 §7, `AutoEQMismatch`): attaching a
+correction records the then-current output device
+(`autoEQDeviceUID`/`autoEQDeviceName` on the profile). When the active
+profile's correction is enabled but the current output's UID differs,
+`AudioState.autoEQMismatch` publishes a warning surfaced in the popover
+(below the compensation slider) and above the Equalizer — with **Bypass
+here** (flips the existing session `autoEQEnabled` stage toggle) and
+**Dismiss** (remembered per profile + device pair in UserDefaults; a new
+combination warns again). Identity comparison only — no fuzzy model-name
+matching; legacy corrections with no recorded UID never warn. Built-in
+speakers get categorical copy (a headphone curve there is always wrong).
+Never auto-bypasses — no silent audio changes.
+
 ---
 
 ### 5.8 Factory Listening Presets
@@ -687,6 +700,9 @@ Other AudioState surface:
   `var effectiveCalibrationOffsetDBA: Double` — live volume shift and the
   offset the analyzers/dose/meters actually consume (base + delta). See
   `volume-aware-dose.md`.
+- `@Published private(set) var autoEQMismatch: AutoEQMismatch?` — headphone
+  correction running on a device it wasn't attached on (§5.7);
+  `dismissAutoEQMismatch()` / `bypassAutoEQForSession()` are the two actions.
 - `func activeProfile(in store: ProfileStore) -> HearingProfile?`
 - `func adoptDefaultProfileIfNeeded(from store: ProfileStore)`
 - `func connect(profileStore: ProfileStore)` — subscribes to profile changes and
@@ -1010,6 +1026,7 @@ SherlockEQ/
 │   ├── EarProfile.swift
 │   ├── AudiogramPoint.swift
 │   ├── EQBand.swift                        ← incl. EQFilterType enum
+│   ├── AutoEQMismatch.swift                ← Correction ↔ output-device mismatch (§5.7)
 │   ├── PresetCurve.swift                   ← Shared outcome-preset curve table (§5.8)
 │   └── TinnitusNotch.swift                 ← incl. NotchWidth enum
 │
@@ -1068,6 +1085,7 @@ SherlockEQ/
 │   └── Components/
 │       ├── ParametricCanvasView.swift      ← Expert canvas (spectrum underlay + curves)
 │       ├── NotchControlView.swift
+│       ├── AutoEQMismatchRow.swift         ← Mismatch warning row (popover + Equalizer)
 │       ├── NoticeBannerView.swift
 │       ├── BuiltInProfileBanner.swift
 │       ├── EQBypassButton.swift

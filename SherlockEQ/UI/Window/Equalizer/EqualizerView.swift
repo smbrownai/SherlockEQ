@@ -15,6 +15,12 @@ struct EqualizerView: View {
         let mode = activeProfile?.eqMode ?? .advanced
 
         VStack(spacing: 0) {
+            // Headphone-correction device mismatch (spec §7) — shown above
+            // whichever surface is active, since the correction shapes what
+            // both of them display and hear.
+            AutoEQMismatchRow()
+                .padding(.horizontal, 24)
+                .padding(.top, 12)
             // Factory presets are editable in place; edits to one can be
             // reverted from Profile Detail ("Reset to Factory Default") or
             // globally via "Restore Factory Presets". No lock here.
