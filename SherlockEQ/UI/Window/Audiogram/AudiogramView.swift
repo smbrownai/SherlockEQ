@@ -34,6 +34,10 @@ struct AudiogramView: View {
                 header(profile)
                 earPicker
                 chartCard(profile)
+                // Notch-vs-correction conflict (spec §6): the derived
+                // correction below may be boosting exactly where the
+                // user's tinnitus notch cuts.
+                CorrectionConflictChip(crossLink: .tinnitusNotch)
                 editorCard(profile)
                 previewCard(profile)
             }

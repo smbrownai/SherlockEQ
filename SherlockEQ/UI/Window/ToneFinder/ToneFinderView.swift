@@ -57,6 +57,9 @@ struct ToneFinderView: View {
                         .font(.title3.weight(.semibold))
                     Spacer()
                 }
+                // Notch-vs-correction conflict (spec §6): warn when this
+                // notch cuts where the audiogram correction boosts.
+                CorrectionConflictChip(crossLink: .audiogram)
                 // Honest preview of the band being reduced — the same
                 // parametric dip the audio applies, both ears when separate.
                 NotchPreviewView(
