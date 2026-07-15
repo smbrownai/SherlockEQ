@@ -34,21 +34,22 @@ on your own terms.
 
 ## How to use it
 
-1. Start the sweep at a comfortable, low level.
-2. Move slowly across the range; pause where a tone seems to match your tinnitus.
-3. Fine-tune around that frequency.
-4. Optionally **Set as Notch** to place a gentle cut there. This sets both ears; a Left / Right / Both choice appears only when **Separate L+R notch** is enabled (see [Per-Ear EQ](help:per-ear-eq)).
+The screen is a short four-step flow:
+
+1. **Set a comfortable tone level** — press Play and set a quiet level; you'll match pitch first, loudness doesn't matter. A prominent **Stop** is available while the tone plays.
+2. **Sweep for the closest pitch** — drag across the range; pause where a tone matches. Use the **Step** selector (1 / 10 / 100 Hz) with **−** / **+** to fine-tune.
+3. **Compare slightly higher and lower** — nudge a little each way, and check an **octave** down/up (a common source of confusion).
+4. **Use this pitch** — places the notch at the current tone and turns it on. A Left / Right / Both choice appears only when **Separate L+R notch** is enabled (see [Per-Ear EQ](help:per-ear-eq)).
 
 Keep the level low. The goal is comparison, not loudness.
 
 ### Guided matching (optional)
 
-Because pitch matching is imprecise and easy to get an octave wrong, the
-**Guided matching** panel walks through a short protocol: sweep up from below,
-compare a tone an **octave** down and up (a common source of confusion), then
-**capture** the same match a few times. Once you've captured two or more, it
-shows a suggested **average** and the **range** — a more honest figure than a
-single "definitive" number. You can set the notch straight from that average.
+Because pitch matching is imprecise and easy to get an octave wrong, step 3
+includes an optional **Average a few matches** aid: **capture** the same match
+a few times and it shows a suggested **average** and **range** — a more honest
+figure than a single "definitive" number — which you can move the tone to
+before using it.
 
 ### Strength presets
 
@@ -59,13 +60,16 @@ The notch has three comfort presets that trade fidelity for reduction:
 - **Strong** — a wider, deeper cut that may sound duller or muffled.
 
 Start with **Subtle** or **Balanced**. The **Depth** and **Width** sliders
-(behind *Fine-tune*) remain available if you want manual control; the preview
-above the controls shows the exact band being reduced.
+(behind **Fine-tune notch**) remain available if you want manual control; the
+preview above the controls shows the exact band being reduced. When the notch
+is off, the section collapses to a short preview and an **Enable** button at
+the pitch you found.
 
 ### Check-in
 
-An optional daily **check-in** lets you rate how much the ringing bothered you
-(0–10) and see a trend over time. It is **not** a clinical score — it just helps
+An optional daily **check-in** — opened from its own button at the bottom of
+the screen, since it tracks rather than configures — lets you rate how much the
+ringing bothered you (0–10) and see a trend over time. It is **not** a clinical score — it just helps
 you notice whether things trend better rather than chasing the ringing day to
 day. Loudness and annoyance are deliberately separated: annoyance is what
 sound-therapy and habituation approaches aim to reduce.

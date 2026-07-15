@@ -138,7 +138,7 @@ struct NotchControlView: View {
             .padding(.top, 8)
             .disabled(!notch.enabled)
         } label: {
-            Text("Fine-tune depth & width")
+            Text("Fine-tune notch")
                 .font(.subheadline.weight(.medium))
         }
         .disabled(!notch.enabled)
