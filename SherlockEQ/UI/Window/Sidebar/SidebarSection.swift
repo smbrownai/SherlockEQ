@@ -20,7 +20,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
         case .profiles:      return "Profiles"
         case .audiogram:     return "Audiogram"
         case .equalizer:     return "Equalizer"
-        case .toneFinder:    return "Tinnitus Notch"
+        case .toneFinder:    return "Tinnitus Tools"
         case .clarity:       return "Adaptive Comfort"
         case .safeListening: return "Safe Listening"
         case .settings:      return "Settings"
@@ -41,12 +41,18 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    /// Audio-processing sections — what shapes the signal on its way
-    /// to the user's ears. `.profiles` is reachable via the persistent
-    /// "Manage Profiles" button at the bottom of the sidebar, not from
-    /// this list, to avoid the redundant top + bottom entry.
-    static var audioProcessorSections: [SidebarSection] {
-        [.equalizer, .audiogram, .toneFinder, .clarity, .safeListening]
+    /// **Sound** — the core signal-shaping surfaces. `.profiles` is reached
+    /// via the persistent active-profile button at the bottom of the sidebar,
+    /// not from a list entry, to avoid a redundant top + bottom entry.
+    static var soundSections: [SidebarSection] {
+        [.equalizer, .audiogram]
+    }
+
+    /// **Comfort & Safety** — the level-following comfort tools, tinnitus
+    /// tools, and listening-safety monitor, grouped so they read as
+    /// "protect and ease listening" rather than "shape the signal."
+    static var comfortSafetySections: [SidebarSection] {
+        [.clarity, .toneFinder, .safeListening]
     }
 
     /// App-level sections — settings and diagnostics. Grouped under

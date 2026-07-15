@@ -1089,17 +1089,20 @@ controls: frequency / depth / width per ear (Linked or Separate, via the
   with an external meter and set `calibrationOffsetDBA`)
 - Explanatory section: what the dose estimate is and isn't; link to NIOSH REL
 
-**Settings** (`SettingsView`)
-- Startup — Launch at login; Hide from Dock when window is closed
-- Output — Master gain
-- Limiter — AUPeakLimiter attack / decay / pre-gain
-- Appearance — Per-ear colors (left / right)
-- Shortcuts — Global Reference Mode shortcut on/off (⌘⇧B when on)
-- AutoEQ library folder — pick a folder of `.txt` corrections; appears in the
-  Profile-Detail headphone picker menu
-- Profile backup location — show / change the on-disk profiles directory (with
-  "Move existing" vs "Switch only" prompt)
-- About — Acknowledgments (AutoEQ, NIOSH, Sparkle, open-source credits)
+**Settings** (`SettingsView`) — collapsible groups; everyday preferences open,
+DSP/engineering collapsed:
+- **General** (open) — Launch at login; Hide from Dock when window is closed
+- **Appearance** (open) — Per-ear colors (left / right)
+- **Keyboard** (open) — Global ⌘⇧B Reference Mode shortcut (subtitle explains it
+  temporarily bypasses all processing)
+- **Advanced Audio** (collapsed) — **App master gain** (the app-wide value, the
+  same control shown on the monitor panel — scope stated in place) + Peak
+  limiter (AUPeakLimiter attack / decay / pre-gain)
+- **Files and data** (collapsed) — Profiles folder (Move existing / Switch only
+  prompt) + Headphone correction library folder (shared by every profile's
+  headphone picker)
+- **Diagnostics** (collapsed) — Show Debug in sidebar; Show metadata on profiles
+- **About** — Acknowledgments (AutoEQ, NIOSH, Sparkle, open-source credits)
 
 **Debug** — diagnostics view (tap state, engine state, sample-rate, frame counters,
 permission status, raw FFT bin readout, manual graph rebuild button). Sidebar entry
@@ -1237,7 +1240,7 @@ SherlockEQ/
 │   │   ├── MainWindowView.swift            ← NavigationSplitView + sliding monitor panel + toolbar status glance
 │   │   ├── Sidebar/
 │   │   │   ├── SidebarView.swift
-│   │   │   └── SidebarSection.swift        ← profiles, audiogram, equalizer, toneFinder, safeListening, settings, debug
+│   │   │   └── SidebarSection.swift        ← Sound / Comfort & Safety / App groups; toneFinder titled "Tinnitus Tools"
 │   │   ├── Profiles/
 │   │   │   ├── ProfilesView.swift
 │   │   │   ├── ProfileListItem.swift
