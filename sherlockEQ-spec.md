@@ -1033,13 +1033,25 @@ sidebar (220pt) toggleable from the toolbar.
   Profiles" button (selects the Profiles section). Profiles is reachable via this
   shortcut, not from the section list, to avoid a duplicated top+bottom entry.
 
-**Profiles** — list of profiles with create / duplicate / delete / import / export /
-restore-factory in the toolbar; rows show name, factory star badge, description, and
-tag chips. Detail panel shows name, symbol, linked device UID, EQ mode picker,
-balance, global trim, safe-listening ceiling, AutoEQ correction (file picker plus
-the library-folder menu plus the AutoEQ remote search view). The four factory presets
-(§5.8) are fully editable; they show a banner with "Reset to Factory Default" (enabled
-once edited) and Duplicate. "Restore Factory Presets" in the toolbar rebuilds all four.
+**Profiles** — master/detail. The list column's toolbar is a labeled **New
+Profile** button plus a **More** overflow menu (duplicate / delete / import /
+export / restore-factory) — replacing the old row of bare icons. Each row shows
+name, a quiet built-in star, description, and linked device. **Status signals
+are exactly two, non-competing**: the row's selection highlight means *being
+edited*, and a single green **Active** pill means *currently processing audio*
+(the old green dot + duplicate footer are gone). The detail panel opens with a
+**scannable summary** (output device · headphone correction · hearing profile ·
+EQ surface · per-ear) and the header distinguishes **"Editing"** from a green
+**"Processing audio now"** pill. The long form is broken into **collapsible
+groups** — Identity · Device and headphones · Hearing personalization · Sound
+tuning · Safety — with specialist knobs (**Compensation, Global trim,
+separate-ear**) under an **Advanced tuning** disclosure. Headphone correction
+stays a compact **"None · Find my headphones…"** until the user opens the
+search/library; once applied, the search moves behind a "Change headphones"
+disclosure. Hearing personalization shows correction status + an **Edit
+audiogram** deep-link (thresholds are edited on the Audiogram screen). The four
+factory presets (§5.8) are fully editable; they show a banner with "Reset to
+Factory Default" (enabled once edited) and Duplicate.
 
 **Audiogram** — interactive audiogram chart for the active profile (Left ear / Right
 ear tabs). Draggable threshold points at standard frequencies plus numeric entry

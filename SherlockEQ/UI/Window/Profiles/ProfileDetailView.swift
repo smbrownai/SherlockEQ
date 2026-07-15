@@ -3,8 +3,11 @@ import AppKit
 import UniformTypeIdentifiers
 
 /// Editor panel for one `HearingProfile`. All edits route through
-/// `ProfileStore.save(_:)`. Plain scrolling layout instead of `Form` so we get
-/// predictable rendering inside the main window's split view.
+/// `ProfileStore.save(_:)`. The long form is broken into a scannable
+/// **summary** plus collapsible groups (Identity, Device & headphones,
+/// Hearing personalization, Sound tuning, Safety) so the most cognitively
+/// demanding screen in the app reads one section at a time. Specialist knobs
+/// (Compensation, Global trim, separate-ear) live under **Advanced tuning**.
 struct ProfileDetailView: View {
     @EnvironmentObject private var profileStore: ProfileStore
     @EnvironmentObject private var audioState: AudioState
@@ -12,13 +15,23 @@ struct ProfileDetailView: View {
     @EnvironmentObject private var autoEQSavedProfiles: AutoEQSavedProfilesStore
 
     let profileID: UUID
-    /// Optional hook the parent uses to follow up on a "Duplicate to
-    /// customize" tap from the built-in banner — typically the parent
-    /// updates its own selection to the new copy's ID.
     var onDuplicatedToCopy: ((HearingProfile) -> Void)? = nil
 
-    /// A pickable profile icon: the SF Symbol plus a plain-English name shown
-    /// in the UI (users shouldn't have to read "speaker.wave.2.fill").
+    // Group expansion — grouped-but-visible by default; the user can collapse
+    // any section. "Advanced tuning" is the only thing hidden by default.
+    @State private var showIdentity = true
+    @State private var showDevice = true
+    @State private var showHearing = true
+    @State private var showTuning = true
+    @State private var showSafety = true
+    @State private var showAdvancedTuning = false
+    @State private var showMetadata = false
+    /// The "nothing applied" headphone state stays compact until the user
+    /// chooses to look for their headphones.
+    @State private var showHeadphoneSearch = false
+
+    @State private var availableDevices: [CATapEngine.OutputDevice] = []
+
     private struct ProfileIcon: Hashable {
         let symbol: String
         let name: String
@@ -39,16 +52,16 @@ struct ProfileDetailView: View {
         .init(symbol: "figure.walk",          name: "On the Go"),
     ]
 
-    /// Friendly name for a stored symbol, falling back to the raw symbol for
-    /// any profile whose icon predates this list.
     private static func iconName(for symbol: String) -> String {
         availableSymbols.first { $0.symbol == symbol }?.name ?? symbol
     }
 
+    private var isActive: Bool { audioState.activeProfileID == profileID }
+
     var body: some View {
         if let profile = profile {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 18) {
                     headerBlock(profile)
                     if profile.isBuiltIn {
                         FactoryPresetBanner(
@@ -58,21 +71,36 @@ struct ProfileDetailView: View {
                             onDuplicate: { duplicateAndHandoff(profile) }
                         )
                     }
-                    // Factory presets are editable in place — no section is
-                    // locked. The banner above offers reset/duplicate recovery.
-                    identitySection(profile)
-                    deviceSection(profile)
-                    autoEQSection(profile)
-                    tuningSection(profile)
-                    safetySection(profile)
+                    summaryCard(profile)
+
+                    group("Identity", systemImage: "person.text.rectangle", isExpanded: $showIdentity) {
+                        identityContent(profile)
+                    }
+                    group("Device and headphones", systemImage: "headphones", isExpanded: $showDevice) {
+                        deviceContent(profile)
+                        Divider()
+                        headphoneContent(profile)
+                    }
+                    group("Hearing personalization", systemImage: "ear", isExpanded: $showHearing) {
+                        hearingContent(profile)
+                    }
+                    group("Sound tuning", systemImage: "slider.horizontal.3", isExpanded: $showTuning) {
+                        soundTuningContent(profile)
+                    }
+                    group("Safety", systemImage: "shield.lefthalf.filled", isExpanded: $showSafety) {
+                        safetyContent(profile)
+                    }
                     if audioState.preferences.showProfileMetadata {
-                        metadataSection(profile)
+                        group("Metadata", systemImage: "info.circle", isExpanded: $showMetadata) {
+                            metadataContent(profile)
+                        }
                     }
                 }
                 .padding(28)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .navigationTitle(profile.name)
+            .onAppear { refreshDeviceList() }
         } else {
             ContentUnavailableView(
                 "No profile selected",
@@ -82,7 +110,7 @@ struct ProfileDetailView: View {
         }
     }
 
-    // MARK: - Sections
+    // MARK: - Header (selected vs. active, made explicit)
 
     @ViewBuilder private func headerBlock(_ profile: HearingProfile) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -92,23 +120,34 @@ struct ProfileDetailView: View {
                     .foregroundStyle(.tint)
                     .frame(width: 48, height: 48)
                     .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(profile.name).font(.title2.weight(.semibold))
-                    Text(audioState.activeProfileID == profile.id ? "Active" : "Inactive")
-                        .font(.caption)
-                        .foregroundStyle(audioState.activeProfileID == profile.id ? .green : .secondary)
+                    // "Editing" always applies (this is the selected profile);
+                    // the green "Processing audio now" pill only shows when it's
+                    // also the active profile. Two distinct meanings, two labels.
+                    HStack(spacing: 8) {
+                        Text("Editing")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if isActive {
+                            Label("Processing audio now", systemImage: "waveform")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.green)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color.green.opacity(0.14)))
+                        }
+                    }
                 }
                 Spacer()
                 Button {
                     audioState.activeProfileID = profile.id
                 } label: {
-                    Label(
-                        audioState.activeProfileID == profile.id ? "Active" : "Make Active",
-                        systemImage: audioState.activeProfileID == profile.id ? "checkmark.circle.fill" : "circle"
-                    )
+                    Label(isActive ? "Active" : "Make Active",
+                          systemImage: isActive ? "checkmark.circle.fill" : "circle")
                 }
                 .buttonStyle(.bordered)
-                .disabled(audioState.activeProfileID == profile.id)
+                .disabled(isActive)
             }
             if let description = profile.presetDescription, !description.isEmpty {
                 Text(description)
@@ -122,42 +161,81 @@ struct ProfileDetailView: View {
         }
     }
 
-    @ViewBuilder private func identitySection(_ profile: HearingProfile) -> some View {
-        sectionHeader("Identity")
-        sectionBox {
-            row("Name") {
-                TextField("", text: bindingForName(profile))
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 320)
-            }
-            Divider()
-            row("Icon") {
-                symbolPicker(profile)
+    // MARK: - Summary card
+
+    private func summaryCard(_ profile: HearingProfile) -> some View {
+        let items: [(label: String, value: String, symbol: String)] = [
+            ("Output device", deviceSummary(profile), "hifispeaker"),
+            ("Headphone correction", profile.autoEQName ?? "None", "headphones"),
+            ("Hearing profile", hearingSummary(profile), "ear"),
+            ("EQ surface", profile.eqMode.label, "slider.horizontal.3"),
+            ("Per-ear", profile.separateChannels ? "Separate L/R" : "Linked", "person.2"),
+        ]
+        return LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 170), spacing: 10)],
+            alignment: .leading,
+            spacing: 10
+        ) {
+            ForEach(items, id: \.label) { item in
+                HStack(spacing: 8) {
+                    Image(systemName: item.symbol)
+                        .foregroundStyle(.tint)
+                        .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(item.label)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(item.value)
+                            .font(.callout.weight(.medium))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.06)))
             }
         }
     }
 
-    @State private var availableDevices: [CATapEngine.OutputDevice] = []
+    private func deviceSummary(_ profile: HearingProfile) -> String {
+        guard let uid = profile.linkedDeviceUID else { return "Any device" }
+        return availableDevices.first(where: { $0.uid == uid })?.name ?? "Linked (offline)"
+    }
 
-    @ViewBuilder private func deviceSection(_ profile: HearingProfile) -> some View {
-        sectionHeader("Output device")
-        sectionBox {
-            row("Linked device") {
-                deviceMenu(profile)
-            }
-            Divider()
-            Text("When the system output switches to the linked device, SherlockEQ activates this profile automatically. Leave \"Any device\" to keep this profile manual.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .padding(.vertical, 4)
+    private func hearingSummary(_ profile: HearingProfile) -> String {
+        let hasAudiogram = !profile.leftEar.correctionBands.isEmpty || !profile.rightEar.correctionBands.isEmpty
+        guard hasAudiogram else { return "No audiogram" }
+        return profile.correctionMode == .adaptive ? "Audiogram · Adaptive" : "Audiogram · Steady"
+    }
+
+    // MARK: - Identity
+
+    @ViewBuilder private func identityContent(_ profile: HearingProfile) -> some View {
+        row("Name") {
+            TextField("", text: bindingForName(profile))
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 320)
         }
-        .onAppear { refreshDeviceList() }
+        Divider()
+        row("Icon") {
+            symbolPicker(profile)
+        }
+    }
+
+    // MARK: - Device & headphones
+
+    @ViewBuilder private func deviceContent(_ profile: HearingProfile) -> some View {
+        row("Linked device") {
+            deviceMenu(profile)
+        }
+        Text("When the system output switches to the linked device, SherlockEQ activates this profile automatically. Leave \"Any device\" to keep this profile manual.")
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .padding(.vertical, 2)
     }
 
     @ViewBuilder private func deviceMenu(_ profile: HearingProfile) -> some View {
-        // If the profile is linked to a device that's not currently
-        // connected (e.g. AirPods that aren't in range), surface that as a
-        // stub entry so the user can still see and unlink it.
         let stubName: String? = {
             guard let uid = profile.linkedDeviceUID,
                   !availableDevices.contains(where: { $0.uid == uid }) else { return nil }
@@ -213,14 +291,6 @@ struct ProfileDetailView: View {
     }
 
     private func refreshDeviceList() {
-        // CoreAudio's `AudioObjectGetPropertyDataSize` can block the
-        // calling thread when the audio HAL is in a confused state
-        // (stuck aggregate devices, disconnected USB DACs the system
-        // still thinks are present, post-sleep wedge). Running the
-        // enumeration on the main thread froze the whole app at
-        // launch — Profile Detail's `.onAppear` fires before the
-        // window is even visible, so a hang here means no UI at all.
-        // Hop to a background queue, then publish the result on main.
         Task.detached(priority: .userInitiated) {
             let devices = CATapEngine.allOutputDevices()
                 .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
@@ -230,38 +300,71 @@ struct ProfileDetailView: View {
         }
     }
 
-    @ViewBuilder private func autoEQSection(_ profile: HearingProfile) -> some View {
-        sectionHeader("Headphone correction", help: .headphoneCorrection)
-        sectionBox {
-            VStack(alignment: .leading, spacing: 14) {
-                appliedAutoEQRow(profile)
-                conflictBanner(for: profile)
-                Divider()
-                AutoEQSearchView { _ in
-                    // Per spec: import does NOT auto-apply. The user
-                    // activates the saved entry explicitly via the
-                    // saved-list Apply button below.
+    /// Headphone correction. Common state ("nothing applied") stays a single
+    /// compact line + a "Find my headphones…" button; the search/library UI
+    /// only appears once the user asks for it.
+    @ViewBuilder private func headphoneContent(_ profile: HearingProfile) -> some View {
+        HStack(spacing: 6) {
+            Text("Headphone correction")
+                .font(.subheadline.weight(.medium))
+            HelpContextButton(.headphoneCorrection, label: "headphone correction")
+        }
+
+        if profile.autoEQName != nil {
+            appliedAutoEQRow(profile)
+            conflictBanner(for: profile)
+            if !audioState.eqChain.autoEQEnabled { autoEQDisabledHint }
+            managementDisclosure(profile)
+        } else if showHeadphoneSearch {
+            HStack {
+                Text("Search the AutoEQ catalog, or import a local .txt file.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Done") { showHeadphoneSearch = false }
+                    .controlSize(.small)
+            }
+            AutoEQSearchView { _ in }
+            AutoEQSavedProfilesList(profile: profile) { saved in
+                applySavedAutoEQ(saved, to: profile)
+            }
+            legacyImportRow(for: profile)
+        } else {
+            HStack(spacing: 10) {
+                Image(systemName: "headphones").foregroundStyle(.secondary)
+                Text("None")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    showHeadphoneSearch = true
+                } label: {
+                    Label("Find my headphones…", systemImage: "magnifyingglass")
                 }
-                AutoEQSavedProfilesList(profile: profile) { saved in
-                    applySavedAutoEQ(saved, to: profile)
-                }
-                if !audioState.eqChain.autoEQEnabled {
-                    autoEQDisabledHint
-                }
-                if AutoEQLibrary.entries(in: audioState.autoEQPreferences.libraryFolder).isEmpty == false ||
-                    profile.autoEQName == nil {
-                    legacyImportRow(for: profile)
-                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
             }
         }
     }
 
-    /// Top-of-section summary of what's currently applied to this
-    /// profile. Source of truth is `profile.autoEQ{Name,Bands,
-    /// PreampDB}` — the saved-list "Apply" action writes through
-    /// these fields, and the existing file-picker import path
-    /// (`legacyImportRow`) still works for offline or curated-folder
-    /// flows.
+    /// When a correction IS applied, the search/library lives behind a
+    /// disclosure so the common "it's set, leave it" state stays compact.
+    @ViewBuilder private func managementDisclosure(_ profile: HearingProfile) -> some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 12) {
+                AutoEQSearchView { _ in }
+                AutoEQSavedProfilesList(profile: profile) { saved in
+                    applySavedAutoEQ(saved, to: profile)
+                }
+                legacyImportRow(for: profile)
+            }
+            .padding(.top, 8)
+        } label: {
+            Text("Change headphones")
+                .font(.subheadline.weight(.medium))
+        }
+    }
+
     @ViewBuilder
     private func appliedAutoEQRow(_ profile: HearingProfile) -> some View {
         if let name = profile.autoEQName, let bands = profile.autoEQBands {
@@ -269,7 +372,7 @@ struct ProfileDetailView: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Applied: \(name)").font(.callout.weight(.medium))
+                    Text(name).font(.callout.weight(.medium))
                     let preamp = profile.autoEQPreampDB ?? 0
                     Text("\(bands.count) bands · preamp \(String(format: "%+.1f", preamp)) dB")
                         .font(.caption)
@@ -289,25 +392,9 @@ struct ProfileDetailView: View {
                 .buttonStyle(.borderless)
                 .help("Remove headphone correction")
             }
-        } else {
-            HStack(spacing: 10) {
-                Image(systemName: "headphones")
-                    .foregroundStyle(.tint)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("No correction applied").font(.callout)
-                    Text("Search the AutoEQ catalog below, or import a local .txt file.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
         }
     }
 
-    /// Advisory warning when an active AutoEQ filter boosts within
-    /// ±1/3 octave of the tinnitus notch. Pure-function detector lives
-    /// in `AutoEQConflictDetector`; this view just surfaces results
-    /// and offers the spec's two action buttons.
     @ViewBuilder
     private func conflictBanner(for profile: HearingProfile) -> some View {
         let conflicts: [AutoEQConflictDetector.Conflict] = {
@@ -333,20 +420,11 @@ struct ProfileDetailView: View {
                     Text("Flagged \(conflicts.count) band\(conflicts.count == 1 ? "" : "s") within ±1/3 octave.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    // "Show me" and "Adjust notch depth" both navigate
-                    // away from this view; the actual jump-and-scroll
-                    // hooks land with the Equalizer / Tinnitus Notch
-                    // routing in a follow-up. For now they're inert
-                    // affordances so the banner reads as designed and
-                    // the wire-up is one selection-change away.
                 }
                 Spacer()
             }
             .padding(10)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.orange.opacity(0.12))
-            )
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.12)))
         }
     }
 
@@ -357,10 +435,6 @@ struct ProfileDetailView: View {
             .foregroundStyle(.secondary)
     }
 
-    /// File-picker / library-folder import path. Kept because users
-    /// who curate a local folder of AutoEQ exports (Crinacle compares,
-    /// custom-tuned files) still want the one-tap "From file…"
-    /// affordance the remote catalog can't replace.
     @ViewBuilder
     private func legacyImportRow(for profile: HearingProfile) -> some View {
         HStack(spacing: 10) {
@@ -384,7 +458,6 @@ struct ProfileDetailView: View {
             deviceName: audioState.tap.currentOutputDeviceName
         )
         if !ok {
-            // Cache missing — re-fetch then re-apply on success.
             let entry = AutoEQIndexEntry(
                 name: saved.name,
                 path: saved.path,
@@ -406,10 +479,6 @@ struct ProfileDetailView: View {
         }
     }
 
-    /// "Import…" / "Replace…" — a plain button when there's no library,
-    /// or a Menu listing each `.txt` in the configured AutoEQ folder
-    /// plus a "From file…" escape hatch. The library entries shortcut
-    /// the NSOpenPanel for users who curate a folder of corrections.
     @ViewBuilder private func autoEQImportControl(for profile: HearingProfile, label: String) -> some View {
         let entries = AutoEQLibrary.entries(in: audioState.autoEQPreferences.libraryFolder)
         if entries.isEmpty {
@@ -430,48 +499,68 @@ struct ProfileDetailView: View {
         }
     }
 
-    @ViewBuilder private func tuningSection(_ profile: HearingProfile) -> some View {
-        sectionHeader("Tuning")
-        sectionBox {
-            sliderRow(
-                "Compensation",
-                value: profile.compensationFactor,
-                range: 0.25...1.0,
-                format: { String(format: "%.0f%%", $0 * 100) },
-                set: { v in update(profile) { $0.compensationFactor = v } }
-            )
-            // While ramping, the applied strength is below the slider's
-            // target — say so right where the target is set (spec §5).
-            AcclimatizationChip(subject: profile, compact: true)
-            Divider()
-            sliderRow(
-                "Global trim",
-                value: profile.globalTrimDB,
-                range: -12...12,
-                format: { String(format: "%+.1f dB", $0) },
-                set: { v in update(profile) { $0.globalTrimDB = v } }
-            )
-            Divider()
-            balanceRow(profile)
-            Divider()
-            separateChannelsRow(profile)
+    // MARK: - Hearing personalization
+
+    @ViewBuilder private func hearingContent(_ profile: HearingProfile) -> some View {
+        let hasAudiogram = !profile.leftEar.correctionBands.isEmpty || !profile.rightEar.correctionBands.isEmpty
+        HStack(spacing: 10) {
+            Image(systemName: hasAudiogram ? "checkmark.seal.fill" : "ear")
+                .foregroundStyle(hasAudiogram ? .green : .secondary)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(hasAudiogram
+                     ? (profile.correctionMode == .adaptive ? "Audiogram correction · Adaptive" : "Audiogram correction · Steady")
+                     : "No audiogram yet")
+                    .font(.callout.weight(.medium))
+                Text(hasAudiogram
+                     ? "Thresholds and correction style are edited on the Audiogram screen."
+                     : "Enter thresholds or run the Listening Check to personalize correction.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Button {
+                audioState.pendingMainSection = .audiogram
+            } label: {
+                Label(hasAudiogram ? "Edit audiogram" : "Set up", systemImage: "waveform.path.ecg")
+            }
+            .controlSize(.small)
         }
     }
 
-    /// Per-profile UI toggle: when on, both EQ surfaces (Graphic,
-    /// Parametric) expose per-ear sliders / band lists for
-    /// fine-tuning. When off (default), one column drives both ears.
-    /// Toggling never mutates band data — the profile's leftEar /
-    /// rightEar arrays stay as they are; only future edits in the
-    /// chosen mode propagate to one or both ears. The Audiogram screen
-    /// is always per-ear regardless of this setting.
+    // MARK: - Sound tuning (common visible; specialist under Advanced)
+
+    @ViewBuilder private func soundTuningContent(_ profile: HearingProfile) -> some View {
+        balanceRow(profile)
+
+        DisclosureGroup(isExpanded: $showAdvancedTuning) {
+            VStack(alignment: .leading, spacing: 12) {
+                sliderRow(
+                    "Compensation",
+                    value: profile.compensationFactor,
+                    range: 0.25...1.0,
+                    format: { String(format: "%.0f%%", $0 * 100) },
+                    set: { v in update(profile) { $0.compensationFactor = v } }
+                )
+                AcclimatizationChip(subject: profile, compact: true)
+                sliderRow(
+                    "Global trim",
+                    value: profile.globalTrimDB,
+                    range: -12...12,
+                    format: { String(format: "%+.1f dB", $0) },
+                    set: { v in update(profile) { $0.globalTrimDB = v } }
+                )
+                separateChannelsRow(profile)
+            }
+            .padding(.top, 8)
+        } label: {
+            Text("Advanced tuning")
+                .font(.subheadline.weight(.medium))
+        }
+    }
+
     @ViewBuilder private func separateChannelsRow(_ profile: HearingProfile) -> some View {
-        // Compare by audio behaviour, not by band identity. EQBand
-        // carries a UUID that's generated fresh on construction —
-        // Simple/Speech/Advanced mint independent bands per ear via
-        // EQBandLookup, so the raw `==` is almost always false even
-        // when both ears describe identical filters. See
-        // `Array<EQBand>.audiblyEquivalent(to:)`.
         let asymmetric = !profile.leftEar.bands.audiblyEquivalent(to: profile.rightEar.bands)
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -490,20 +579,17 @@ struct ProfileDetailView: View {
                     Label("L ≠ R", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.orange)
-                        .help("This profile has different bands on each ear, but EQ tabs are in linked mode. Linked-mode edits will collapse the difference on bands you touch; untouched bands stay asymmetric.")
+                        .help("This profile has different bands on each ear, but the EQ is in linked mode. Linked-mode edits will collapse the difference on bands you touch; untouched bands stay asymmetric.")
                 }
             }
             Text(profile.separateChannels
-                 ? "EQ tabs show per-ear sliders. Edits affect only the ear you touch."
-                 : "EQ tabs show a single set of sliders. Edits apply to both ears.")
+                 ? "The EQ shows per-ear sliders. Edits affect only the ear you touch."
+                 : "The EQ shows a single set of sliders. Edits apply to both ears.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
     }
 
-    /// Stereo balance: linear L↔R pan. The recenter button next to the
-    /// readout resets to 0 — a double-click on the slider doesn't work
-    /// because Slider's own gesture eats the tap.
     @ViewBuilder private func balanceRow(_ profile: HearingProfile) -> some View {
         let centered = abs(profile.balance) < 0.005
         HStack {
@@ -541,58 +627,53 @@ struct ProfileDetailView: View {
         return b < 0 ? "L \(pct)%" : "R \(pct)%"
     }
 
-    @ViewBuilder private func safetySection(_ profile: HearingProfile) -> some View {
-        sectionHeader("Safe listening")
-        sectionBox {
-            sliderRow(
-                "Ceiling",
-                value: profile.safeListeningCeilingDB,
-                range: 70...100,
-                format: { String(format: "%.0f dBA", $0) },
-                set: { v in update(profile) { $0.safeListeningCeilingDB = v } }
-            )
-            Divider()
-            Text("NIOSH recommends 85 dBA over 8 hours; lower values shorten the safe daily duration.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .padding(.vertical, 4)
-        }
+    // MARK: - Safety
+
+    @ViewBuilder private func safetyContent(_ profile: HearingProfile) -> some View {
+        sliderRow(
+            "Listening limit",
+            value: profile.safeListeningCeilingDB,
+            range: 70...100,
+            format: { String(format: "%.0f dBA", $0) },
+            set: { v in update(profile) { $0.safeListeningCeilingDB = v } }
+        )
+        Text("NIOSH recommends 85 dBA over 8 hours; lower values shorten the safe daily duration.")
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .padding(.vertical, 2)
     }
 
-    @ViewBuilder private func metadataSection(_ profile: HearingProfile) -> some View {
-        sectionHeader("Metadata")
-        sectionBox {
-            metaRow("Created", text: profile.createdAt.formatted(date: .abbreviated, time: .shortened))
-            Divider()
-            metaRow("Modified", text: profile.modifiedAt.formatted(date: .abbreviated, time: .shortened))
-            Divider()
-            metaRow("ID", text: profile.id.uuidString)
-        }
+    // MARK: - Metadata
+
+    @ViewBuilder private func metadataContent(_ profile: HearingProfile) -> some View {
+        metaRow("Created", text: profile.createdAt.formatted(date: .abbreviated, time: .shortened))
+        Divider()
+        metaRow("Modified", text: profile.modifiedAt.formatted(date: .abbreviated, time: .shortened))
+        Divider()
+        metaRow("ID", text: profile.id.uuidString)
     }
 
-    // MARK: - Building blocks
-
-    private func sectionHeader(_ title: String, help: HelpTopic? = nil) -> some View {
-        HStack(spacing: 6) {
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(.primary)
-            if let help {
-                HelpContextButton(help, label: title.lowercased())
-            }
-        }
-    }
+    // MARK: - Group scaffold
 
     @ViewBuilder
-    private func sectionBox<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            content()
+    private func group<Content: View>(
+        _ title: String,
+        systemImage: String,
+        isExpanded: Binding<Bool>,
+        @ViewBuilder _ content: @escaping () -> Content
+    ) -> some View {
+        DisclosureGroup(isExpanded: isExpanded) {
+            VStack(alignment: .leading, spacing: 10) {
+                content()
+            }
+            .padding(.top, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            Label(title, systemImage: systemImage)
+                .font(.headline)
         }
         .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.secondary.opacity(0.06))
-        )
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.06)))
     }
 
     @ViewBuilder
@@ -690,8 +771,6 @@ struct ProfileDetailView: View {
         try? profileStore.save(copy)
     }
 
-    /// Save a duplicate of the built-in, activate it, and let the parent
-    /// follow up (typically by syncing its list selection).
     private func duplicateAndHandoff(_ profile: HearingProfile) {
         var copy = profile.duplicated()
         copy.name = uniqueName(base: copy.name)
@@ -700,7 +779,6 @@ struct ProfileDetailView: View {
             audioState.activeProfileID = copy.id
             onDuplicatedToCopy?(copy)
         } catch {
-            // Surfaced via ProfileStore.lastError (DebugView); built-in stays as-is.
         }
     }
 
@@ -728,9 +806,6 @@ struct ProfileDetailView: View {
     private func applyAutoEQ(at url: URL, name: String, to profile: HearingProfile) {
         guard let text = try? String(contentsOf: url, encoding: .utf8),
               let parsed = AutoEQParser.parse(text) else { return }
-        // Record the output device the correction is being set up on —
-        // the identity the device-mismatch warning (spec §7) checks
-        // against after route changes.
         let deviceUID = audioState.tap.currentOutputDeviceUID
         let deviceName = audioState.tap.currentOutputDeviceName
         update(profile) {
@@ -750,5 +825,6 @@ struct ProfileDetailView: View {
             $0.autoEQDeviceUID = nil
             $0.autoEQDeviceName = nil
         }
+        showHeadphoneSearch = false
     }
 }
