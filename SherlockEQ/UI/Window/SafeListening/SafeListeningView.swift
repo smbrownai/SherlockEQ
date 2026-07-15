@@ -194,7 +194,8 @@ struct SafeListeningView: View {
 
             if let profile = state.activeProfile(in: profileStore) {
                 sliderRow(
-                    "Listening limit (active profile)",
+                    "Listening limit",
+                    scope: .profile,
                     value: profile.safeListeningCeilingDB,
                     range: 70...100,
                     format: { String(format: "%.0f dBA", $0) },
@@ -247,6 +248,7 @@ struct SafeListeningView: View {
             VStack(alignment: .leading, spacing: 12) {
                 sliderRow(
                     "Quiet threshold",
+                    scope: .app,
                     value: state.safeListening.quietThresholdDBA,
                     range: 30...70,
                     format: { String(format: "%.0f dBA", $0) },
@@ -301,6 +303,7 @@ struct SafeListeningView: View {
 
                 sliderRow(
                     "Playback calibration",
+                    scope: .device,
                     value: state.calibrationOffsetDBA,
                     range: 80...115,
                     format: { String(format: "%.0f dB SPL @ 0 dBFS", $0) },
@@ -463,14 +466,18 @@ struct SafeListeningView: View {
     @ViewBuilder
     private func sliderRow(
         _ label: String,
+        scope: ControlScope? = nil,
         value: Double,
         range: ClosedRange<Double>,
         format: @escaping (Double) -> String,
         set: @escaping (Double) -> Void
     ) -> some View {
         HStack {
-            Text(label)
-                .frame(width: 220, alignment: .leading)
+            HStack(spacing: 6) {
+                Text(label)
+                if let scope { ScopeBadge(scope: scope) }
+            }
+            .frame(width: 240, alignment: .leading)
             Slider(value: Binding(get: { value }, set: set), in: range)
                 .controlSize(.small)
             Text(format(value))

@@ -106,13 +106,13 @@ struct MonitorSidebar: View {
 
     @ViewBuilder private var volumeSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                // Explicit scope: this is the app-wide output gain, the
-                // same value the popover and Settings expose — not a
-                // per-profile setting. The label says so to kill the
-                // "global or profile?" ambiguity the bare sliders created.
-                Text("App master gain")
+            HStack(spacing: 6) {
+                // Scope badge (App) marks this as the app-wide output gain,
+                // the same value the popover and Settings expose — not a
+                // per-profile setting.
+                Text("Master gain")
                     .font(.caption.weight(.semibold))
+                ScopeBadge(scope: .app)
                 Spacer()
                 Text(formatGain(audioState.engineParameters.masterGainDB))
                     .font(.caption.monospacedDigit())
@@ -144,13 +144,13 @@ struct MonitorSidebar: View {
     @ViewBuilder private var balanceSection: some View {
         if let profile = audioState.activeProfile(in: profileStore) {
             VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    // Explicit scope: balance belongs to the ACTIVE
-                    // profile and is saved with it (editing here is the
-                    // same as ProfileDetail's balance row) — unlike the
-                    // app-wide gain above it.
-                    Text("Active profile balance")
+                HStack(spacing: 6) {
+                    // Scope badge (Profile): balance is saved with the active
+                    // profile (editing here is the same as ProfileDetail's
+                    // balance row) — unlike the app-wide gain above it.
+                    Text("Balance")
                         .font(.caption.weight(.semibold))
+                    ScopeBadge(scope: .profile)
                     Spacer()
                     Text(balanceLabel(profile.balance))
                         .font(.caption.monospacedDigit())
@@ -202,12 +202,13 @@ struct MonitorSidebar: View {
 
     @ViewBuilder private var doseSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 4) {
-                // Explicit scope: cumulative exposure for TODAY (resets at
-                // local midnight), not a live level — the VU above is the
+            HStack(spacing: 6) {
+                // Scope badge (Today): cumulative exposure for today (resets
+                // at local midnight), not a live level — the VU above is the
                 // live signal.
-                Text("Today's exposure")
+                Text("Exposure")
                     .font(.caption.weight(.semibold))
+                ScopeBadge(scope: .session)
                 Spacer()
                 Image(systemName: doseZoneSymbol)
                     .foregroundStyle(doseColor)

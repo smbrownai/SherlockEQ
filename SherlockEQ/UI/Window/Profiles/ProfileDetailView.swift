@@ -538,6 +538,7 @@ struct ProfileDetailView: View {
             VStack(alignment: .leading, spacing: 12) {
                 sliderRow(
                     "Compensation",
+                    scope: .profile,
                     value: profile.compensationFactor,
                     range: 0.25...1.0,
                     format: { String(format: "%.0f%%", $0 * 100) },
@@ -546,6 +547,7 @@ struct ProfileDetailView: View {
                 AcclimatizationChip(subject: profile, compact: true)
                 sliderRow(
                     "Global trim",
+                    scope: .profile,
                     value: profile.globalTrimDB,
                     range: -12...12,
                     format: { String(format: "%+.1f dB", $0) },
@@ -593,9 +595,12 @@ struct ProfileDetailView: View {
     @ViewBuilder private func balanceRow(_ profile: HearingProfile) -> some View {
         let centered = abs(profile.balance) < 0.005
         HStack {
-            Text("Balance")
-                .foregroundStyle(.secondary)
-                .frame(width: 120, alignment: .leading)
+            HStack(spacing: 6) {
+                Text("Balance")
+                    .foregroundStyle(.secondary)
+                ScopeBadge(scope: .profile)
+            }
+            .frame(width: 170, alignment: .leading)
             Slider(
                 value: Binding(
                     get: { profile.balance },
@@ -632,6 +637,7 @@ struct ProfileDetailView: View {
     @ViewBuilder private func safetyContent(_ profile: HearingProfile) -> some View {
         sliderRow(
             "Listening limit",
+            scope: .profile,
             value: profile.safeListeningCeilingDB,
             range: 70...100,
             format: { String(format: "%.0f dBA", $0) },
@@ -690,15 +696,19 @@ struct ProfileDetailView: View {
     @ViewBuilder
     private func sliderRow(
         _ label: String,
+        scope: ControlScope? = nil,
         value: Double,
         range: ClosedRange<Double>,
         format: @escaping (Double) -> String,
         set: @escaping (Double) -> Void
     ) -> some View {
         HStack {
-            Text(label)
-                .foregroundStyle(.secondary)
-                .frame(width: 120, alignment: .leading)
+            HStack(spacing: 6) {
+                Text(label)
+                    .foregroundStyle(.secondary)
+                if let scope { ScopeBadge(scope: scope) }
+            }
+            .frame(width: 170, alignment: .leading)
             Slider(value: Binding(get: { value }, set: set), in: range)
                 .controlSize(.small)
             Text(format(value))
