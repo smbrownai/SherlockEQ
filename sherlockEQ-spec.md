@@ -391,8 +391,26 @@ NIOSH constants (`SafeListeningTracker`):
 
 **Popover:** compact dose bar (green → amber → red), remaining-time label.
 
-**Main window — Safe Listening view:** full detail — current level estimate, session
-history, ceiling configuration, notification preferences, SPL-calibration workflow.
+**Main window — Safe Listening view:** organised around the two live questions —
+**"How loud is it now?"** and **"Today's exposure"** — at the top, each carrying a
+calibration-confidence badge so the presented precision never implies more
+certainty than exists:
+- **Confidence badge** next to the live dBA: **Not calibrated** (no user
+  calibration → rough default), **Approximate** (calibrated but volume unreadable
+  / different device), or **Calibrated** (calibrated and volume-tracking active),
+  derived from `hasUserCalibration` + `volumeTrackingStatus`.
+- **Waiting for audio** — when the level reading is below the meter floor the live
+  card shows "Waiting for audio" rather than a misleading "Safe" verdict.
+- **Remaining safe time** is surfaced as the actionable figure once calibrated
+  (dose % otherwise).
+- The profile's limit is labelled **"Listening limit"** (was "Ceiling").
+- **Calibration** (an SPL-meter setup task, not a daily one) lives in its own
+  **sheet** opened from a short "Calibrate for more accurate level estimates" row;
+  the tone + meter-reading workflow and the volume-tracking status line moved
+  there.
+- **Quiet threshold**, the 80/100 % notification toggle, and **Reset today's
+  dose** (now confirmation-gated and de-emphasised) sit under an **Advanced**
+  disclosure.
 
 **Behavior:**
 - Dose accumulates at all levels (NIOSH self-regulates — permissible duration at

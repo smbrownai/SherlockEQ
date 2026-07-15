@@ -4,6 +4,10 @@ import SwiftUI
 /// breakpoints (≤70 unlimited, 70–85 cautious, 85–95 NIOSH limit, ≥95 risky).
 struct LevelMeterView: View {
     let levelDBA: Double
+    /// When false, no meaningful level is arriving (silence / engine idle):
+    /// the meter shows "Waiting for audio" rather than a misleading "Safe"
+    /// verdict at the floor.
+    var isReceivingAudio: Bool = true
 
     private let minDB: Double = 30
     private let maxDB: Double = 110
@@ -92,11 +96,12 @@ struct LevelMeterView: View {
     }
 
     private var displayValue: String {
-        if levelDBA < minDB + 1 { return "—" }
+        if !isReceivingAudio || levelDBA < minDB + 1 { return "—" }
         return String(format: "%.0f", levelDBA)
     }
 
     private var zoneLabel: String {
+        guard isReceivingAudio else { return "Waiting for audio" }
         switch levelDBA {
         case ..<70:  return "Safe"
         case ..<85:  return "Caution"
@@ -105,6 +110,7 @@ struct LevelMeterView: View {
     }
 
     private var zoneSymbol: String {
+        guard isReceivingAudio else { return "waveform.slash" }
         switch levelDBA {
         case ..<70:  return "checkmark.shield.fill"
         case ..<85:  return "exclamationmark.triangle.fill"
@@ -113,6 +119,7 @@ struct LevelMeterView: View {
     }
 
     private var zoneColor: Color {
+        guard isReceivingAudio else { return .secondary }
         switch levelDBA {
         case ..<70:  return .green
         case ..<85:  return .yellow
