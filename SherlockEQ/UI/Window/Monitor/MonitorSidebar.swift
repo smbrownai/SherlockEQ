@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Right-hand monitoring sidebar — visible alongside every main-window
-/// tab so users get persistent level / dose awareness while editing
-/// their EQ, browsing profiles, calibrating, etc. Dismissible via the
-/// toolbar toggle in `MainWindowView` and the visibility flag
-/// `monitorSidebarVisible` persisted in @AppStorage.
+/// Right-hand monitoring panel — opened on demand as an inspector from the
+/// toolbar's `MonitorStatusButton` (it used to be a persistent gutter, but
+/// its usual state was an idle low-information repeat, so it's collapsed by
+/// default now). Its visibility flag `monitorSidebarVisible` persists in
+/// @AppStorage. Each control here carries an explicit scope label so it's
+/// unambiguous whether a value is app-wide or per-profile.
 ///
 /// Contents (top → bottom):
 ///   1. Output level VU — vertical L/R peak meter. Triple-tap the
@@ -106,7 +107,11 @@ struct MonitorSidebar: View {
     @ViewBuilder private var volumeSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Master Gain")
+                // Explicit scope: this is the app-wide output gain, the
+                // same value the popover and Settings expose — not a
+                // per-profile setting. The label says so to kill the
+                // "global or profile?" ambiguity the bare sliders created.
+                Text("App master gain")
                     .font(.caption.weight(.semibold))
                 Spacer()
                 Text(formatGain(audioState.engineParameters.masterGainDB))
@@ -140,7 +145,11 @@ struct MonitorSidebar: View {
         if let profile = audioState.activeProfile(in: profileStore) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("Balance")
+                    // Explicit scope: balance belongs to the ACTIVE
+                    // profile and is saved with it (editing here is the
+                    // same as ProfileDetail's balance row) — unlike the
+                    // app-wide gain above it.
+                    Text("Active profile balance")
                         .font(.caption.weight(.semibold))
                     Spacer()
                     Text(balanceLabel(profile.balance))
@@ -176,7 +185,9 @@ struct MonitorSidebar: View {
     }
 
     private func balanceLabel(_ b: Double) -> String {
-        if abs(b) < 0.005 { return "Center" }
+        // "Centered" (not "Center") to match the toolbar status glance
+        // that summarizes this panel.
+        if abs(b) < 0.005 { return "Centered" }
         if b > 0 { return String(format: "R %.0f%%", b * 100) }
         return String(format: "L %.0f%%", abs(b) * 100)
     }
@@ -192,7 +203,10 @@ struct MonitorSidebar: View {
     @ViewBuilder private var doseSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 4) {
-                Text("Today's Dose")
+                // Explicit scope: cumulative exposure for TODAY (resets at
+                // local midnight), not a live level — the VU above is the
+                // live signal.
+                Text("Today's exposure")
                     .font(.caption.weight(.semibold))
                 Spacer()
                 Image(systemName: doseZoneSymbol)
