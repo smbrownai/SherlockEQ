@@ -44,7 +44,7 @@ struct ApplyAudiogramSheet: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Apply Audiogram to Other Profiles")
                 .font(.headline)
-            Text("Copies \(source.name)'s hearing thresholds onto the profiles you choose and recomputes their correction. Their EQ, tinnitus notch, and compensation strength are left as they are.")
+            Text("Copies \(source.name)'s hearing thresholds onto the profiles you choose and recomputes their hearing adjustment. Their EQ, tinnitus notch, and compensation strength are left as they are.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

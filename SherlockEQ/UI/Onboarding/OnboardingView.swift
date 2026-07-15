@@ -169,7 +169,7 @@ private struct OnboardingWelcomeStep: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Welcome to SherlockEQ")
                             .font(.title.weight(.semibold))
-                        Text("Real-time hearing correction for everything your Mac plays.")
+                        Text("Real-time hearing adjustment for everything your Mac plays.")
                             .font(.title3)
                             .foregroundStyle(.secondary)
                     }
@@ -186,7 +186,7 @@ private struct OnboardingWelcomeStep: View {
                         Image(systemName: "info.circle")
                             .foregroundStyle(.tint)
                     }
-                    Text("Equalizers inside other apps — like Music's EQ or Sound Check — shape the audio before it reaches SherlockEQ and stack with its correction. For predictable results, keep other apps' equalizers flat.")
+                    Text("Equalizers inside other apps — like Music's EQ or Sound Check — shape the audio before it reaches SherlockEQ and stack with its adjustment. For predictable results, keep other apps' equalizers flat.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -412,7 +412,7 @@ private struct OnboardingProfileStep: View {
             .onChange(of: selected) { applySelection() }
             .onAppear { applySelection() }
 
-            Text("These are listening-comfort presets, not medical hearing correction.")
+            Text("These are listening-comfort presets, not a medical hearing adjustment.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -479,7 +479,7 @@ private struct OnboardingPersonalizationStep: View {
 
             infoRow(symbol: "ear",
                     title: "Audiogram",
-                    subtitle: "Plot a hearing test for a tailored correction.")
+                    subtitle: "Plot a hearing test for a tailored adjustment.")
             infoRow(symbol: "bandage",
                     title: "Tinnitus pitch",
                     subtitle: "Match a tone to your ringing and notch it out.")

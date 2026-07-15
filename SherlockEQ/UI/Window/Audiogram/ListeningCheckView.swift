@@ -71,7 +71,7 @@ struct ListeningCheckView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Listening Check")
                 .font(.title2.weight(.semibold))
-            Text("A guided estimate of the quietest level you can hear at each audiogram frequency, per ear. Takes about five minutes. The result can power your hearing correction — no clinical audiogram needed.")
+            Text("A guided estimate of the quietest level you can hear at each audiogram frequency, per ear. Takes about five minutes. The result can power your hearing adjustment — no clinical audiogram needed.")
                 .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -228,10 +228,10 @@ struct ListeningCheckView: View {
                 }
 
                 if hasUnmeasurable {
-                    warningBox("Some frequencies couldn't be measured — no response even at this check's safety ceiling. Those points are left out of the correction. For losses in that range, an EQ alone may not fully restore clarity; a hearing professional can discuss additional options.")
+                    warningBox("Some frequencies couldn't be measured — no response even at this check's safety ceiling. Those points are left out of the adjustment. For losses in that range, an EQ alone may not fully restore clarity; a hearing professional can discuss additional options.")
                 }
 
-                Text("This is an estimate made with your own headphones in your own room. It cannot diagnose anything. Applying it derives a correction the same way manual audiogram entry does — starting gently and rising over three weeks.")
+                Text("This is an estimate made with your own headphones in your own room. It cannot diagnose anything. Applying it derives an adjustment the same way manual audiogram entry does — starting gently and rising over three weeks.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

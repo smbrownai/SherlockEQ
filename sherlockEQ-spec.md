@@ -285,10 +285,14 @@ from their audiologist. Lives in the main window's Audiogram section.
 - User adjusts `compensationFactor` via the "Compensation Strength" slider in both
   the popover (quick) and the main window (in context with the EQ curve preview).
 
-**Correction style — Steady vs Adaptive (phase 4):** a segmented selector on
+**Adjustment style — Steady vs Adaptive (phase 4):** a segmented selector on
 the Audiogram screen (below the chart, shown only when correction exists)
 writes `profile.correctionMode` (`.steady` default / `.adaptive`, tolerant
-decode). Steady applies the stored correction as fixed EQ in the static
+decode). **Terminology:** user-facing copy calls the audiogram-derived
+processing a **"hearing adjustment"** (not "correction") — "correction" implies
+a verified clinical fitting this deliberately isn't. Code identifiers keep the
+`correction*` names (`correctionMode`, `correctionBands`, …); "headphone
+correction" (AutoEQ) is a separate, unchanged term. Steady applies the stored correction as fixed EQ in the static
 cascade; Adaptive routes it through the `AdaptiveCorrectionProcessor`
 (6-band level-following gains anchored to the NAL-R curve at 65 dB SPL —
 see phase4-adaptive-correction.md). Supporting UI:

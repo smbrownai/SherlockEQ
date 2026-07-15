@@ -41,7 +41,7 @@ struct EqualizerView: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Image(systemName: "info.circle")
                     .foregroundStyle(.secondary)
-                Text("Equalizers inside other apps — like Music's EQ — shape the audio before it reaches SherlockEQ and stack with this curve. For predictable correction, keep other apps' equalizers flat.")
+                Text("Equalizers inside other apps — like Music's EQ — shape the audio before it reaches SherlockEQ and stack with this curve. For predictable results, keep other apps' equalizers flat.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

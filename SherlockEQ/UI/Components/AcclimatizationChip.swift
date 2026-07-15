@@ -27,17 +27,17 @@ struct AcclimatizationChip: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Image(systemName: "chart.line.uptrend.xyaxis")
                         .foregroundStyle(.tint)
-                    Text("Acclimatization: day \(day) of \(Int(AcclimatizationRamp.durationDays)) — correction at \(percent) %.")
+                    Text("Acclimatization: day \(day) of \(Int(AcclimatizationRamp.durationDays)) — adjustment at \(percent) %.")
                         .font(compact ? .caption : .callout)
                     Spacer()
                     Button("Skip to full strength") {
                         skipRamp(profile)
                     }
                     .controlSize(.small)
-                    .help("End the ramp now and apply the correction at its full target strength.")
+                    .help("End the ramp now and apply the adjustment at its full target strength.")
                 }
                 if !compact {
-                    Text("A new correction starts gentle and rises to full strength over three weeks — the same easing hearing-care professionals use, because an unaccustomed ear finds the full prescription harsh at first. Not medical advice; skip ahead any time.")
+                    Text("A new adjustment starts gentle and rises to full strength over three weeks — the same easing hearing-care professionals use, because an unaccustomed ear finds the full prescription harsh at first. Not medical advice; skip ahead any time.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -54,7 +54,7 @@ struct AcclimatizationChip: View {
                     .strokeBorder(Color.accentColor.opacity(0.30))
             )
             .accessibilityElement(children: .contain)
-            .accessibilityLabel("Acclimatization ramp, day \(day) of \(Int(AcclimatizationRamp.durationDays)), correction at \(percent) percent.")
+            .accessibilityLabel("Acclimatization ramp, day \(day) of \(Int(AcclimatizationRamp.durationDays)), adjustment at \(percent) percent.")
         }
     }
 

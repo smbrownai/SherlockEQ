@@ -77,11 +77,13 @@ currently applied; **Skip to full strength** ends the ramp any time. The
 Compensation slider sets your long-term target — the ramp scales it, never
 overrides it.
 
-## Correction style: Steady vs Adaptive
+## Adjustment style: Steady vs Adaptive
 
-Below the threshold chart you can choose how the correction is applied:
+Below the threshold chart you can choose how the hearing adjustment is applied
+(SherlockEQ calls this a *hearing adjustment*, not a "correction", because it's
+a comfort-oriented shaping tuned by ear — not a verified clinical fitting):
 
-- **Steady** (the default) applies the same correction at every volume — a
+- **Steady** (the default) applies the same adjustment at every volume — a
   fixed EQ shape derived from your thresholds.
 - **Adaptive** gives quiet sounds more help and loud sounds less — closer to
   how hearing actually works. Sensorineural loss compresses the range between
@@ -94,7 +96,7 @@ Adaptive judges "quiet" and "loud" using your **playback calibration** from
 Safe Listening. Until you calibrate, it runs in a reduced-depth mode — the
 level-dependent part is kept small because its level estimate is a guess. The
 preview chart switches to a family of three curves (quiet / moderate / loud)
-so you can see exactly how the correction moves with level.
+so you can see exactly how the adjustment moves with level.
 
 Start with Steady; try Adaptive when your calibration is set and you notice
 quiet passages need more help than loud ones.

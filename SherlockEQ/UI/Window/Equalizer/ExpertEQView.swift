@@ -654,7 +654,7 @@ struct ExpertEQView: View {
             let targetDB = BiquadResponse.compositeMagnitudeDB(at: band.frequencyHz, bands: target)
             let delta = userDB - targetDB
             VStack(alignment: .leading, spacing: 1) {
-                Text("vs corr.")
+                Text("vs adj.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 Text(formatDelta(delta))
@@ -662,7 +662,7 @@ struct ExpertEQView: View {
                     .foregroundStyle(deltaTint(delta))
             }
             .frame(width: 78, alignment: .leading)
-            .help("How far your tone EQ sits from the hearing-correction curve at \(Int(band.frequencyHz)) Hz. The correction is applied automatically on top of your EQ — this is just for reference.")
+            .help("How far your tone EQ sits from the hearing-adjustment curve at \(Int(band.frequencyHz)) Hz. The adjustment is applied automatically on top of your EQ — this is just for reference.")
         }
     }
 
