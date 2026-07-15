@@ -49,6 +49,14 @@ struct AudiogramView: View {
                 CorrectionConflictChip(crossLink: .tinnitusNotch)
                 editorCard(profile)
                 previewCard(profile)
+                // Contextual (kept): interpreting/applying an audiogram-derived
+                // adjustment is a moment where a health misreading is possible.
+                SafetyNote(
+                    text: "Adjustments here are conservative listening starting points you fine-tune by ear — not a clinical fitting, and not a correction of a measured loss.",
+                    symbol: "ear",
+                    tint: .blue,
+                    learnMoreTopic: .audiogramProfiles
+                )
             }
             .padding(28)
             .frame(maxWidth: .infinity, alignment: .leading)

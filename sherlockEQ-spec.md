@@ -139,6 +139,43 @@ the sliders also appear on the popover / Settings / Profile Detail):
    green/amber/red capsule (resets at local midnight).
 
 Visibility persisted via `@AppStorage("sherlockeq.monitorSidebarVisible")`.
+
+### Health & Safety disclosure (three-tier model)
+
+Health/safety disclosure follows one architecture with a single source of
+truth (`HealthSafetyDisclosure`) so wording can't drift into slightly
+different per-view copies:
+
+1. **Persistent access** — a **Health & Safety** row in the sidebar footer
+   (below the active-profile control, a compact secondary row so it never
+   obscures it at the minimum window size). Reachable from every main screen,
+   keyboard-operable, VoiceOver-labeled, understandable from its text alone
+   (icon decorative). Opens the consolidated **`HealthSafetySheet`** (native
+   `.sheet`, presented at the window level via `AudioState.showHealthSafety`).
+   The sheet is calm and scannable: intro summary + the sections About /
+   Not a medical device or hearing aid / Audiograms & hearing adjustments /
+   Tinnitus tools & test tones / Listening-level estimates & calibration /
+   Safe use & when to stop / When to consult a professional / Privacy & local
+   processing / Learn more, each linking to the relevant Help article. Done
+   button; full keyboard + VoiceOver; Dynamic-Type friendly; no color-only
+   meaning.
+2. **Contextual just-in-time notices** — one-or-two-sentence `SafetyNote`s (or
+   inline copy) kept where timing matters, each with a "Learn more" link:
+   tinnitus red-flag symptoms (Tinnitus Tools), start-quiet/stop-if-
+   uncomfortable at the tone transport, large-boost warning past +9 dB
+   (Graphic EQ), audiogram "starting point, not a clinical fitting"
+   (Audiogram), the calibration-confidence badge + "Waiting for audio"
+   (Safe Listening), and the Listening Check's estimate framing. These never
+   repeat the full general disclosure.
+3. **Detailed background → Help** — the deep-dive (NIOSH exchange rate,
+   NAL-R rationale, notched-sound evidence, privacy specifics) lives in the
+   Help articles; the sheet and notices summarize and link.
+
+Repeated general-purpose "not a medical device" cards (Clarity, Safe Listening)
+are replaced by the compact **`HealthSafetyChip`** ("Consumer audio tools —
+not medical care. Health & Safety…"), which opens the same sheet. This changes
+none of the app's medical-device status, intended purpose, audio behavior, or
+safety policies — only how the disclosure is organized and surfaced.
 Defaults to **closed**: the panel's usual state was an idle low-information
 repeat, and the live glance now lives in the toolbar status.
 
@@ -1288,6 +1325,8 @@ SherlockEQ/
 │       ├── EQGainChip.swift
 │       ├── CanvasLayerChipStrip.swift
 │       ├── ScopeBadge.swift                 ← control-scope pill (App / Profile / Device / ear / Today)
+│       ├── HealthSafetySheet.swift          ← consolidated Health & Safety disclosure sheet
+│       ├── DisclosureChip.swift             ← HealthSafetyChip (compact) + SafetyNote (contextual)
 │       ├── LogFreqAxis.swift
 │       ├── PlaceholderView.swift
 │       ├── ColorHex.swift

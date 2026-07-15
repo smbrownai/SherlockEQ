@@ -429,19 +429,22 @@ struct SafeListeningView: View {
         }
     }
 
+    // Contextual (kept): how to read the estimate and dose — timing-relevant
+    // to interpreting the numbers on this screen. The general "not a medical
+    // device" statement moved to the shared chip → Health & Safety sheet.
     @ViewBuilder private var disclaimerCard: some View {
         card {
             cardHeader("About this estimate", systemImage: "info.circle")
             VStack(alignment: .leading, spacing: 8) {
-                bullet("Loudness is estimated from the digital signal level, not measured at your ear. Actual SPL still depends on your hardware and headphone fit. System-volume changes are tracked into the estimate automatically when your output device exposes its volume.")
-                bullet("Dose uses the NIOSH 3 dB exchange rate: 85 dBA over 8 hours is 100 %; every +3 dBA halves the safe duration.")
-                bullet("SherlockEQ is not a medical device and makes no diagnostic claims. The dose meter is a daily-listening guide, not a clinical reading.")
+                bullet("Loudness is estimated from the digital signal level, not measured at your ear. Actual SPL still depends on your hardware and headphone fit.")
+                bullet("Dose uses the NIOSH 3 dB exchange rate: 85 dBA over 8 hours is 100 %; every +3 dBA halves the safe duration. It's a daily-listening guide, not a clinical reading.")
                 Link(destination: URL(string: "https://www.cdc.gov/niosh/topics/noise/")!) {
                     Label("NIOSH noise & hearing-loss prevention", systemImage: "arrow.up.right.square")
                         .font(.callout)
                 }
             }
         }
+        HealthSafetyChip()
     }
 
     // MARK: - Building blocks
