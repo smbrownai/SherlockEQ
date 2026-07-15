@@ -91,7 +91,7 @@ struct CanvasLayerChipStrip: View {
                         swatch: earColor,
                         isOn: $showResultCurve,
                         hint: hasAudiogram
-                            ? "What you actually hear — the hearing correction and your EQ combined."
+                            ? "What you actually hear — the hearing adjustment and your EQ combined."
                             : "Your active equaliser curve and band handles."
                     )
                     if hasAudiogram {
@@ -99,14 +99,14 @@ struct CanvasLayerChipStrip: View {
                             "EQ",
                             swatch: earColor,
                             isOn: $showEQCurve,
-                            hint: "Your tone EQ on its own, without the hearing correction — the difference from Result is what the correction adds."
+                            hint: "Your tone EQ on its own, without the hearing adjustment — the difference from Result is what the adjustment adds."
                         )
                         chip(
-                            "Correction",
+                            "Adjustment",
                             swatch: earColor,
                             pattern: .dashed,
                             isOn: $showAudiogramTarget,
-                            hint: "The audiogram-derived hearing correction on its own."
+                            hint: "The audiogram-derived hearing adjustment on its own."
                         )
                     }
                     chip(
@@ -208,7 +208,7 @@ struct CanvasLayerChipStrip: View {
                     isOn: $showEQCurve
                 )
                 popoverRow(
-                    "Correction",
+                    "Adjustment",
                     swatch: earColor,
                     pattern: .dashed,
                     isOn: $showAudiogramTarget

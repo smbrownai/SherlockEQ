@@ -192,9 +192,9 @@ struct AudiogramView: View {
     @ViewBuilder private func correctionStyleCard(_ profile: HearingProfile) -> some View {
         card {
             HStack(spacing: 12) {
-                Text("Correction style")
+                Text("Adjustment style")
                     .font(.subheadline.weight(.semibold))
-                Picker("Correction style", selection: correctionModeBinding(for: profile)) {
+                Picker("Adjustment style", selection: correctionModeBinding(for: profile)) {
                     Text("Steady").tag(CorrectionMode.steady)
                     Text("Adaptive").tag(CorrectionMode.adaptive)
                 }
@@ -203,7 +203,7 @@ struct AudiogramView: View {
                 .frame(maxWidth: 240)
                 Spacer()
             }
-            Text("Steady applies the same correction at every volume. Adaptive gives quiet sounds more help and loud sounds less — closer to how hearing actually works — using your playback calibration to judge levels. Start with Steady; try Adaptive when your calibration is set.")
+            Text("Steady applies the same adjustment at every volume. Adaptive gives quiet sounds more help and loud sounds less — closer to how hearing actually works — using your playback calibration to judge levels. Start with Steady; try Adaptive when your calibration is set.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -232,7 +232,7 @@ struct AudiogramView: View {
                 updated.correctionMode = newMode
                 try? profileStore.save(
                     updated,
-                    actionName: "Set correction style to \(newMode == .adaptive ? "Adaptive" : "Steady")"
+                    actionName: "Set adjustment style to \(newMode == .adaptive ? "Adaptive" : "Steady")"
                 )
             }
         )

@@ -509,12 +509,12 @@ struct ProfileDetailView: View {
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
                 Text(hasAudiogram
-                     ? (profile.correctionMode == .adaptive ? "Audiogram correction · Adaptive" : "Audiogram correction · Steady")
+                     ? (profile.correctionMode == .adaptive ? "Audiogram adjustment · Adaptive" : "Audiogram adjustment · Steady")
                      : "No audiogram yet")
                     .font(.callout.weight(.medium))
                 Text(hasAudiogram
-                     ? "Thresholds and correction style are edited on the Audiogram screen."
-                     : "Enter thresholds or run the Listening Check to personalize correction.")
+                     ? "Thresholds and adjustment style are edited on the Audiogram screen."
+                     : "Enter thresholds or run the Listening Check to personalize your hearing adjustment.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

@@ -448,7 +448,7 @@ struct ParametricCanvasView: View {
             var t: [(CurveKind, String)] = []
             if showResultCurve { t.append((.result, "Result")) }
             if showEQCurve { t.append((.eq, "EQ")) }
-            if showAudiogramTarget { t.append((.correction, "Correction")) }
+            if showAudiogramTarget { t.append((.correction, "Adjustment")) }
             return t
         }()
         if !types.isEmpty && (types.count > 1 || earsAsymmetric) {

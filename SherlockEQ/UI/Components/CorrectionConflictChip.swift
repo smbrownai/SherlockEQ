@@ -38,7 +38,7 @@ struct CorrectionConflictChip: View {
                         }
                         .controlSize(.small)
                         .help(crossLink == .audiogram
-                              ? "Adjust the correction strength on the Audiogram screen."
+                              ? "Adjust the hearing-adjustment strength on the Audiogram screen."
                               : "Adjust the notch depth or width on the Tinnitus Notch screen.")
                         Spacer()
                     }

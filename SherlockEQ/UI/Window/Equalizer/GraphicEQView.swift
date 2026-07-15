@@ -158,7 +158,7 @@ struct GraphicEQView: View {
     /// entirely and reads as clearly clickable.
     private var toneFlavorButton: some View {
         Menu {
-            Section("Taste presets — not hearing correction. They stack with your profile's correction.") {
+            Section("Taste presets — not a hearing adjustment. They stack with your profile's hearing adjustment.") {
                 ForEach(ToneFlavorPreset.allCases) { preset in
                     Button {
                         apply(preset)
@@ -180,7 +180,7 @@ struct GraphicEQView: View {
         .buttonStyle(.bordered)
         .controlSize(.large)
         .fixedSize()
-        .help("Genre and taste curves — a matter of preference, not hearing correction. They stack on top of your profile's correction.")
+        .help("Genre and taste curves — a matter of preference, not a hearing adjustment. They stack on top of your profile's hearing adjustment.")
         .accessibilityLabel("Tone flavor presets")
     }
 
@@ -237,7 +237,7 @@ struct GraphicEQView: View {
                 Image(systemName: "checkmark.seal.fill")
                     .foregroundStyle(.tint)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Additional correction is active")
+                    Text("Additional processing is active")
                         .font(.callout.weight(.semibold))
                     Text("\(sources.joined(separator: " + ")) — included in the curve above, beneath your graphic bands.")
                         .font(.callout)
