@@ -54,7 +54,10 @@ struct NotchControlView: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color.secondary.opacity(0.06))
         )
-        .opacity(notch.enabled ? 1.0 : 0.6)
+        // No whole-card dimming: titles and explanations stay readable when
+        // the notch is off. Only the controls themselves are `.disabled`
+        // (via the per-row `.disabled(!notch.enabled)` below), which is the
+        // honest "you can't operate this yet" signal.
     }
 
     // MARK: - Sections

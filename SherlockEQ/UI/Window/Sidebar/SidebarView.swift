@@ -7,8 +7,15 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: $selection) {
-            Section("Audio Processing") {
-                ForEach(SidebarSection.audioProcessorSections) { section in
+            Section("Sound") {
+                ForEach(SidebarSection.soundSections) { section in
+                    Label(section.title, systemImage: section.symbol)
+                        .tag(section)
+                }
+            }
+
+            Section("Comfort & Safety") {
+                ForEach(SidebarSection.comfortSafetySections) { section in
                     Label(section.title, systemImage: section.symbol)
                         .tag(section)
                 }
@@ -25,40 +32,40 @@ struct SidebarView: View {
         .safeAreaInset(edge: .bottom) { profileShortcut }
     }
 
+    /// The active-profile footer is itself the clickable control that opens
+    /// profile management — one button (profile name + a chevron affordance)
+    /// so it's obvious it's tappable, rather than a read-only label sitting
+    /// above a separate "Manage Profiles" row.
     @ViewBuilder private var profileShortcut: some View {
-        // Active profile name (read-only label) sits above the "Manage
-        // Profiles" jump so the user always knows what's loaded — the
-        // sidebar is the most persistent surface in the window, and
-        // the active profile drives every audio decision downstream.
-        // Real CRUD lives in the section's toolbar; the button is just
-        // navigation.
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Active profile")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(activeProfileName)
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .padding(.bottom, 8)
-            .accessibilityElement(children: .combine)
-
             Divider()
-
             Button(action: { selection = .profiles }) {
-                Label("Manage Profiles", systemImage: "person.crop.circle.badge.plus")
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 10) {
+                    Image(systemName: "person.crop.circle")
+                        .foregroundStyle(.tint)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Active profile")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(activeProfileName)
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .help("Open the Profiles section")
+            .help("Manage profiles — create, duplicate, import, or switch the active profile")
+            .accessibilityLabel("Active profile: \(activeProfileName). Manage profiles")
         }
     }
 

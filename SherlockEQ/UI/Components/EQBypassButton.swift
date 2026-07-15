@@ -28,9 +28,10 @@ struct EQBypassButton: View {
         }
         .buttonStyle(.plain)
         .help(audioState.eqChain.referenceMode
-              ? "Re-enable EQ processing (⌘B)"
-              : "Bypass all EQ stages to hear the source unprocessed (⌘B)")
+              ? "Reference Mode — temporarily bypassing all processing. Click to re-enable (⌘B)."
+              : "Reference Mode — temporarily bypass all processing to hear the source unchanged (⌘B).")
         .accessibilityLabel("Reference Mode")
+        .accessibilityHint("Temporarily bypass all processing")
         .accessibilityValue(audioState.eqChain.referenceMode ? "On" : "Off")
         .accessibilityAddTraits(.isButton)
     }
