@@ -46,8 +46,10 @@ struct GraphicEQView: View {
     @ViewBuilder private func content(_ profile: HearingProfile) -> some View {
         // Per-ear hearing correction (what's actually applied). The audiogram
         // is inherently per-ear, so we surface both even when EQ is linked.
-        let leftCorrection = profile.leftEar.correctionBands
-        let rightCorrection = profile.rightEar.correctionBands
+        // Effective (ramp-scaled) correction — matches the audio (phase3 §5).
+        let correction = profile.effectiveCorrectionBands()
+        let leftCorrection = correction.left
+        let rightCorrection = correction.right
         let hasAudiogram = !leftCorrection.isEmpty || !rightCorrection.isEmpty
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {

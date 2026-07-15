@@ -62,7 +62,8 @@ struct ExpertEQView: View {
         // Hearing correction for the displayed ear (and the other, for its
         // shadow Result line). Stored per-ear, independent of channel linking.
         let correction = targetBands(for: profile)
-        let shadowCorrection = tab == .left ? profile.rightEar.correctionBands : profile.leftEar.correctionBands
+        let effectiveCorrection = profile.effectiveCorrectionBands()
+        let shadowCorrection = tab == .left ? effectiveCorrection.right : effectiveCorrection.left
         let hasAudiogram = !correction.isEmpty || !shadowCorrection.isEmpty
         // Wrapped in ScrollView (matching GraphicEQView) so the view
         // breathes when window height is tight. Outer padding bumped from
@@ -635,7 +636,8 @@ struct ExpertEQView: View {
     /// summed with the user's EQ). Empty when the audiogram is flat, so the
     /// canvas hides the Correction layer.
     private func targetBands(for profile: HearingProfile) -> [EQBand] {
-        tab == .left ? profile.leftEar.correctionBands : profile.rightEar.correctionBands
+        // Effective (ramp-scaled) correction — matches the audio (phase3 §5).
+        tab == .left ? profile.effectiveCorrectionBands().left : profile.effectiveCorrectionBands().right
     }
 
     private func bandsBinding(for profile: HearingProfile) -> Binding<[EQBand]> {

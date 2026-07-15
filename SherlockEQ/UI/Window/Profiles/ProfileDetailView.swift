@@ -442,6 +442,9 @@ struct ProfileDetailView: View {
                 format: { String(format: "%.0f%%", $0 * 100) },
                 set: { v in update(profile) { $0.compensationFactor = v } }
             )
+            // While ramping, the applied strength is below the slider's
+            // target — say so right where the target is set (spec §5).
+            AcclimatizationChip(subject: profile, compact: true)
             Divider()
             sliderRow(
                 "Global trim",

@@ -57,11 +57,15 @@ struct CorrectionConflict: Equatable {
     }
 
     /// Per-ear results for a whole profile: `(left, right)`, either nil
-    /// when that ear has no conflict.
-    static func evaluate(profile: HearingProfile) -> (left: CorrectionConflict?, right: CorrectionConflict?) {
-        (
-            evaluate(notch: profile.leftNotch, correctionBands: profile.leftEar.correctionBands),
-            evaluate(notch: profile.rightNotch, correctionBands: profile.rightEar.correctionBands)
+    /// when that ear has no conflict. Evaluates the EFFECTIVE correction
+    /// (target strength × acclimatization ramp) — what's actually being
+    /// heard right now, so the chip appears when the fight is real, not
+    /// when a ramped-down correction merely will fight eventually.
+    static func evaluate(profile: HearingProfile, now: Date = Date()) -> (left: CorrectionConflict?, right: CorrectionConflict?) {
+        let correction = profile.effectiveCorrectionBands(now: now)
+        return (
+            evaluate(notch: profile.leftNotch, correctionBands: correction.left),
+            evaluate(notch: profile.rightNotch, correctionBands: correction.right)
         )
     }
 }
