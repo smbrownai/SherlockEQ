@@ -543,8 +543,8 @@ its perceptual vocabulary and voice-tuning role fold into the Graphic surface
 
 ### 5.9 Parametric EQ
 
-The full-control surface. Reached by setting the active profile's EQ surface to
-**Parametric** on Profile Detail (`eqMode = .expert`). Rendered by `ExpertEQView` via
+The full-control surface. Reached from the **Graphic | Parametric** segmented
+control in the Equalizer screen's toolbar (`eqMode = .expert`). Rendered by `ExpertEQView` via
 `ParametricCanvasView`.
 
 - Interactive frequency response canvas: log-scaled x-axis (20 Hz – 20 kHz),
@@ -964,7 +964,10 @@ ear tabs). Draggable threshold points at standard frequencies plus numeric entry
 alongside. EQ preview rendered below.
 
 **Equalizer** — shows the single EQ surface that matches the active profile's
-`eqMode`. The two surfaces:
+`eqMode`, switched by a **Graphic | Parametric** segmented control in the
+screen's toolbar (next to the title — the switch swaps this entire screen, so
+the control lives where its effect is; it previously hid on Profile Detail).
+The two surfaces:
 - *Graphic* — 12-band graphic EQ on the audiometric grid (31.5, 63, 125, 250,
   500, 1k, 2k, 3k, 4k, 6k, 8k, 16k Hz — the octave series plus the 3 & 6 kHz
   audiogram frequencies; canonical list: `EQMode.graphicCenters`). Off-grid
