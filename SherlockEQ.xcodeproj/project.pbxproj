@@ -7,10 +7,19 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		8F9953AA0EA9D4ACB8FE8CB2 /* HealthSafetyUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3374FDFA338A76D0BE52E90B /* HealthSafetyUITests.swift */; };
 		975CFBD82FD6601100AF53D9 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 975CFBD72FD6601100AF53D9 /* Sparkle */; };
+		99C1DEF47F4AC87DD6E610A1 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4978C6664098A065D783167A /* Cocoa.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		74BB6D6BD2D57A92EFA27ADF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9789EF072FCF6BC6008D3A9A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9789EF0E2FCF6BC6008D3A9A;
+			remoteInfo = SherlockEQ;
+		};
 		977681282FD473BF00F6CE2F /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 9789EF072FCF6BC6008D3A9A /* Project object */;
@@ -21,6 +30,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		249CE78211CC67878786342A /* SherlockEQUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SherlockEQUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3374FDFA338A76D0BE52E90B /* HealthSafetyUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HealthSafetyUITests.swift; sourceTree = "<group>"; };
+		4978C6664098A065D783167A /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
 		977681242FD473BF00F6CE2F /* SherlockEQTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SherlockEQTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9789EF0F2FCF6BC6008D3A9A /* SherlockEQ.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SherlockEQ.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -28,17 +40,29 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		977681252FD473BF00F6CE2F /* SherlockEQTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = SherlockEQTests;
 			sourceTree = "<group>";
 		};
 		9789EF112FCF6BC6008D3A9A /* SherlockEQ */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
 			path = SherlockEQ;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		2DCD20BE2445EAFECD14BF15 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				99C1DEF47F4AC87DD6E610A1 /* Cocoa.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		977681212FD473BF00F6CE2F /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -57,12 +81,22 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		5F74C9CA294A8BF923708D30 /* OS X */ = {
+			isa = PBXGroup;
+			children = (
+				4978C6664098A065D783167A /* Cocoa.framework */,
+			);
+			name = "OS X";
+			sourceTree = "<group>";
+		};
 		9789EF062FCF6BC6008D3A9A = {
 			isa = PBXGroup;
 			children = (
 				9789EF112FCF6BC6008D3A9A /* SherlockEQ */,
 				977681252FD473BF00F6CE2F /* SherlockEQTests */,
 				9789EF102FCF6BC6008D3A9A /* Products */,
+				B87DF3FE6029DA873988868D /* Frameworks */,
+				FCDF7E77A233611FBDA0CA35 /* SherlockEQUITests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -71,13 +105,49 @@
 			children = (
 				9789EF0F2FCF6BC6008D3A9A /* SherlockEQ.app */,
 				977681242FD473BF00F6CE2F /* SherlockEQTests.xctest */,
+				249CE78211CC67878786342A /* SherlockEQUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		B87DF3FE6029DA873988868D /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				5F74C9CA294A8BF923708D30 /* OS X */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		FCDF7E77A233611FBDA0CA35 /* SherlockEQUITests */ = {
+			isa = PBXGroup;
+			children = (
+				3374FDFA338A76D0BE52E90B /* HealthSafetyUITests.swift */,
+			);
+			name = SherlockEQUITests;
+			path = SherlockEQUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		974EFF79F9863459B1B80844 /* SherlockEQUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 61A513C82F1754B96BC3AB0C /* Build configuration list for PBXNativeTarget "SherlockEQUITests" */;
+			buildPhases = (
+				966D65AD5B15A0452D363884 /* Sources */,
+				2DCD20BE2445EAFECD14BF15 /* Frameworks */,
+				2054E5A9FE2B64618F9A182A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				797610FE92C66481E9582536 /* PBXTargetDependency */,
+			);
+			name = SherlockEQUITests;
+			productName = SherlockEQUITests;
+			productReference = 249CE78211CC67878786342A /* SherlockEQUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		977681232FD473BF00F6CE2F /* SherlockEQTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 9776812A2FD473BF00F6CE2F /* Build configuration list for PBXNativeTarget "SherlockEQTests" */;
@@ -95,8 +165,6 @@
 				977681252FD473BF00F6CE2F /* SherlockEQTests */,
 			);
 			name = SherlockEQTests;
-			packageProductDependencies = (
-			);
 			productName = SherlockEQTests;
 			productReference = 977681242FD473BF00F6CE2F /* SherlockEQTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -162,11 +230,19 @@
 			targets = (
 				9789EF0E2FCF6BC6008D3A9A /* SherlockEQ */,
 				977681232FD473BF00F6CE2F /* SherlockEQTests */,
+				974EFF79F9863459B1B80844 /* SherlockEQUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		2054E5A9FE2B64618F9A182A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		977681222FD473BF00F6CE2F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -184,6 +260,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		966D65AD5B15A0452D363884 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8F9953AA0EA9D4ACB8FE8CB2 /* HealthSafetyUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		977681202FD473BF00F6CE2F /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -201,6 +285,12 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		797610FE92C66481E9582536 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = SherlockEQ;
+			target = 9789EF0E2FCF6BC6008D3A9A /* SherlockEQ */;
+			targetProxy = 74BB6D6BD2D57A92EFA27ADF /* PBXContainerItemProxy */;
+		};
 		977681292FD473BF00F6CE2F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 9789EF0E2FCF6BC6008D3A9A /* SherlockEQ */;
@@ -209,6 +299,38 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		42C03CFE79074E8AB4507788 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = YRB6VBTSRV;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shawnbrown.SherlockEQUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = SherlockEQ;
+			};
+			name = Debug;
+		};
+		802D03AC7F9BD74CA0318591 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = YRB6VBTSRV;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.5;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shawnbrown.SherlockEQUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = SherlockEQ;
+			};
+			name = Release;
+		};
 		9776812B2FD473BF00F6CE2F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -488,6 +610,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		61A513C82F1754B96BC3AB0C /* Build configuration list for PBXNativeTarget "SherlockEQUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				802D03AC7F9BD74CA0318591 /* Release */,
+				42C03CFE79074E8AB4507788 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		9776812A2FD473BF00F6CE2F /* Build configuration list for PBXNativeTarget "SherlockEQTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
