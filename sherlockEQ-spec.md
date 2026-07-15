@@ -599,6 +599,25 @@ control in the Equalizer screen's toolbar (`eqMode = .expert`). Rendered by `Exp
   `NotchControlView`, not the canvas, so the dedicated freq/depth/width inputs stay
   authoritative
 
+**Approachability polish (Parametric surface).**
+- **Empty ear:** the empty-state card offers **Add band** (primary,
+  `.borderedProminent`, one band at 1 kHz) beside **Create standard 8-band
+  EQ** (secondary — the former "Quick start: 8 bands", renamed to say what it
+  does). The header's Add band is a real bordered button, not borderless.
+- **Selected-band controls** (`controlsBar`) sit immediately below the canvas
+  so the select→tune loop stays tight; the keyboard cheat-sheet no longer
+  occupies a permanent block below them.
+- **Keyboard shortcuts** moved behind a header keyboard-icon button into a
+  `.popover` (`shortcutsCard`) — the reference no longer outweighs the
+  primary workflow.
+- **Bandwidth unit switch** is labeled **Bandwidth** with **Q / Octaves**
+  segments (was a bare `Q | Oct` pair).
+- **Layer chips gated on content:** the whole `CanvasLayerChipStrip` is hidden
+  until the ear has bands or an audiogram (or a live dynamics trace); its
+  Output / Input / Result-EQ / Safety chips take a `hasContent` flag so they
+  don't present dead toggles on an empty surface. Graphic passes the default
+  (always content).
+
 ---
 
 ### 5.10 Tone Finder

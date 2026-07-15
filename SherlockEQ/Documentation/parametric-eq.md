@@ -47,6 +47,13 @@ For each band, set:
   - **Notch** — deep, narrow cut to remove a tone (see [Tinnitus Tone Matching](help:tinnitus-tone-matching)).
   - **Low-pass / high-pass / band-pass** — pass only part of the spectrum.
 
+Starting from an empty ear, **Add band** drops one band at 1 kHz to drag into
+place, or **Create standard 8-band EQ** lays out eight bands at the audiogram
+frequencies to enable and tune. Select a band (click its node, or press Tab)
+and its exact controls appear just below the canvas; the **Bandwidth** switch
+shows the selected band's width as **Q** or **Octaves**. A keyboard-shortcuts
+reference lives behind the keyboard button in the header.
+
 You can drag bands directly on the parametric canvas, which overlays the live
 spectrum so you can see what you're correcting.
 

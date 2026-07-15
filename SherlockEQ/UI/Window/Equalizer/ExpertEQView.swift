@@ -13,6 +13,8 @@ struct ExpertEQView: View {
     }
     @State private var tab: EarTab = .left
     @State private var selectedBandID: UUID?
+    /// Keyboard-shortcuts popover visibility (header button).
+    @State private var showShortcuts = false
     /// Display preference for the Q/BW readout — Q value vs equivalent
     /// bandwidth in octaves. Storage is always Q internally.
     @State private var showQAsOctaves: Bool = false
@@ -38,8 +40,8 @@ struct ExpertEQView: View {
     /// chip is hidden whenever the active profile has no enabled features.
     @AppStorage("sherlockeq.layer.dynamics")  private var showDynamicsLayer  = true
 
-    /// Standard 8 bands at audiogram frequencies — used by Quick start
-    /// to populate an empty profile with a useful working surface.
+    /// Standard 8 bands at audiogram frequencies — used by "Create standard
+    /// 8-band EQ" to populate an empty profile with a useful working surface.
     private static let quickStartFrequencies: [Double] = [
         250, 500, 1000, 2000, 3000, 4000, 6000, 8000
     ]
@@ -65,6 +67,11 @@ struct ExpertEQView: View {
         let effectiveCorrection = profile.effectiveCorrectionBands()
         let shadowCorrection = tab == .left ? effectiveCorrection.right : effectiveCorrection.left
         let hasAudiogram = !correction.isEmpty || !shadowCorrection.isEmpty
+        // The layer chips only mean something once there's a curve to
+        // overlay (bands or an audiogram) or a live dynamics trace. On an
+        // empty ear they'd toggle nothing — so the whole strip stays hidden
+        // until the surface has content.
+        let hasContent = !activeBands.isEmpty || hasAudiogram
         // Wrapped in ScrollView (matching GraphicEQView) so the view
         // breathes when window height is tight. Outer padding bumped from
         // 20 → 24 to match the rest of the app's window-content margins,
@@ -73,18 +80,21 @@ struct ExpertEQView: View {
         ScrollView {
             VStack(spacing: 18) {
                 header
-            CanvasLayerChipStrip(
-                showInputSpectrum: $showInputLayer,
-                showOutputSpectrum: $showOutputLayer,
-                showEQCurve: $showEQLayer,
-                showAudiogramTarget: $showAudiogramLayer,
-                showResultCurve: $showResultLayer,
-                showSafetyOverlay: $showSafetyLayer,
-                showDynamics: $showDynamicsLayer,
-                hasAudiogram: hasAudiogram,
-                hasDynamics: hasEnabledDynamics,
-                earColor: earColor
-            )
+            if hasContent || hasEnabledDynamics {
+                CanvasLayerChipStrip(
+                    showInputSpectrum: $showInputLayer,
+                    showOutputSpectrum: $showOutputLayer,
+                    showEQCurve: $showEQLayer,
+                    showAudiogramTarget: $showAudiogramLayer,
+                    showResultCurve: $showResultLayer,
+                    showSafetyOverlay: $showSafetyLayer,
+                    showDynamics: $showDynamicsLayer,
+                    hasAudiogram: hasAudiogram,
+                    hasDynamics: hasEnabledDynamics,
+                    earColor: earColor,
+                    hasContent: hasContent
+                )
+            }
             LiveParametricCanvas(
                 spectrum: audioState.spectrum,
                 preSpectrum: audioState.preSpectrum,
@@ -154,8 +164,9 @@ struct ExpertEQView: View {
             }
             .onKeyPress { press in handleKey(press, in: profile) }
             .onTapGesture { canvasFocused = true }
+            // Selected-band controls sit immediately below the canvas so the
+            // edit loop (select on canvas → tune here) stays visually tight.
             controlsBar(profile)
-            shortcutsKey
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -306,20 +317,43 @@ struct ExpertEQView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            Picker("", selection: $showQAsOctaves) {
-                Text("Q").tag(false)
-                Text("Oct").tag(true)
+            // Bandwidth unit switch — labeled so "Q | Oct" isn't a bare
+            // pair of jargon abbreviations.
+            HStack(spacing: 6) {
+                Text("Bandwidth")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Picker("Bandwidth", selection: $showQAsOctaves) {
+                    Text("Q").tag(false)
+                    Text("Octaves").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .help("Bandwidth: show the selected band's width as Q or as octaves.")
             }
-            .pickerStyle(.segmented)
-            .frame(width: 80)
-            .help("Display the selected band's width as Q or as octave bandwidth")
+
+            // Power-user keyboard reference — behind a button so it doesn't
+            // outweigh the primary workflow (it used to occupy a permanent
+            // block at the bottom of the page).
+            Button {
+                showShortcuts.toggle()
+            } label: {
+                Image(systemName: "keyboard")
+            }
+            .help("Keyboard shortcuts")
+            .accessibilityLabel("Keyboard shortcuts")
+            .popover(isPresented: $showShortcuts, arrowEdge: .bottom) {
+                shortcutsCard
+            }
 
             Button {
                 addBand()
             } label: {
                 Label("Add band", systemImage: "plus")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.bordered)
+            .help("Add a parametric band at 1 kHz, ready to drag into place.")
         }
     }
 
@@ -397,15 +431,23 @@ struct ExpertEQView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("This ear has no bands yet")
                         .font(.callout.weight(.medium))
-                    Text("Quick start places 8 disabled parametric bands at the audiogram frequencies, ready for you to enable and tune.")
+                    Text("Add one band to place by hand, or create a standard 8-band EQ at the audiogram frequencies to enable and tune.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
+                // Secondary: the multi-band shortcut.
                 Button {
                     quickStart()
                 } label: {
-                    Label("Quick start: 8 bands", systemImage: "wand.and.stars")
+                    Label("Create standard 8-band EQ", systemImage: "wand.and.stars")
+                }
+                .buttonStyle(.bordered)
+                // Primary technical action, adjacent to the empty-state message.
+                Button {
+                    addBand()
+                } label: {
+                    Label("Add band", systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -449,13 +491,12 @@ struct ExpertEQView: View {
         try? profileStore.save(profile)
     }
 
-    /// Bottom-of-screen keyboard cheat sheet. Expert is the power-
-    /// user tab — the shortcuts are real and load-bearing, but
-    /// discovering them by reading the source isn't a workflow. Pin
-    /// the legend to the page so they're visible while you're using
-    /// the tab. Compact 2-column grid with monospaced keycap glyphs
-    /// to read as keys rather than running text.
-    @ViewBuilder private var shortcutsKey: some View {
+    /// Keyboard cheat sheet, shown in a popover from the header's keyboard
+    /// button. Expert is the power-user surface — the shortcuts are real and
+    /// load-bearing, but they don't need to occupy a permanent block that
+    /// outweighs the editing workflow. Compact 2-column grid with monospaced
+    /// keycap glyphs to read as keys rather than running text.
+    @ViewBuilder private var shortcutsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "keyboard")
@@ -491,8 +532,8 @@ struct ExpertEQView: View {
                 }
             }
         }
-        .padding(.top, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .frame(minWidth: 460, alignment: .leading)
     }
 
     /// One shortcut entry: a row of monospaced keycaps + a short label
