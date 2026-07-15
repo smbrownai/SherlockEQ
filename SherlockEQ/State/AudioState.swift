@@ -536,6 +536,12 @@ final class AudioState: ObservableObject {
     private let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "AudioState")
 
     init() {
+        // Crash-mute recovery (see `TapMuteSentinel`): if the previous run was
+        // killed with its tap active, the output device is left muted. Consume
+        // any stale marker synchronously here — before this session's tap start
+        // writes a fresh one — and unmute off-main if we own the mute.
+        Self.recoverStaleTapMuteIfNeeded()
+
         let tap = CATapEngine()
         let audio = SherlockEQAudioEngine()
         let spectrum = SpectrumAnalyzer()
@@ -998,6 +1004,24 @@ final class AudioState: ObservableObject {
             message: "Notifications are off — you won't get safe-listening alerts. Enable them in System Settings → Notifications → SherlockEQ.",
             autoDismissAfter: 12
         ))
+    }
+
+    /// Detect a mute left behind by a previous unclean exit and lift it.
+    /// Reads the stale marker synchronously (fast UserDefaults) and clears it
+    /// immediately so this session's tap start can write its own; the CoreAudio
+    /// device read/unmute runs off-main because a wedged HAL can block (see
+    /// memory `coreaudio-sync-main-thread-hang`). No-op in the common clean
+    /// case — the marker is absent.
+    private static func recoverStaleTapMuteIfNeeded() {
+        guard let marker = TapMuteSentinel.staleMarker() else { return }
+        TapMuteSentinel.clear()
+        DispatchQueue.global(qos: .userInitiated).async {
+            let uid = SystemVolumeController.defaultOutputDeviceUID()
+            let muted = SystemVolumeController.defaultOutputMuted() ?? false
+            if TapMuteSentinel.shouldUnmute(marker: marker, currentDeviceUID: uid, currentlyMuted: muted) {
+                SystemVolumeController.setDefaultOutputMuted(false)
+            }
+        }
     }
 
     func startAll() async {

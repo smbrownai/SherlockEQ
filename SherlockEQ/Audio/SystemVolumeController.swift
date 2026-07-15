@@ -284,4 +284,63 @@ final class SystemVolumeController: ObservableObject {
             mScope: kAudioDevicePropertyScopeOutput,
             mElement: kAudioObjectPropertyElementMain)
     }
+
+    // MARK: - Stateless device helpers (crash-mute recovery)
+    //
+    // Free functions that read/write a specific device without needing a live
+    // controller instance — used by `TapMuteSentinel` recovery at launch and
+    // by the tap-start mute snapshot. All synchronous CoreAudio calls; callers
+    // must run them OFF the main thread (a wedged HAL can block indefinitely —
+    // see memory `coreaudio-sync-main-thread-hang`).
+
+    /// Mute flag of a specific device, or nil if it has no mute property.
+    nonisolated static func muted(deviceID: AudioObjectID) -> Bool? {
+        guard deviceID != AudioObjectID(kAudioObjectUnknown) else { return nil }
+        var addr = muteAddress()
+        guard AudioObjectHasProperty(deviceID, &addr) else { return nil }
+        var value = UInt32(0)
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(deviceID, &addr, 0, nil, &size, &value) == noErr else {
+            return nil
+        }
+        return value != 0
+    }
+
+    /// Set a specific device's mute flag. Returns true on success.
+    @discardableResult
+    nonisolated static func setMuted(_ muted: Bool, deviceID: AudioObjectID) -> Bool {
+        guard deviceID != AudioObjectID(kAudioObjectUnknown) else { return false }
+        var addr = muteAddress()
+        guard AudioObjectHasProperty(deviceID, &addr) else { return false }
+        var value: UInt32 = muted ? 1 : 0
+        let status = AudioObjectSetPropertyData(
+            deviceID, &addr, 0, nil, UInt32(MemoryLayout<UInt32>.size), &value)
+        return status == noErr
+    }
+
+    /// UID of the current default output device, or nil if unavailable.
+    nonisolated static func defaultOutputDeviceUID() -> String? {
+        let dev = defaultOutputDevice()
+        guard dev != AudioObjectID(kAudioObjectUnknown) else { return nil }
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceUID,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var uid: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        guard AudioObjectGetPropertyData(dev, &addr, 0, nil, &size, &uid) == noErr,
+              let cf = uid?.takeRetainedValue() else { return nil }
+        return cf as String
+    }
+
+    /// Mute flag of the current default output device.
+    nonisolated static func defaultOutputMuted() -> Bool? {
+        muted(deviceID: defaultOutputDevice())
+    }
+
+    /// Set the current default output device's mute flag.
+    @discardableResult
+    nonisolated static func setDefaultOutputMuted(_ muted: Bool) -> Bool {
+        setMuted(muted, deviceID: defaultOutputDevice())
+    }
 }

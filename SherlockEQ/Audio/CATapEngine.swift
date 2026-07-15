@@ -474,6 +474,10 @@ final class CATapEngine: ObservableObject {
         let outputDeviceID = try defaultOutputDeviceID()
         let outputDeviceName = (try? deviceName(outputDeviceID)) ?? "Device \(outputDeviceID)"
         let outputDeviceUID = try deviceUID(outputDeviceID)
+        // Snapshot the device's mute state BEFORE our tap engages its mute, so
+        // crash-recovery can tell "we muted it" (recover) from "the user had it
+        // muted" (leave alone). See `TapMuteSentinel`.
+        let preTapMuted = SystemVolumeController.muted(deviceID: outputDeviceID) ?? false
         // Must succeed: if the PID→ProcessObject lookup fails and we fall back
         // to 0, the tap excludes process 0 (not SherlockEQ), so the app's own
         // processed output is no longer excluded — it gets re-tapped and
@@ -552,6 +556,12 @@ final class CATapEngine: ObservableObject {
         // is always a stereo global tap), preserving prior behaviour. Clamp
         // to at least 1 so the IOProc arithmetic can't underflow.
         let tapChannels = max(1, Int((try? tapStreamFormat(newTapID))?.mChannelsPerFrame ?? 2))
+
+        // Tap + aggregate are live and the mute is engaged. Persist the
+        // recovery marker now; a clean `tearDownSync` clears it. If the
+        // process dies before that, the next launch finds this marker and
+        // unmutes (see `TapMuteSentinel`).
+        TapMuteSentinel.markActive(deviceUID: outputDeviceUID, preTapMuted: preTapMuted)
 
         return TapPrepResult(
             outputDeviceID: outputDeviceID,
@@ -1105,6 +1115,9 @@ final class CATapEngine: ObservableObject {
         if tapID != kAudioObjectUnknown {
             AudioHardwareDestroyProcessTap(tapID)
         }
+        // Clean teardown: the mute is released, so drop the recovery marker.
+        // (Harmless if it was already clear.)
+        TapMuteSentinel.clear()
     }
 
     // MARK: - Errors

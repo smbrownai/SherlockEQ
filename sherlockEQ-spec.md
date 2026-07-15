@@ -1165,6 +1165,7 @@ SherlockEQ/
 │
 ├── Audio/
 │   ├── CATapEngine.swift                   ← CATap + per-ear source nodes + cascades
+│   ├── TapMuteSentinel.swift               ← crash-resilient recovery of the tap's output mute
 │   ├── SherlockEQAudioEngine.swift         ← AVAudioEngine graph, balance, limiter, gain
 │   ├── BiquadCoefficients.swift            ← Audio EQ Cookbook coefficient math
 │   ├── BiquadCascade.swift                 ← Per-ear render-block cascade
