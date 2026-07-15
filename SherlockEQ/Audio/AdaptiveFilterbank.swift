@@ -57,7 +57,11 @@ final class AdaptiveFilterbank {
     }
 
     // Per crossover k: LR4 low = 2 identical Butterworth-2 LP sections,
-    // LR4 high = 2 identical Butterworth-2 HP sections.
+    // LR4 high = 2 identical Butterworth-2 HP sections. Shapes are fixed
+    // at init; `configure` rewrites coefficient VALUES in place and never
+    // reallocates — belt-and-braces for the step-2 processor's contract
+    // that sample-rate changes only happen while the render block isn't
+    // running.
     private var lowSections: [[Section]] = []   // [crossover][2]
     private var highSections: [[Section]] = []  // [crossover][2]
     /// Compensation allpasses: band b (finalized at stage b, clamped to
@@ -67,36 +71,45 @@ final class AdaptiveFilterbank {
     private var compensation: [[Section]] = []
     /// Per-band scratch for the current sample's band values.
     private var bandSample = [Float](repeating: 0, count: AdaptiveFilterbank.bandCount)
+    /// Scratch for the ramped-gain variant (per-sample per-band gain).
+    private var gainNow = [Float](repeating: 1, count: AdaptiveFilterbank.bandCount)
+    private var gainStep = [Float](repeating: 0, count: AdaptiveFilterbank.bandCount)
 
     private(set) var sampleRate: Double = 0
 
     init(sampleRate: Double = 48_000) {
+        // Build the fixed structure once; `configure` only rewrites values.
+        for _ in Self.crossoverHz {
+            lowSections.append([Section(), Section()])
+            highSections.append([Section(), Section()])
+        }
+        for band in 0..<Self.bandCount {
+            let laterCount = band == Self.bandCount - 1
+                ? 0
+                : Self.crossoverHz.count - min(band + 1, Self.crossoverHz.count)
+            compensation.append([Section](repeating: Section(), count: laterCount))
+        }
         configure(sampleRate: sampleRate)
     }
 
     /// (Re)compute all coefficients for a sample rate and clear state.
-    /// Main-thread only; the audio thread never calls this.
+    /// Main-thread only, and only while the render block isn't running
+    /// (engine rebuild) — writes values in place, allocates nothing.
     func configure(sampleRate: Double) {
         self.sampleRate = sampleRate
-        lowSections = []
-        highSections = []
-        compensation = []
 
         var allpassPrototypes: [Section] = []
-        for fc in Self.crossoverHz {
+        for (k, fc) in Self.crossoverHz.enumerated() {
             let (lp, hp, ap) = Self.crossoverSections(fc: fc, sampleRate: sampleRate)
-            lowSections.append([lp, lp])
-            highSections.append([hp, hp])
+            lowSections[k][0] = lp; lowSections[k][1] = lp
+            highSections[k][0] = hp; highSections[k][1] = hp
             allpassPrototypes.append(ap)
         }
-
-        // Band b's compensation chain: allpasses of crossovers after the
-        // stage that finalized it (band index == stage index, except band
-        // 5 which shares the last stage and needs none).
         for band in 0..<Self.bandCount {
             let firstLater = min(band + 1, Self.crossoverHz.count)
-            let later = band == Self.bandCount - 1 ? [] : Array(allpassPrototypes[firstLater...])
-            compensation.append(later)
+            for (i, s) in compensation[band].indices.enumerated() {
+                compensation[band][s] = allpassPrototypes[firstLater + i]
+            }
         }
         reset()
     }
@@ -112,12 +125,41 @@ final class AdaptiveFilterbank {
         }
     }
 
-    /// Split → gain → sum, in place, mono. `gainsLinear` is one linear
-    /// gain per band (callers pre-smooth; this class applies them
-    /// verbatim). Allocation-free.
+    /// Split → gain → sum, in place, mono, static gains. Convenience over
+    /// the ramped variant below (start == end, no level measurement).
     func process(_ samples: UnsafeMutablePointer<Float>, frameCount: Int, gainsLinear: [Float]) {
-        guard frameCount > 0, gainsLinear.count == Self.bandCount else { return }
+        process(samples, frameCount: frameCount,
+                gainsStartLinear: gainsLinear, gainsEndLinear: gainsLinear,
+                bandMeanSquares: nil)
+    }
+
+    /// The step-2 processor's workhorse: split → (measure) → ramped gain →
+    /// sum, in place, mono, allocation-free.
+    ///
+    /// - Per-band gain ramps linearly from `gainsStartLinear` to
+    ///   `gainsEndLinear` across the call — the caller updates gains at
+    ///   block rate and this ramp makes each step zipper-free.
+    /// - `bandMeanSquares` (6 floats), when non-nil, receives each band's
+    ///   PRE-GAIN mean square over the call — the feed-forward detector
+    ///   input (the estimated at-ear level, before correction is applied).
+    func process(
+        _ samples: UnsafeMutablePointer<Float>,
+        frameCount: Int,
+        gainsStartLinear: [Float],
+        gainsEndLinear: [Float],
+        bandMeanSquares: UnsafeMutablePointer<Float>?
+    ) {
+        guard frameCount > 0,
+              gainsStartLinear.count == Self.bandCount,
+              gainsEndLinear.count == Self.bandCount else { return }
         let stages = Self.crossoverHz.count
+        let invFrames = 1.0 / Float(frameCount)
+
+        for b in 0..<Self.bandCount {
+            gainNow[b] = gainsStartLinear[b]
+            gainStep[b] = (gainsEndLinear[b] - gainsStartLinear[b]) * invFrames
+            bandMeanSquares?[b] = 0
+        }
 
         for i in 0..<frameCount {
             var remainder = samples[i]
@@ -137,14 +179,16 @@ final class AdaptiveFilterbank {
             }
             bandSample[stages] = remainder
 
-            // Phase compensation + gain + sum.
+            // Phase compensation + measurement + ramped gain + sum.
             var sum: Float = 0
             for b in 0..<Self.bandCount {
                 var v = bandSample[b]
                 for s in compensation[b].indices {
                     v = compensation[b][s].step(v)
                 }
-                sum += gainsLinear[b] * v
+                if let out = bandMeanSquares { out[b] += v * v * invFrames }
+                gainNow[b] += gainStep[b]
+                sum += gainNow[b] * v
             }
             samples[i] = sum
         }
