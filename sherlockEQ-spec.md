@@ -266,6 +266,16 @@ The Tone Finder and notch controls live on the same view (sidebar entry "Tinnitu
 Notch") so the user reads them as one task — identify the pitch, then dial in the
 notch.
 
+**Conflict detection** (phase-3 §6, `CorrectionConflict`): presbycusic tinnitus
+typically sits in the region of maximum loss, so the notch often lands exactly
+where NAL-R prescribes its largest boost — one filter bank arguing with itself.
+When the correction boosts ≥ +4 dB at an enabled notch's center and the notch
+cuts ≤ −6 dB, a persistent chip appears on both the Tinnitus Notch and
+Audiogram screens (per-ear; collapsed to one line when both ears match)
+explaining the tradeoff — narrower notch keeps more correction, shallower
+notch keeps more relief — with a deep-link to the other surface. Detection
+only; no auto-fix.
+
 ---
 
 ### 5.4 Safe Listening Monitor
@@ -996,6 +1006,7 @@ SherlockEQ/
 │   ├── StereoMonitor.swift                 ← L/R peak metering for the monitor surfaces
 │   ├── VUMeter.swift                       ← Analog VU ballistics
 │   ├── AudiogramConversion.swift           ← dB HL → EQBand
+│   ├── CorrectionConflict.swift            ← Notch ↔ correction collision check (§5.3)
 │   ├── EQBandLookup.swift                  ← Mode → slot mapping for hidden-band hints
 │   ├── SineToneGenerator.swift             ← Tone Finder + diagnostic test tones
 │   ├── AutoEQParser.swift                  ← Parse AutoEQ .txt → preamp + [EQBand]
@@ -1086,6 +1097,7 @@ SherlockEQ/
 │       ├── ParametricCanvasView.swift      ← Expert canvas (spectrum underlay + curves)
 │       ├── NotchControlView.swift
 │       ├── AutoEQMismatchRow.swift         ← Mismatch warning row (popover + Equalizer)
+│       ├── CorrectionConflictChip.swift    ← Notch/correction conflict chip (§5.3)
 │       ├── NoticeBannerView.swift
 │       ├── BuiltInProfileBanner.swift
 │       ├── EQBypassButton.swift
