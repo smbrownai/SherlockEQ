@@ -13,6 +13,11 @@ struct EQGainChip: View {
     /// VoiceOver label — the chip exposes its current dB value via
     /// `.accessibilityValue` automatically.
     var accessibilityLabel: String = "Gain"
+    /// Readout font — Graphic EQ passes a larger size so the values read
+    /// clearly at arm's length; Expert keeps the compact default.
+    var valueFont: Font = .caption.monospaced().weight(.medium)
+    /// Chip height — grows with `valueFont` on the Graphic surface.
+    var height: CGFloat = 18
 
     @State private var isEditing = false
     @State private var draftText = ""
@@ -25,9 +30,9 @@ struct EQGainChip: View {
             TextField("", text: $draftText)
                 .focused($focused)
                 .textFieldStyle(.plain)
-                .font(.caption.monospaced().weight(.medium))
+                .font(valueFont)
                 .multilineTextAlignment(.center)
-                .frame(height: 18)
+                .frame(height: height)
                 .padding(.horizontal, 4)
                 .background(
                     RoundedRectangle(cornerRadius: 4)
@@ -52,11 +57,11 @@ struct EQGainChip: View {
                 .onDisappear { removeOutsideClickMonitor() }
         } else {
             Text(formattedValue)
-                .font(.caption.monospaced().weight(.medium))
+                .font(valueFont)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .frame(height: 18)
+                .frame(height: height)
                 .padding(.horizontal, 4)
                 .frame(maxWidth: .infinity)
                 .background(

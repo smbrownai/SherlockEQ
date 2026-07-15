@@ -254,10 +254,10 @@ struct AudiogramView: View {
                     earColor: earColor
                 )
             } else {
-                // "Combined across all tabs" = the Result the listener hears:
-                // EFFECTIVE hearing correction (target strength × acclimatization
-                // ramp — same helper the engine consumes, phase3 §5) summed with
-                // the user/preset EQ, per ear.
+                // The full result the listener hears: EFFECTIVE hearing
+                // correction (target strength × acclimatization ramp — same
+                // helper the engine consumes, phase3 §5) summed with the
+                // user/preset EQ, per ear.
                 EQPreviewView(
                     leftBands: profile.effectiveCorrectionBands().left + profile.leftEar.bands,
                     rightBands: profile.effectiveCorrectionBands().right + profile.rightEar.bands,

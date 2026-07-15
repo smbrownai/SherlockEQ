@@ -29,6 +29,12 @@ struct CanvasLayerChipStrip: View {
     let hasDynamics: Bool
     /// Used as the swatch hue for the EQ / Audiogram chips.
     let earColor: Color
+    /// When false the spectrum / curve / safety chips (Output, Input,
+    /// Result-EQ, Safety) are hidden — on an empty surface with no bands and
+    /// no audiogram they toggle overlays that have nothing to show, so they
+    /// read as dead controls. Defaults true so surfaces that always carry a
+    /// curve (Graphic's 12 bands) are unaffected.
+    var hasContent: Bool = true
 
     /// Local state for the collapsed-layout layers popover.
     @State private var layersPopoverShown: Bool = false
@@ -62,51 +68,54 @@ struct CanvasLayerChipStrip: View {
 
     private var fullStripContent: some View {
             HStack(spacing: 8) {
-                chip(
-                    "Output",
-                    swatch: Self.outputColor,
-                    isOn: $showOutputSpectrum,
-                    hint: "Live post-EQ spectrum — what's leaving the chain."
-                )
-                chip(
-                    "Input",
-                    swatch: Self.inputColor,
-                    isOn: $showInputSpectrum,
-                    hint: "Pre-EQ spectrum — what's arriving before the EQ runs."
-                )
-                // Primary curve. With an audiogram it's the "Result" (what you
-                // hear = correction + EQ); without one, Result == EQ, so it's
-                // just labelled "EQ". The two breakdown chips below only appear
-                // when an audiogram makes them carry distinct information.
-                chip(
-                    hasAudiogram ? "Result" : "EQ",
-                    swatch: earColor,
-                    isOn: $showResultCurve,
-                    hint: hasAudiogram
-                        ? "What you actually hear — the hearing correction and your EQ combined."
-                        : "Your active equaliser curve and band handles."
-                )
-                if hasAudiogram {
+                if hasContent {
                     chip(
-                        "EQ",
-                        swatch: earColor,
-                        isOn: $showEQCurve,
-                        hint: "Your tone EQ on its own, without the hearing correction — the difference from Result is what the correction adds."
+                        "Output",
+                        swatch: Self.outputColor,
+                        isOn: $showOutputSpectrum,
+                        hint: "Live post-EQ spectrum — what's leaving the chain."
                     )
                     chip(
-                        "Correction",
+                        "Input",
+                        swatch: Self.inputColor,
+                        isOn: $showInputSpectrum,
+                        hint: "Pre-EQ spectrum — what's arriving before the EQ runs."
+                    )
+                    // Primary curve. With an audiogram it's the "Result" (what
+                    // you hear = correction + EQ); without one, Result == EQ, so
+                    // it's just labelled "EQ". The two breakdown chips below
+                    // only appear when an audiogram makes them carry distinct
+                    // information.
+                    chip(
+                        hasAudiogram ? "Result" : "EQ",
                         swatch: earColor,
-                        pattern: .dashed,
-                        isOn: $showAudiogramTarget,
-                        hint: "The audiogram-derived hearing correction on its own."
+                        isOn: $showResultCurve,
+                        hint: hasAudiogram
+                            ? "What you actually hear — the hearing correction and your EQ combined."
+                            : "Your active equaliser curve and band handles."
+                    )
+                    if hasAudiogram {
+                        chip(
+                            "EQ",
+                            swatch: earColor,
+                            isOn: $showEQCurve,
+                            hint: "Your tone EQ on its own, without the hearing correction — the difference from Result is what the correction adds."
+                        )
+                        chip(
+                            "Correction",
+                            swatch: earColor,
+                            pattern: .dashed,
+                            isOn: $showAudiogramTarget,
+                            hint: "The audiogram-derived hearing correction on its own."
+                        )
+                    }
+                    chip(
+                        "Safety",
+                        swatch: Self.safetyColor,
+                        isOn: $showSafetyOverlay,
+                        hint: "Highlights frequency regions where sustained energy exceeds a hearing-safety threshold."
                     )
                 }
-                chip(
-                    "Safety",
-                    swatch: Self.safetyColor,
-                    isOn: $showSafetyOverlay,
-                    hint: "Highlights frequency regions where sustained energy exceeds a hearing-safety threshold."
-                )
                 if hasDynamics {
                     chip(
                         "Dynamics",

@@ -525,12 +525,29 @@ The `PresetCurve` table (gains on the 12-band grid 31.5 / 63 / 125 / 250 /
 | Reduce harshness | — | 0, 0, 0, 0, 0, −0.5, −1.5, −2.5, −2.5, −1.5, −1, −0.5 | 0 |
 
 The Graphic selector shows these six plus a computed **Custom** state
-(whenever sliders + trim diverge from every curve), with the genre curves
-(Warm … Techno, `ToneFlavorPreset`) demoted to a "Tone flavors" submenu
-labeled *taste presets, not hearing correction*. The former static "Loudness
-compensation" preset was deleted outright — a fixed contour impersonating
-level-dependent equal-loudness is wrong physics (a correct SPL-keyed version
-becomes possible with the Phase-1 volume anchoring; future spec).
+(whenever sliders + trim diverge from every curve), rendered as a real
+bordered **`Preset:` menu button** (not the old borderless capsule, which
+read as a link). The genre curves (Warm … Techno, `ToneFlavorPreset`) live
+in a **separate sibling `Tone flavors` menu button** labeled *taste presets,
+not hearing correction* — previously a nested submenu, which SwiftUI's macOS
+`Menu` flashed open then auto-dismissed after ~1 s, making the flavors
+unreachable. The former static "Loudness compensation" preset was deleted
+outright — a fixed contour impersonating level-dependent equal-loudness is
+wrong physics (a correct SPL-keyed version becomes possible with the Phase-1
+volume anchoring; future spec).
+
+**Approachability polish (Graphic surface).** The surface is styled as the
+app's friendly default rather than a test panel: enlarged frequency and gain
+readouts, shortened slider travel with an enlarged response graph, and an
+optional **tone guide** — a perceptual caption under each band (Rumble / Bass
+/ Warmth / Voice body / Clarity / Sibilance / Air, grouped so adjacent bands
+share a word), toggled by `sherlockeq.graphic.toneGuide` (default on). The
+reset control reads **Reset to Flat**. When audiogram-derived and/or
+headphone (AutoEQ) correction is active, a plain-language **"Additional
+correction is active — Audiogram + headphone correction"** note states that a
+correction layer runs beneath the graphic bands and is included in the drawn
+curve (informational; editing lives on the Audiogram screen / Profile
+Detail).
 
 **Factory lifecycle.** `ProfileStore.reconcileFactoryPresets()` (version-gated
 on `sherlockeq.factoryPresetsVersion`, now **2**) installs the four on first
@@ -581,6 +598,25 @@ control in the Equalizer screen's toolbar (`eqMode = .expert`). Rendered by `Exp
 - Tinnitus notch rendered as a labeled notch on the curve; edits route through
   `NotchControlView`, not the canvas, so the dedicated freq/depth/width inputs stay
   authoritative
+
+**Approachability polish (Parametric surface).**
+- **Empty ear:** the empty-state card offers **Add band** (primary,
+  `.borderedProminent`, one band at 1 kHz) beside **Create standard 8-band
+  EQ** (secondary — the former "Quick start: 8 bands", renamed to say what it
+  does). The header's Add band is a real bordered button, not borderless.
+- **Selected-band controls** (`controlsBar`) sit immediately below the canvas
+  so the select→tune loop stays tight; the keyboard cheat-sheet no longer
+  occupies a permanent block below them.
+- **Keyboard shortcuts** moved behind a header keyboard-icon button into a
+  `.popover` (`shortcutsCard`) — the reference no longer outweighs the
+  primary workflow.
+- **Bandwidth unit switch** is labeled **Bandwidth** with **Q / Octaves**
+  segments (was a bare `Q | Oct` pair).
+- **Layer chips gated on content:** the whole `CanvasLayerChipStrip` is hidden
+  until the ear has bands or an audiogram (or a live dynamics trace); its
+  Output / Input / Result-EQ / Safety chips take a `hasContent` flag so they
+  don't present dead toggles on an empty surface. Graphic passes the default
+  (always content).
 
 ---
 
