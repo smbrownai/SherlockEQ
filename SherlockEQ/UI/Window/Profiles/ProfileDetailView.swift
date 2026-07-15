@@ -433,8 +433,6 @@ struct ProfileDetailView: View {
     @ViewBuilder private func tuningSection(_ profile: HearingProfile) -> some View {
         sectionHeader("Tuning")
         sectionBox {
-            eqModeRow(profile)
-            Divider()
             sliderRow(
                 "Compensation",
                 value: profile.compensationFactor,
@@ -457,35 +455,6 @@ struct ProfileDetailView: View {
             balanceRow(profile)
             Divider()
             separateChannelsRow(profile)
-        }
-    }
-
-    /// EQ surface picker: Graphic (12-band audiometric graphic EQ) or
-    /// Parametric (full canvas). Both edit one underlying band array —
-    /// switching never deletes data. Named for the tool, not the user's
-    /// skill level; Graphic surfaces any band it can't edit via its
-    /// "Other filters" row.
-    @ViewBuilder private func eqModeRow(_ profile: HearingProfile) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("EQ surface")
-                    .foregroundStyle(.secondary)
-                    .frame(width: 120, alignment: .leading)
-                Picker("", selection: Binding(
-                    get: { profile.eqMode },
-                    set: { v in update(profile) { $0.eqMode = v } }
-                )) {
-                    ForEach(EQMode.allCases) { mode in
-                        Label(mode.label, systemImage: mode.symbol).tag(mode)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(maxWidth: 220)
-                Spacer()
-            }
-            Text(profile.eqMode.tagline)
-                .font(.callout)
-                .foregroundStyle(.secondary)
         }
     }
 

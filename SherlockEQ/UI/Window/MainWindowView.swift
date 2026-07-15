@@ -7,12 +7,14 @@ struct MainWindowView: View {
     @EnvironmentObject private var audioState: AudioState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var selection: SidebarSection? = .profiles
-    /// Visibility of the right-hand monitoring sidebar. Persistent across
-    /// launches via @AppStorage — users who dismiss it stay dismissed
-    /// until they re-open it from the toolbar. Defaults to visible so
-    /// first-launch users discover the level / volume / balance / dose
-    /// monitoring panel without having to find a hidden toggle.
-    @AppStorage("sherlockeq.monitorSidebarVisible") private var monitorSidebarVisible: Bool = true
+    /// Visibility of the right-hand monitoring inspector. Persistent
+    /// across launches via @AppStorage — the user's open/closed choice
+    /// sticks. Defaults to **closed**: the panel mostly repeated a
+    /// low-information idle state while consuming ~240 pt on every screen,
+    /// so the live glance now lives in the compact toolbar status
+    /// (`MonitorStatusButton`) and the full panel opens on demand as an
+    /// inspector.
+    @AppStorage("sherlockeq.monitorSidebarVisible") private var monitorSidebarVisible: Bool = false
 
     var body: some View {
         // Lock the sidebar visible: the seven sections + active-profile
@@ -48,28 +50,29 @@ struct MainWindowView: View {
                     .padding(.bottom, 4)
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
+                // The monitor panel slides in as an in-layout trailing
+                // column — collapsed by default, opened from the toolbar
+                // status. Kept inside the detail area (rather than SwiftUI's
+                // native `.inspector`, which resized/shifted the whole
+                // window and animated jerkily): here nothing outside the
+                // detail moves, so both gutters stay aligned and the slide
+                // is smooth. The StereoMonitor 60 Hz loop stays refcount-
+                // gated on the panel's onAppear/onDisappear, idle while
+                // collapsed.
                 HStack(spacing: 0) {
                     detail
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     if monitorSidebarVisible {
                         Divider()
                         MonitorSidebar()
-                            // Match the left sidebar's fixed 240 pt so
-                            // both gutters read as the same shape and
-                            // there's no width drift between launches.
-                            .frame(width: 240)
-                            // Slide in / out smoothly when the toolbar toggle
-                            // flips. The transition is purely visual; the
-                            // underlying StereoMonitor subscription is keyed
-                            // on the view's lifecycle (onAppear/onDisappear).
+                            .frame(width: 260)
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
                 }
             }
-            // Skip animations entirely when Reduce Motion is on — the
-            // System Settings toggle exists exactly so users prone to
-            // vestibular triggers can disable transitions like the
-            // sidebar slide and the banner drop-in.
+            // Skip the slide / banner animations when Reduce Motion is on —
+            // the System Settings toggle exists exactly so users prone to
+            // vestibular triggers can disable transitions like these.
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: monitorSidebarVisible)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: audioState.noticeCenter.userVisibleNotice)
             // Soft scroll-edge fade where detail content (the EQ screens'
@@ -97,24 +100,24 @@ struct MainWindowView: View {
                 }
             }
             ToolbarItem(placement: .primaryAction) {
-                Button {
+                // Compact live glance — app master gain, today's exposure,
+                // active-profile balance — that also opens the full panel.
+                // Replaces the old show/hide toggle: the panel's usual state
+                // was idle, so the values it carried belong in the title bar
+                // and the controls behind a click.
+                MonitorStatusButton(isOpen: monitorSidebarVisible) {
                     monitorSidebarVisible.toggle()
-                } label: {
-                    Image(systemName: monitorSidebarVisible
-                          ? "sidebar.right"
-                          : "sidebar.squares.right")
                 }
-                .help(monitorSidebarVisible ? "Hide monitor panel" : "Show monitor panel")
-                .accessibilityLabel(monitorSidebarVisible ? "Hide monitor panel" : "Show monitor panel")
             }
         }
         // Sized so the Expert layer-chip strip (Output / Input / Result /
         // EQ / Correction / Safety chips) fits on one row at the default
-        // Dynamic Type size, with the existing top header bar (ear picker
-        // + bands badge + Q/Oct + Link L+R + Add band) above it, the main
-        // sidebar at left, AND the persistent 240pt monitor sidebar at
-        // right.
-        .frame(minWidth: 1366, idealWidth: 1400, minHeight: 716, idealHeight: 800)
+        // Dynamic Type size, with the top header bar (ear picker + bands
+        // badge + Q/Oct + Link L+R + Add band) above it and the main
+        // sidebar at left. The monitor panel is no longer a persistent
+        // gutter — it opens as an inspector — so the minimum drops by its
+        // former 240 pt; the ideal keeps room for the inspector open.
+        .frame(minWidth: 1126, idealWidth: 1400, minHeight: 716, idealHeight: 800)
         .linkUndoManagerToProfileStore()
         // Honor cross-window deep-link requests (e.g. the onboarding wizard's
         // "next steps" cards). `onAppear` catches an intent set before this
@@ -142,5 +145,89 @@ struct MainWindowView: View {
         case .settings:      SettingsView()
         case .debug:         DebugView()
         }
+    }
+}
+
+/// Compact title-bar glance at the three values the monitor panel used to
+/// hold open a whole gutter for: **app master gain**, **today's exposure**,
+/// and **active-profile balance**. Clicking it opens (or closes) the full
+/// `MonitorSidebar` as an inspector, where each value carries its explicit
+/// scope label — resolving the "is this global or per-profile?" ambiguity
+/// that the bare sliders created across the popover, Settings, and Profile
+/// Detail. Reads only slow-changing state, so it never drives the 60 Hz VU
+/// loop (that stays gated on the panel itself).
+private struct MonitorStatusButton: View {
+    @EnvironmentObject private var audioState: AudioState
+    @EnvironmentObject private var profileStore: ProfileStore
+
+    let isOpen: Bool
+    let toggle: () -> Void
+
+    var body: some View {
+        Button(action: toggle) {
+            HStack(spacing: 6) {
+                Image(systemName: isOpen ? "sidebar.right" : "sidebar.squares.right")
+                    .imageScale(.medium)
+                HStack(spacing: 5) {
+                    labeled("Output", gainText)
+                    bullet
+                    labeled("Dose", doseText, tint: doseColor)
+                    bullet
+                    Text(balanceText)
+                }
+                .font(.callout)
+                .monospacedDigit()
+            }
+        }
+        .help(isOpen
+              ? "Hide the monitor panel"
+              : "Show the monitor panel — app master gain, active-profile balance, and today's exposure")
+        .accessibilityLabel(isOpen ? "Hide monitor panel" : "Show monitor panel")
+        .accessibilityValue(accessibilityValue)
+    }
+
+    private func labeled(_ label: String, _ value: String, tint: Color? = nil) -> some View {
+        HStack(spacing: 3) {
+            Text("\(label):").foregroundStyle(.secondary)
+            Text(value).foregroundStyle(tint ?? .primary)
+        }
+    }
+
+    private var bullet: some View {
+        Text("•").foregroundStyle(.tertiary)
+    }
+
+    // MARK: - Values (mirrors MonitorSidebar's formatting so the glance and
+    // the panel never disagree)
+
+    private var gainText: String {
+        let dB = audioState.engineParameters.masterGainDB
+        let magnitude = abs(dB)
+        if magnitude < 0.05 { return "0 dB" }
+        return String(format: "%@%.1f dB", dB > 0 ? "+" : "−", magnitude)
+    }
+
+    private var doseText: String {
+        String(format: "%.0f%%", audioState.sessionDosePercent * 100)
+    }
+
+    private var balanceText: String {
+        guard let profile = audioState.activeProfile(in: profileStore) else { return "—" }
+        let b = profile.balance
+        if abs(b) < 0.005 { return "Centered" }
+        return b > 0 ? String(format: "R %.0f%%", b * 100)
+                     : String(format: "L %.0f%%", abs(b) * 100)
+    }
+
+    private var doseColor: Color {
+        switch audioState.safeListening.doseSeverity {
+        case .safe:  return .primary
+        case .amber: return .orange
+        case .red:   return .red
+        }
+    }
+
+    private var accessibilityValue: String {
+        "App master gain \(gainText), today's exposure \(doseText), active profile balance \(balanceText)"
     }
 }

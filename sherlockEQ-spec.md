@@ -72,8 +72,8 @@ listeners hear. Uses Reference Mode to A/B their mix against their hearing profi
 ## 4. UI Surface Map
 
 SherlockEQ has two primary surfaces — a menu-bar popover for quick operation, and a
-main window for configuration — plus a persistent right-hand monitor sidebar inside the
-main window.
+main window for configuration — plus an on-demand right-hand monitor panel inside the
+main window (collapsed by default, opened from a compact toolbar status).
 
 ### Menu Bar Popover (380pt wide)
 The popover is for **operating** SherlockEQ, not configuring it. It dismisses when you
@@ -102,10 +102,10 @@ What does **not** belong here:
   device routing follows the macOS default output. Profile→device auto-switching is
   configured per profile in Profile Detail.)
 
-### Main Window (default 1480 × 880pt, minimum 1400 × 740pt)
+### Main Window (default 1480 × 880pt, minimum 1126 × 716pt)
 Opened deliberately from the popover. Appears in the Dock and CMD+Tab while open.
-Uses `NavigationSplitView` with a left sidebar and a persistent right monitor sidebar
-(220pt) toggleable from the toolbar.
+Uses `NavigationSplitView` with a left sidebar and an on-demand right monitor
+**panel** (opened from the toolbar's compact status glance — see below).
 
 What belongs here:
 - All profile management (create, duplicate, delete, reorder, import, export)
@@ -117,18 +117,30 @@ What belongs here:
 - All Settings
 - Debug diagnostics
 
-### Right-Hand Monitor Sidebar (220pt, toggleable)
-Persistent across every main-window section so the user keeps level/dose awareness
-while editing EQ, browsing profiles, calibrating, etc. Contents:
+### Monitor Panel (collapsed by default)
+Opened from the toolbar's **compact status glance** — a `MonitorStatusButton`
+reading `Output: <app master gain>  •  Dose: <today's exposure>  •  <active-
+profile balance>` (dose tinted by severity). The glance reads only slow state,
+so the 60 Hz VU loop stays idle until the panel is open. Clicking it toggles
+the panel as an in-layout trailing column that slides in within the detail
+area (chosen over SwiftUI's native `.inspector`, which resized/shifted the
+whole window and animated jerkily — the in-layout slide keeps both gutters
+aligned and moves nothing outside the detail). Contents, each with an **explicit scope
+label** (so it's never ambiguous whether a value is app-wide or per-profile —
+the sliders also appear on the popover / Settings / Profile Detail):
 1. Output level VU — vertical L/R peak meter. Triple-tap the header to swap
    between the Digital and Analog VU displays (the analog dial is the
    nostalgic easter egg shared with the Analog Control Unit).
-2. Master gain slider (`-60…+12 dB`).
-3. Balance slider (per active profile, `-1…+1`) with recenter button.
-4. Dose mini-bar — today's NIOSH dose as a thin green/amber/red capsule.
+2. **App master gain** slider (`-60…+12 dB`) — app-wide, same value as the
+   popover and Settings.
+3. **Active profile balance** slider (`-1…+1`) with recenter button — saved
+   with the active profile (same as Profile Detail's balance row).
+4. **Today's exposure** mini-bar — today's NIOSH dose as a thin
+   green/amber/red capsule (resets at local midnight).
 
-Visibility persisted via `@AppStorage("sherlockeq.monitorSidebarVisible")`. Defaults
-to visible so first-launch users discover it.
+Visibility persisted via `@AppStorage("sherlockeq.monitorSidebarVisible")`.
+Defaults to **closed**: the panel's usual state was an idle low-information
+repeat, and the live glance now lives in the toolbar status.
 
 ### Activation Policy
 - Window closed → `NSApp.setActivationPolicy(.accessory)` — menu bar only, no Dock
@@ -543,8 +555,8 @@ its perceptual vocabulary and voice-tuning role fold into the Graphic surface
 
 ### 5.9 Parametric EQ
 
-The full-control surface. Reached by setting the active profile's EQ surface to
-**Parametric** on Profile Detail (`eqMode = .expert`). Rendered by `ExpertEQView` via
+The full-control surface. Reached from the **Graphic | Parametric** segmented
+control in the Equalizer screen's toolbar (`eqMode = .expert`). Rendered by `ExpertEQView` via
 `ParametricCanvasView`.
 
 - Interactive frequency response canvas: log-scaled x-axis (20 Hz – 20 kHz),
@@ -937,7 +949,7 @@ and sequences the `.accessory → .regular` policy flip + activation determinist
 
 ---
 
-### 8.3 Main Window (default 1480 × 880pt, minimum 1400 × 740pt, resizable)
+### 8.3 Main Window (default 1480 × 880pt, minimum 1126 × 716pt, resizable)
 
 `NavigationSplitView` with a left sidebar (min 220 / ideal 240 / max 300pt), detail
 content in the middle (min 760 / ideal 820pt), and a persistent right monitor
@@ -964,7 +976,10 @@ ear tabs). Draggable threshold points at standard frequencies plus numeric entry
 alongside. EQ preview rendered below.
 
 **Equalizer** — shows the single EQ surface that matches the active profile's
-`eqMode`. The two surfaces:
+`eqMode`, switched by a **Graphic | Parametric** segmented control in the
+screen's toolbar (next to the title — the switch swaps this entire screen, so
+the control lives where its effect is; it previously hid on Profile Detail).
+The two surfaces:
 - *Graphic* — 12-band graphic EQ on the audiometric grid (31.5, 63, 125, 250,
   500, 1k, 2k, 3k, 4k, 6k, 8k, 16k Hz — the octave series plus the 3 & 6 kHz
   audiogram frequencies; canonical list: `EQMode.graphicCenters`). Off-grid
@@ -1136,7 +1151,7 @@ SherlockEQ/
 │   │   └── ReferenceButton.swift
 │   │
 │   ├── Window/
-│   │   ├── MainWindowView.swift            ← NavigationSplitView + right monitor sidebar
+│   │   ├── MainWindowView.swift            ← NavigationSplitView + sliding monitor panel + toolbar status glance
 │   │   ├── Sidebar/
 │   │   │   ├── SidebarView.swift
 │   │   │   └── SidebarSection.swift        ← profiles, audiogram, equalizer, toneFinder, safeListening, settings, debug
@@ -1252,4 +1267,4 @@ distributed (Core Audio Taps requires `audio-input` outside the sandbox).
 | Spectrogram visualisation | **Removed** (2026-07 scope-reduction pass) along with the 1/3-octave bars mode, peak callouts, lens presets, vectorscope, and waveform scope. These were mixing-engineer instruments serving no hearing-accommodation purpose; the code was deleted rather than left dormant. The Analog Control Unit and analog VU dial were deliberately kept (nostalgia is their purpose). Git history has the deleted implementations if ever needed. |
 | Onboarding wizard | Implemented as a lean three-step first-launch wizard (§8.4): welcome + upstream-EQ note → permission priming (defers the system-audio + notification prompts so they arrive with context) → starter-profile pick with optional deep-links. Replayable from Settings → About. The deeper guided audiogram / tinnitus / calibration steps the original spec imagined were deliberately left as deep-link pointers to the now-first-class screens. |
 | AutoEQ license | AutoEQ data is MIT licensed. Credit lives in Settings → About → Acknowledgments with a link to the upstream repo. |
-| Window sizing | Current minimum 1400 × 740pt is set so the Expert layer-chip strip and the dual sidebars fit on one row without compression. Lowering the floor would require collapsing the right monitor sidebar by default. |
+| Window sizing | ✅ Resolved: the right monitor panel is now collapsed by default (a slide-in trailing column), so the minimum dropped from 1366 to 1126 pt (its former 240 pt gutter). The Expert layer-chip strip still fits without the panel; opening it may transiently compress the detail on a minimum-width window. |

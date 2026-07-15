@@ -25,8 +25,8 @@ related:
 
 Parametric EQ gives you full control over each band: its **frequency**, its
 **gain**, its **Q** (bandwidth), and its **filter type**. You can stack
-multiple bands to build any response shape. In a profile's **Tuning** section
-this surface is selected as **Parametric**.
+multiple bands to build any response shape. Switch to it with the
+**Graphic | Parametric** control at the top of the Equalizer screen.
 
 ## Why it exists
 
