@@ -39,6 +39,14 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     /// source/type (e.g. the same model from oratory1990 and Crinacle), so a
     /// name match alone can point at the wrong correction. decodeIfPresent.
     var autoEQSourcePath: String?
+    /// Output device the correction was attached on (UID + display name),
+    /// recorded at attach time. Drives the device-mismatch warning
+    /// (phase3-make-correction-land.md §7): a correction is voiced for one
+    /// specific transducer, so running it on a different output deserves a
+    /// heads-up. Nil on legacy profiles (attached before this field
+    /// existed) — no warning until re-attached; no fuzzy name matching.
+    var autoEQDeviceUID: String?
+    var autoEQDeviceName: String?
     var safeListeningCeilingDB: Double          // user-set, default 85.0
     var compensationFactor: Double              // 0.25–1.0 — audiogram→EQ strength
     /// When true, EQ tabs show per-ear sliders; when false, every edit
@@ -110,6 +118,8 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.autoEQBands            = try c.decodeIfPresent([EQBand].self, forKey: .autoEQBands)
         self.autoEQPreampDB         = try c.decodeIfPresent(Double.self, forKey: .autoEQPreampDB)
         self.autoEQSourcePath       = try c.decodeIfPresent(String.self, forKey: .autoEQSourcePath)
+        self.autoEQDeviceUID        = try c.decodeIfPresent(String.self, forKey: .autoEQDeviceUID)
+        self.autoEQDeviceName       = try c.decodeIfPresent(String.self, forKey: .autoEQDeviceName)
         self.safeListeningCeilingDB = try c.decode(Double.self, forKey: .safeListeningCeilingDB)
         self.compensationFactor     = try c.decode(Double.self, forKey: .compensationFactor)
         self.separateChannels       = try c.decodeIfPresent(Bool.self, forKey: .separateChannels) ?? false
@@ -153,6 +163,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         globalTrimDB: Double, balance: Double = 0,
         autoEQName: String? = nil, autoEQBands: [EQBand]? = nil, autoEQPreampDB: Double? = nil,
         autoEQSourcePath: String? = nil,
+        autoEQDeviceUID: String? = nil, autoEQDeviceName: String? = nil,
         safeListeningCeilingDB: Double, compensationFactor: Double,
         separateChannels: Bool = false,
         eqMode: EQMode = .advanced,
@@ -172,6 +183,8 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.autoEQBands = autoEQBands
         self.autoEQPreampDB = autoEQPreampDB
         self.autoEQSourcePath = autoEQSourcePath
+        self.autoEQDeviceUID = autoEQDeviceUID
+        self.autoEQDeviceName = autoEQDeviceName
         self.safeListeningCeilingDB = safeListeningCeilingDB
         self.compensationFactor = compensationFactor
         self.separateChannels = separateChannels

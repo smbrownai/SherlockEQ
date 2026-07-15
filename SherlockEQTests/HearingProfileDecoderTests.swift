@@ -99,6 +99,15 @@ struct HearingProfileDecoderTests {
         }
     }
 
+    @Test func missingAutoEQDeviceFieldsDecodeToNil() throws {
+        // Corrections attached before the device-mismatch feature carry no
+        // recorded device — they must decode (nil) and produce no warning.
+        let json = Self.minimalLegacyJSON(omitting: "autoEQDeviceUID")
+        let profile = try Self.decoder.decode(HearingProfile.self, from: json)
+        #expect(profile.autoEQDeviceUID == nil)
+        #expect(profile.autoEQDeviceName == nil)
+    }
+
     @Test func missingIsBuiltInDefaultsToFalse() throws {
         let json = Self.minimalLegacyJSON(omitting: "isBuiltIn")
         let profile = try Self.decoder.decode(HearingProfile.self, from: json)

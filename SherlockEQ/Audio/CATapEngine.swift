@@ -25,6 +25,15 @@ final class CATapEngine: ObservableObject {
     /// CoreAudio type doesn't leak into the view layer.
     @Published private(set) var currentOutputDeviceID: AudioDeviceID = kAudioObjectUnknown
     @Published private(set) var currentOutputDeviceName: String = "—"
+    /// UID of the current default output device — the stable identity used
+    /// for profile auto-switching and the AutoEQ device-mismatch check
+    /// (phase3-make-correction-land.md §7). Resolved in the off-main prep
+    /// step alongside the name; nil until the first tap start.
+    @Published private(set) var currentOutputDeviceUID: String?
+    /// True when the current output device's transport is the built-in
+    /// speakers — the case where a headphone correction is always wrong,
+    /// not just probably (drives the mismatch warning's stronger copy).
+    @Published private(set) var currentOutputDeviceIsBuiltIn: Bool = false
 
     /// Pre-formatted "Name (#id)" string for diagnostic UI. DebugView
     /// reads this instead of touching `currentOutputDeviceID` directly,
@@ -427,6 +436,8 @@ final class CATapEngine: ObservableObject {
     private struct TapPrepResult {
         let outputDeviceID: AudioDeviceID
         let outputDeviceName: String
+        let outputDeviceUID: String
+        let outputDeviceIsBuiltIn: Bool
         let ownProcessObjectID: AudioObjectID
         let tapID: AudioObjectID
         let aggregateDeviceID: AudioDeviceID
@@ -529,6 +540,8 @@ final class CATapEngine: ObservableObject {
         return TapPrepResult(
             outputDeviceID: outputDeviceID,
             outputDeviceName: outputDeviceName,
+            outputDeviceUID: outputDeviceUID,
+            outputDeviceIsBuiltIn: isBuiltInOutput(outputDeviceID),
             ownProcessObjectID: ownProcessObjectID,
             tapID: newTapID,
             aggregateDeviceID: newAggID,
@@ -547,6 +560,8 @@ final class CATapEngine: ObservableObject {
     private func applyTapPrep(_ prep: TapPrepResult) throws {
         currentOutputDeviceID = prep.outputDeviceID
         currentOutputDeviceName = prep.outputDeviceName
+        currentOutputDeviceUID = prep.outputDeviceUID
+        currentOutputDeviceIsBuiltIn = prep.outputDeviceIsBuiltIn
         excludedProcessObjectID.set(Int64(prep.ownProcessObjectID))
         tapID = prep.tapID
         aggregateDeviceID = prep.aggregateDeviceID
@@ -1186,6 +1201,22 @@ extension CATapEngine {
             throw TapError.deviceUIDUnavailable(status)
         }
         return cf as String
+    }
+
+    /// True when the device's transport is the Mac's built-in speakers —
+    /// the one output where a headphone correction curve is categorically
+    /// wrong. Best-effort: an unreadable transport reads as "not built-in"
+    /// (the mismatch warning then just uses its normal copy).
+    nonisolated static func isBuiltInOutput(_ deviceID: AudioDeviceID) -> Bool {
+        var transport = UInt32(0)
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &transport)
+        return status == noErr && transport == kAudioDeviceTransportTypeBuiltIn
     }
 
     /// Lightweight descriptor for the output-device picker.

@@ -77,6 +77,7 @@ the final judge.
 - Works per ear alongside [Per-Ear EQ](help:per-ear-eq).
 - The preamp interacts with master [gain](help:gain-volume); large correction boosts cost headroom.
 - Correction is tied to a headphone, so pair it with the right [output device](help:output-devices)/profile.
+- SherlockEQ remembers which output device a correction was set up on. If you're later listening on a **different device** — especially the built-in speakers, where a headphone curve is always wrong — a warning appears in the menu-bar popover and on the Equalizer screen, with one-click **Bypass here** and **Dismiss** options. Dismissals are remembered per profile and device.
 
 ## Recommended uses
 

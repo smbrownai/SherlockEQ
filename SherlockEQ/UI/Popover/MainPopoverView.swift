@@ -43,6 +43,9 @@ struct MainPopoverView: View {
             Divider()
             ProfilePickerRow()
             CompensationSliderView()
+            // Headphone-correction device mismatch (spec §7) — menu-bar-only
+            // users must see this without opening the main window.
+            AutoEQMismatchRow(compact: true)
             TinnitusNotchRow()
             ListeningComfortRow()
             ReferenceButton()

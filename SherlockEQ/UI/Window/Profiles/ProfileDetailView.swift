@@ -379,7 +379,9 @@ struct ProfileDetailView: View {
             path: saved.path,
             to: profile,
             service: autoEQRemote,
-            profileStore: profileStore
+            profileStore: profileStore,
+            deviceUID: audioState.tap.currentOutputDeviceUID,
+            deviceName: audioState.tap.currentOutputDeviceName
         )
         if !ok {
             // Cache missing — re-fetch then re-apply on success.
@@ -395,7 +397,9 @@ struct ProfileDetailView: View {
                         path: saved.path,
                         to: profile,
                         service: autoEQRemote,
-                        profileStore: profileStore
+                        profileStore: profileStore,
+                        deviceUID: audioState.tap.currentOutputDeviceUID,
+                        deviceName: audioState.tap.currentOutputDeviceName
                     )
                 }
             }
@@ -752,10 +756,17 @@ struct ProfileDetailView: View {
     private func applyAutoEQ(at url: URL, name: String, to profile: HearingProfile) {
         guard let text = try? String(contentsOf: url, encoding: .utf8),
               let parsed = AutoEQParser.parse(text) else { return }
+        // Record the output device the correction is being set up on —
+        // the identity the device-mismatch warning (spec §7) checks
+        // against after route changes.
+        let deviceUID = audioState.tap.currentOutputDeviceUID
+        let deviceName = audioState.tap.currentOutputDeviceName
         update(profile) {
             $0.autoEQName = name
             $0.autoEQBands = parsed.bands
             $0.autoEQPreampDB = parsed.preampDB
+            $0.autoEQDeviceUID = deviceUID
+            $0.autoEQDeviceName = deviceUID == nil ? nil : deviceName
         }
     }
 
@@ -764,6 +775,8 @@ struct ProfileDetailView: View {
             $0.autoEQName = nil
             $0.autoEQBands = nil
             $0.autoEQPreampDB = nil
+            $0.autoEQDeviceUID = nil
+            $0.autoEQDeviceName = nil
         }
     }
 }
