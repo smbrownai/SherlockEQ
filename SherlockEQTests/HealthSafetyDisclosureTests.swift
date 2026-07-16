@@ -56,11 +56,16 @@ struct HealthSafetyDisclosureTests {
         #expect(c.contains("discomfort") && c.contains("pain") && c.contains("dizziness"))
     }
 
-    @Test func statesWhenToConsultAProfessional() {
+    /// The red-flag symptoms and the "not a substitute for professional
+    /// evaluation" statement must survive, even though the section is framed
+    /// as the app's limits rather than as advice about the reader's health.
+    @Test func statesRedFlagSymptomsAndProfessionalEvaluation() {
         let c = corpus
         #expect(c.contains("sudden"))
         #expect(c.contains("one ear"))
+        #expect(c.contains("pulsatile"))
         #expect(c.contains("healthcare professional"))
+        #expect(c.contains("substitute"))
     }
 
     @Test func statesLocalProcessingPrivacy() {
@@ -72,13 +77,8 @@ struct HealthSafetyDisclosureTests {
     }
 
     @Test func everyLearnMoreLinkResolves() {
-        // Section links + the footer "Learn more" list must all point at real
-        // Help articles (non-empty slug).
-        for section in HealthSafetyDisclosure.sections {
-            if let topic = section.learnMore {
-                #expect(!topic.slug.isEmpty)
-            }
-        }
+        // Help links live only in the footer list now — sections carry no
+        // per-section link — and each must point at a real article.
         for entry in HealthSafetyDisclosure.learnMoreTopics {
             #expect(!entry.topic.slug.isEmpty)
             #expect(!entry.label.isEmpty)

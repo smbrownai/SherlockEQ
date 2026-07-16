@@ -21,7 +21,7 @@ enum HealthSafetyDisclosure {
     static let title = "Health & Safety"
 
     /// One calm sentence that frames the whole sheet.
-    static let summary = "SherlockEQ is a consumer audio tool for everyday listening — not medical care. Here's what that means, how to use it safely, and when to seek professional help."
+    static let summary = "SherlockEQ is a consumer audio tool for everyday listening — not medical care. Here's what that means, how to use it safely, and where its limits are."
 
     // MARK: - Compact chip (repeated-card replacement)
 
@@ -38,8 +38,6 @@ enum HealthSafetyDisclosure {
         let symbol: String
         /// Short scannable paragraphs — plain language, no legal wall.
         let paragraphs: [String]
-        /// Optional Help article for the deep-dive.
-        let learnMore: HelpTopic?
     }
 
     static let sections: [Section] = [
@@ -49,8 +47,7 @@ enum HealthSafetyDisclosure {
             symbol: "app.badge",
             paragraphs: [
                 "SherlockEQ is a consumer audio-processing application. It shapes the sound your Mac plays — equalization, per-ear balance, a tinnitus notch, and comfort tools — so everyday listening to music, video, and speech can feel clearer or easier."
-            ],
-            learnMore: .gettingStarted
+            ]
         ),
         Section(
             id: "not-medical",
@@ -59,8 +56,7 @@ enum HealthSafetyDisclosure {
             paragraphs: [
                 "SherlockEQ is not a medical device and not a hearing aid.",
                 "It does not diagnose, treat, cure, or prevent hearing loss, tinnitus, or any other health condition, and it implies no regulatory approval."
-            ],
-            learnMore: .safetyLimits
+            ]
         ),
         Section(
             id: "audiogram",
@@ -69,8 +65,7 @@ enum HealthSafetyDisclosure {
             paragraphs: [
                 "Audiogram-derived adjustments are conservative listening starting points you fine-tune by ear — not clinical fittings.",
                 "A static equalizer can't provide the calibrated, level-dependent processing, output limiting, and real-ear verification a professionally fitted hearing aid uses. Treat any adjustment as a comfort preference, not a correction of a measured loss."
-            ],
-            learnMore: .audiogramProfiles
+            ]
         ),
         Section(
             id: "tinnitus",
@@ -79,8 +74,7 @@ enum HealthSafetyDisclosure {
             paragraphs: [
                 "The tinnitus tools let you explore a notch around a pitch you match by ear and track how bothersome the ringing feels. They don't treat tinnitus, and evidence for notched-sound approaches is mixed.",
                 "Test tones should begin quietly. Stop immediately if a tone causes discomfort, pain, dizziness, or worsening symptoms."
-            ],
-            learnMore: .tinnitusToneMatching
+            ]
         ),
         Section(
             id: "levels",
@@ -89,8 +83,7 @@ enum HealthSafetyDisclosure {
             paragraphs: [
                 "Listening-level and exposure (dose) values are estimates, not measurements. Their accuracy depends on your output device, your volume, and whether you've set the playback calibration.",
                 "Without calibration the estimate shows the right shape but not a true level; when audio isn't playing there's no level to show at all."
-            ],
-            learnMore: .safetyLimits
+            ]
         ),
         Section(
             id: "safe-use",
@@ -99,18 +92,21 @@ enum HealthSafetyDisclosure {
             paragraphs: [
                 "Keep levels comfortable, take regular breaks, and start any test tone or large boost quietly.",
                 "Stop right away if listening becomes uncomfortable or causes pain, ringing, fullness, or dizziness."
-            ],
-            learnMore: .safetyLimits
+            ]
         ),
+        // Framed as the app's limits rather than as guidance about the
+        // reader's health: it says what SherlockEQ cannot do, not what a
+        // symptom warrants. The symptom list is retained deliberately — it's
+        // what lets someone recognise that they're outside what an equalizer
+        // can address. See the wording note at the top of this file.
         Section(
             id: "consult",
-            title: "When to consult a hearing professional",
+            title: "What SherlockEQ can't assess",
             symbol: "stethoscope",
             paragraphs: [
-                "A sudden change in hearing, a change in one ear, ear pain, drainage, dizziness, pulsatile (heartbeat-like) tinnitus, or other concerning symptoms warrant evaluation by an appropriate healthcare professional.",
-                "SherlockEQ can't assess these, and no amount of audio tuning is a substitute for that evaluation."
-            ],
-            learnMore: nil
+                "SherlockEQ can't assess symptoms — among them a sudden change in hearing, a change in one ear, ear pain, drainage, dizziness, and pulsatile (heartbeat-like) tinnitus.",
+                "It isn't a substitute for evaluation by an appropriate healthcare professional, and no amount of audio tuning is."
+            ]
         ),
         Section(
             id: "privacy",
@@ -118,8 +114,7 @@ enum HealthSafetyDisclosure {
             symbol: "lock.shield",
             paragraphs: [
                 "Audio is processed on your Mac in real time. Nothing you play is recorded, saved, or sent anywhere, and your profiles stay in local files you control."
-            ],
-            learnMore: .privacy
+            ]
         ),
     ]
 

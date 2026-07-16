@@ -64,23 +64,15 @@ struct HealthSafetySheet: View {
             }
             .accessibilityAddTraits(.isHeader)
 
+            // No per-section "Learn more" — a link under every section turned
+            // the sheet into a wall of links and pulled the eye away from the
+            // disclosure itself. All Help links are gathered at the bottom.
             ForEach(Array(section.paragraphs.enumerated()), id: \.offset) { _, paragraph in
                 Text(paragraph)
                     .font(.callout)
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            if let topic = section.learnMore {
-                Button {
-                    openHelp(topic)
-                } label: {
-                    Label("Learn more", systemImage: "arrow.up.right.square")
-                        .font(.callout)
-                }
-                .buttonStyle(.link)
-                .accessibilityLabel("Learn more about \(section.title) in Help")
             }
         }
     }
