@@ -18,11 +18,13 @@ struct SettingsView: View {
     @State private var showAdvancedAudio = false
     @State private var showFiles = false
     @State private var showDiagnostics = false
+    @State private var showAbout = true
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                header
+                // No in-page "Settings" hero — the window title bar already
+                // names the screen; a second copy was pure duplication.
                 group("General", systemImage: "switch.2", isExpanded: $showGeneral) {
                     generalContent
                 }
@@ -35,7 +37,7 @@ struct SettingsView: View {
                 group("Advanced Audio", systemImage: "waveform.badge.exclamationmark", isExpanded: $showAdvancedAudio) {
                     advancedAudioContent
                 }
-                group("Files and data", systemImage: "externaldrive", isExpanded: $showFiles) {
+                group("Data & Profiles", systemImage: "externaldrive", isExpanded: $showFiles) {
                     filesContent
                 }
                 group("Diagnostics", systemImage: "stethoscope", isExpanded: $showDiagnostics) {
@@ -67,21 +69,6 @@ struct SettingsView: View {
     private struct RelocationPrompt: Identifiable {
         let url: URL
         var id: URL { url }
-    }
-
-    private var header: some View {
-        HStack(spacing: 14) {
-            Image(systemName: "gearshape")
-                .font(.system(size: 32))
-                .foregroundStyle(.tint)
-                .frame(width: 48, height: 48)
-                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Settings").font(.title2.weight(.semibold))
-                Text("App-wide preferences").font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
     }
 
     // MARK: - General
@@ -116,9 +103,8 @@ struct SettingsView: View {
             ColorPicker("", selection: binding, supportsOpacity: false)
                 .labelsHidden()
                 .frame(width: 44)
-            Text(binding.wrappedValue.hexString)
-                .font(.callout.monospaced())
-                .foregroundStyle(.secondary)
+            // Hex value hidden — the swatch/well is the editor; the raw code
+            // is engineering noise on the everyday Appearance row.
             Spacer()
             Button {
                 binding.wrappedValue = defaultColor
@@ -363,7 +349,7 @@ struct SettingsView: View {
     // MARK: - About
 
     private var aboutSection: some View {
-        groupBox(title: "About", systemImage: "info.circle") {
+        group("About", systemImage: "info.circle", isExpanded: $showAbout) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Acknowledgments").font(.callout.weight(.medium))
@@ -409,19 +395,4 @@ struct SettingsView: View {
         .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.06)))
     }
 
-    @ViewBuilder
-    private func groupBox<Content: View>(
-        title: String,
-        systemImage: String,
-        @ViewBuilder _ content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(title, systemImage: systemImage)
-                .font(.headline)
-            content()
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.06)))
-    }
 }
