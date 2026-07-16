@@ -11,9 +11,7 @@ struct MainWindowView: View {
     /// across launches via @AppStorage — the user's open/closed choice
     /// sticks. Defaults to **closed**: the panel mostly repeated a
     /// low-information idle state while consuming ~240 pt on every screen,
-    /// so the live glance now lives in the compact toolbar status
-    /// (`MonitorStatusButton`) and the full panel opens on demand as an
-    /// inspector.
+    /// so it opens on demand as an inspector via `MonitorToggleButton`.
     @AppStorage("sherlockeq.monitorSidebarVisible") private var monitorSidebarVisible: Bool = false
 
     var body: some View {
@@ -100,12 +98,8 @@ struct MainWindowView: View {
                 }
             }
             ToolbarItem(placement: .primaryAction) {
-                // Compact live glance — app master gain, today's exposure,
-                // active-profile balance — that also opens the full panel.
-                // Replaces the old show/hide toggle: the panel's usual state
-                // was idle, so the values it carried belong in the title bar
-                // and the controls behind a click.
-                MonitorStatusButton(isOpen: monitorSidebarVisible) {
+                // Show/hide the monitor panel. Defaults hidden.
+                MonitorToggleButton(isOpen: monitorSidebarVisible) {
                     monitorSidebarVisible.toggle()
                 }
             }
@@ -154,94 +148,23 @@ struct MainWindowView: View {
     }
 }
 
-/// Compact title-bar glance at the three values the monitor panel used to
-/// hold open a whole gutter for: **app master gain**, **today's exposure**,
-/// and **active-profile balance**. Clicking it opens (or closes) the full
-/// `MonitorSidebar` as an inspector, where each value carries its explicit
-/// scope label — resolving the "is this global or per-profile?" ambiguity
-/// that the bare sliders created across the popover, Settings, and Profile
-/// Detail. Reads only slow-changing state, so it never drives the 60 Hz VU
-/// loop (that stays gated on the panel itself).
-private struct MonitorStatusButton: View {
-    @EnvironmentObject private var audioState: AudioState
-    @EnvironmentObject private var profileStore: ProfileStore
-
+/// Toolbar toggle for the monitor panel (`MonitorSidebar`), which holds app
+/// master gain, active-profile balance, and today's exposure — each with its
+/// explicit scope label. Deliberately just a toggle: it briefly carried a live
+/// gain/balance/exposure readout in the title bar, but those numbers duplicated
+/// the panel they open and earned their space nowhere. The panel defaults to
+/// hidden and its open/closed state persists.
+private struct MonitorToggleButton: View {
     let isOpen: Bool
     let toggle: () -> Void
 
     var body: some View {
         Button(action: toggle) {
-            HStack(spacing: 6) {
-                Image(systemName: isOpen ? "sidebar.right" : "sidebar.squares.right")
-                    .imageScale(.medium)
-                HStack(spacing: 5) {
-                    labeled("Gain", gainText)
-                    bullet
-                    labeled("Balance", balanceText)
-                    bullet
-                    labeled("Exposure", doseText, tint: doseColor)
-                }
-                .font(.callout)
-                .monospacedDigit()
-                // Chevron so the summary reads as a clickable disclosure, not
-                // just a status readout.
-                Image(systemName: "chevron.up.chevron.down")
-                    .imageScale(.small)
-                    .foregroundStyle(.tertiary)
-            }
+            Image(systemName: isOpen ? "sidebar.right" : "sidebar.squares.right")
+                .imageScale(.medium)
         }
-        .help(isOpen
-              ? "Hide the monitor panel"
-              : "Show the monitor panel — app master gain, active-profile balance, and today's exposure")
+        .help(isOpen ? "Hide the monitor panel"
+                     : "Show the monitor panel — app master gain, active-profile balance, and today's exposure")
         .accessibilityLabel(isOpen ? "Hide monitor panel" : "Show monitor panel")
-        .accessibilityValue(accessibilityValue)
-    }
-
-    private func labeled(_ label: String, _ value: String, tint: Color? = nil) -> some View {
-        HStack(spacing: 3) {
-            Text("\(label):").foregroundStyle(.secondary)
-            Text(value).foregroundStyle(tint ?? .primary)
-        }
-    }
-
-    private var bullet: some View {
-        Text("•").foregroundStyle(.tertiary)
-    }
-
-    // MARK: - Values (mirrors MonitorSidebar's formatting so the glance and
-    // the panel never disagree)
-
-    private var gainText: String {
-        let dB = audioState.engineParameters.masterGainDB
-        let magnitude = abs(dB)
-        if magnitude < 0.05 { return "0 dB" }
-        return String(format: "%@%.1f dB", dB > 0 ? "+" : "−", magnitude)
-    }
-
-    /// A missing measurement isn't a "0 %" measurement — when there's no audio
-    /// and nothing has accumulated, show an explicit unknown dash.
-    private var doseText: String {
-        if audioState.sessionDosePercent <= 0 && !audioState.exposureAudioPresent { return "—" }
-        return String(format: "%.0f%%", audioState.sessionDosePercent * 100)
-    }
-
-    private var balanceText: String {
-        guard let profile = audioState.activeProfile(in: profileStore) else { return "—" }
-        let b = profile.balance
-        if abs(b) < 0.005 { return "Centered" }
-        return b > 0 ? String(format: "R %.0f%%", b * 100)
-                     : String(format: "L %.0f%%", abs(b) * 100)
-    }
-
-    private var doseColor: Color {
-        switch audioState.safeListening.doseSeverity {
-        case .safe:  return .primary
-        case .amber: return .orange
-        case .red:   return .red
-        }
-    }
-
-    private var accessibilityValue: String {
-        "App master gain \(gainText), today's exposure \(doseText), active profile balance \(balanceText)"
     }
 }
