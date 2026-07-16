@@ -213,8 +213,11 @@ private struct MonitorStatusButton: View {
         return String(format: "%@%.1f dB", dB > 0 ? "+" : "−", magnitude)
     }
 
+    /// A missing measurement isn't a "0 %" measurement — when there's no audio
+    /// and nothing has accumulated, show an explicit unknown dash.
     private var doseText: String {
-        String(format: "%.0f%%", audioState.sessionDosePercent * 100)
+        if audioState.sessionDosePercent <= 0 && !audioState.exposureAudioPresent { return "—" }
+        return String(format: "%.0f%%", audioState.sessionDosePercent * 100)
     }
 
     private var balanceText: String {

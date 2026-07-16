@@ -129,43 +129,93 @@ struct SafeListeningView: View {
     @ViewBuilder private var doseCard: some View {
         card {
             cardHeader("Today's exposure", systemImage: "shield.lefthalf.filled")
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(String(format: "%.0f%%", state.safeListening.sessionDose * 100))
-                    .font(.system(size: 44, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(doseColor)
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(state.safeListening.didCrossRedToday ? "Limit reached" :
-                         state.safeListening.didCrossAmberToday ? "Approaching limit" :
-                         "Under safe limit")
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(doseColor)
-                    remainingReadout
+            if exposureState == .unknown {
+                unknownExposureBody
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(String(format: "%.0f%%", state.safeListening.sessionDose * 100))
+                        .font(.system(size: 44, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(doseTint)
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(doseStatusText)
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(doseTint)
+                        remainingReadout
+                    }
                 }
-            }
 
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.quaternary)
-                    Capsule()
-                        .fill(doseColor)
-                        .frame(width: max(0, geo.size.width * min(1, state.safeListening.sessionDose)))
-                        .animation(.easeOut(duration: 0.2), value: state.safeListening.sessionDose)
-                    Rectangle().fill(Color.orange.opacity(0.3)).frame(width: 1).offset(x: geo.size.width * 0.8)
-                    Rectangle().fill(Color.red.opacity(0.4)).frame(width: 1).offset(x: geo.size.width)
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.quaternary)
+                        Capsule()
+                            .fill(doseTint)
+                            .frame(width: max(0, geo.size.width * min(1, state.safeListening.sessionDose)))
+                            .animation(.easeOut(duration: 0.2), value: state.safeListening.sessionDose)
+                        Rectangle().fill(Color.orange.opacity(0.3)).frame(width: 1).offset(x: geo.size.width * 0.8)
+                        Rectangle().fill(Color.red.opacity(0.4)).frame(width: 1).offset(x: geo.size.width)
+                    }
                 }
-            }
-            .frame(height: 14)
+                .frame(height: 14)
 
-            HStack {
-                Text("0 %").font(.caption.monospaced()).foregroundStyle(.secondary)
-                Spacer()
-                Text("Warn (80 %)").font(.caption.monospaced()).foregroundStyle(.orange)
-                Spacer()
-                Text("Limit (100 %)").font(.caption.monospaced()).foregroundStyle(.red)
+                HStack {
+                    Text("0 %").font(.caption.monospaced()).foregroundStyle(.secondary)
+                    Spacer()
+                    Text("Warn (80 %)").font(.caption.monospaced()).foregroundStyle(.orange)
+                    Spacer()
+                    Text("Limit (100 %)").font(.caption.monospaced()).foregroundStyle(.red)
+                }
             }
         }
+    }
+
+    /// Shown when there's no audio to measure and nothing has accumulated yet.
+    /// A missing measurement is not a safe measurement — so no green, no "0 %",
+    /// no "under limit" claim.
+    private var unknownExposureBody: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text("—")
+                .font(.system(size: 44, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Exposure unavailable")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Text("Start audio to begin estimating exposure. Calibrate for a more accurate estimate.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+        }
+    }
+
+    /// Three honest states for today's exposure. `unknown` = no audio now AND
+    /// nothing recorded yet (we genuinely don't know); `approximate` = tracking
+    /// without calibration; `tracked` = a calibrated, valid estimate.
+    private enum ExposureState { case unknown, approximate, tracked }
+
+    private var exposureState: ExposureState {
+        if state.safeListening.sessionDose <= 0 && !isReceivingAudio { return .unknown }
+        return state.hasUserCalibration ? .tracked : .approximate
+    }
+
+    /// Amber/red always show (they're safety signals regardless of calibration);
+    /// the "safe" bottom state only earns green once it's a valid tracked
+    /// estimate — an approximate estimate reads neutral, never green.
+    private var doseTint: Color {
+        switch state.safeListening.doseSeverity {
+        case .red:   return .red
+        case .amber: return .orange
+        case .safe:  return exposureState == .tracked ? .green : .secondary
+        }
+    }
+
+    private var doseStatusText: String {
+        if state.safeListening.didCrossRedToday { return "Limit reached" }
+        if state.safeListening.didCrossAmberToday { return "Approaching limit" }
+        return exposureState == .tracked ? "Under your limit" : "Approximate exposure"
     }
 
     /// Remaining safe time is the actionable figure — but only meaningful once
@@ -208,6 +258,10 @@ struct SafeListeningView: View {
                 Text("The level SherlockEQ treats as your daily limit. It lives on each profile — switching profiles can change it.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                Text("It's a duration limit too: 85 dBA corresponds to 8 hours, and every +3 dBA halves the time (NIOSH 3 dB exchange rate).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text("No active profile — make one active in the Profiles section to set a listening limit.")
                     .font(.callout)
@@ -420,8 +474,11 @@ struct SafeListeningView: View {
 
     @ViewBuilder private var historyCard: some View {
         card {
-            cardHeader("7-day history", systemImage: "calendar")
-            Text("Each day's peak dose, captured at the midnight rollover. Today reflects your exposure so far.")
+            cardHeader(state.hasUserCalibration ? "7-day history" : "7-day history (estimated)",
+                       systemImage: "calendar")
+            Text(state.hasUserCalibration
+                 ? "Each day's peak dose, captured at the midnight rollover. Today reflects your exposure so far."
+                 : "Each day's peak dose, captured at the midnight rollover. Recorded without calibration, so these are rough estimates. Today reflects your exposure so far.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             DoseHistoryChart(history: state.doseHistory, tracker: state.safeListening)
@@ -506,11 +563,4 @@ struct SafeListeningView: View {
         return "\(Int(minutes))m left"
     }
 
-    private var doseColor: Color {
-        switch state.safeListening.doseSeverity {
-        case .safe:  return .green
-        case .amber: return .orange
-        case .red:   return .red
-        }
-    }
 }
