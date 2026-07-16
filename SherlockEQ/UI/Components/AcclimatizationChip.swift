@@ -27,17 +27,17 @@ struct AcclimatizationChip: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Image(systemName: "chart.line.uptrend.xyaxis")
                         .foregroundStyle(.tint)
-                    Text("Acclimatization: day \(day) of \(Int(AcclimatizationRamp.durationDays)) — adjustment at \(percent) %.")
+                    Text("Gradual adjustment: day \(day) of \(Int(AcclimatizationRamp.durationDays)) — \(percent) % strength.")
                         .font(compact ? .caption : .callout)
                     Spacer()
-                    Button("Skip to full strength") {
+                    Button("Use full strength now") {
                         skipRamp(profile)
                     }
                     .controlSize(.small)
-                    .help("End the ramp now and apply the adjustment at its full target strength.")
+                    .help("End the gradual ramp now and apply the adjustment at its full target strength.")
                 }
                 if !compact {
-                    Text("A new adjustment starts gentle and rises to full strength over three weeks — the same easing hearing-care professionals use, because an unaccustomed ear finds the full prescription harsh at first. Not medical advice; skip ahead any time.")
+                    Text("New hearing adjustments can initially sound unfamiliar. SherlockEQ can introduce this adjustment gradually over three weeks. You may use full strength at any time.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -54,7 +54,7 @@ struct AcclimatizationChip: View {
                     .strokeBorder(Color.accentColor.opacity(0.30))
             )
             .accessibilityElement(children: .contain)
-            .accessibilityLabel("Acclimatization ramp, day \(day) of \(Int(AcclimatizationRamp.durationDays)), adjustment at \(percent) percent.")
+            .accessibilityLabel("Gradual adjustment, day \(day) of \(Int(AcclimatizationRamp.durationDays)), \(percent) percent strength.")
         }
     }
 
