@@ -13,14 +13,6 @@ struct SafeListeningView: View {
     @State private var showCalibration = false
     @State private var confirmingReset = false
 
-    /// Below this dBA the level reading is treated as "no audio" rather than a
-    /// real quiet reading — matches the meter's own floor.
-    private let audioFloorDBA: Double = 31
-
-    private var isReceivingAudio: Bool {
-        state.safeListening.currentLevelDBA >= audioFloorDBA
-    }
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -68,7 +60,7 @@ struct SafeListeningView: View {
             }
             LevelMeterView(
                 levelDBA: state.safeListening.currentLevelDBA,
-                isReceivingAudio: isReceivingAudio
+                isReceivingAudio: state.isReceivingAudio
             )
         }
     }
@@ -129,7 +121,7 @@ struct SafeListeningView: View {
     @ViewBuilder private var doseCard: some View {
         card {
             cardHeader("Today's exposure", systemImage: "shield.lefthalf.filled")
-            if exposureState == .unknown {
+            if state.exposureStatus == .unknown {
                 unknownExposureBody
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -191,16 +183,6 @@ struct SafeListeningView: View {
         }
     }
 
-    /// Three honest states for today's exposure. `unknown` = no audio now AND
-    /// nothing recorded yet (we genuinely don't know); `approximate` = tracking
-    /// without calibration; `tracked` = a calibrated, valid estimate.
-    private enum ExposureState { case unknown, approximate, tracked }
-
-    private var exposureState: ExposureState {
-        if state.safeListening.sessionDose <= 0 && !isReceivingAudio { return .unknown }
-        return state.hasUserCalibration ? .tracked : .approximate
-    }
-
     /// Amber/red always show (they're safety signals regardless of calibration);
     /// the "safe" bottom state only earns green once it's a valid tracked
     /// estimate — an approximate estimate reads neutral, never green.
@@ -208,14 +190,14 @@ struct SafeListeningView: View {
         switch state.safeListening.doseSeverity {
         case .red:   return .red
         case .amber: return .orange
-        case .safe:  return exposureState == .tracked ? .green : .secondary
+        case .safe:  return state.exposureStatus == .tracked ? .green : .secondary
         }
     }
 
     private var doseStatusText: String {
         if state.safeListening.didCrossRedToday { return "Limit reached" }
         if state.safeListening.didCrossAmberToday { return "Approaching limit" }
-        return exposureState == .tracked ? "Under your limit" : "Approximate exposure"
+        return state.exposureStatus == .tracked ? "Under your limit" : "Approximate exposure"
     }
 
     /// Remaining safe time is the actionable figure — but only meaningful once

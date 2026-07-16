@@ -6,6 +6,44 @@ import CoreAudio
 import OSLog
 import ServiceManagement
 import SwiftUI
+
+/// How much we actually know about today's exposure right now.
+///
+/// - `unknown`: no audio is playing and nothing has accumulated — we have no
+///   measurement, which is *not* the same as a measurement of zero.
+/// - `approximate`: tracking, but without playback calibration the number has
+///   the right shape and the wrong level.
+/// - `tracked`: calibrated and measuring; the only state that has earned a
+///   plain, unqualified reading.
+///
+/// Lives here (not on a view) because the Safe Listening screen and the
+/// menu-bar popover must answer this identically.
+///
+/// `nonisolated` (the project defaults types to MainActor): this is pure data
+/// plus a pure rule, so it shouldn't require the main actor to compare — and
+/// under Swift 6 a MainActor-isolated `Equatable` conformance is unusable from
+/// the nonisolated tests that guard it.
+nonisolated enum ExposureStatus {
+    case unknown, approximate, tracked
+
+    /// Below this dBA the level reading is treated as "no audio" rather than a
+    /// real quiet reading — matches the level meter's own floor.
+    static let audioFloorDBA: Double = 31
+
+    /// The rule itself, kept pure so it's directly testable and can't drift
+    /// between the surfaces that render it.
+    ///
+    /// Note the asymmetry: accumulated exposure keeps its reading even after
+    /// the audio stops (it genuinely happened), so only a zero dose with no
+    /// audio is `unknown`.
+    static func resolve(sessionDose: Double,
+                        levelDBA: Double,
+                        hasCalibration: Bool) -> ExposureStatus {
+        let receivingAudio = levelDBA >= audioFloorDBA
+        if sessionDose <= 0 && !receivingAudio { return .unknown }
+        return hasCalibration ? .tracked : .approximate
+    }
+}
 import UserNotifications
 
 /// Single source of truth for audio lifecycle, injected as `@EnvironmentObject`
@@ -243,6 +281,21 @@ final class AudioState: ObservableObject {
     /// offset alone runs Adaptive in its reduced-depth mode.
     var hasUserCalibration: Bool {
         UserDefaults.standard.object(forKey: Self.calibrationKey) != nil
+    }
+
+    /// Whether audio is actually flowing right now. Live (not the throttled
+    /// mirror), so only read it from surfaces that already track the tracker.
+    var isReceivingAudio: Bool {
+        safeListening.currentLevelDBA >= ExposureStatus.audioFloorDBA
+    }
+
+    /// The honest read of today's exposure, shared by the Safe Listening screen
+    /// and the menu-bar popover so the two can't drift into telling different
+    /// stories about the same number. Rule lives in `ExposureStatus.resolve`.
+    var exposureStatus: ExposureStatus {
+        ExposureStatus.resolve(sessionDose: safeListening.sessionDose,
+                               levelDBA: safeListening.currentLevelDBA,
+                               hasCalibration: hasUserCalibration)
     }
 
     func activeProfile(in store: ProfileStore) -> HearingProfile? {

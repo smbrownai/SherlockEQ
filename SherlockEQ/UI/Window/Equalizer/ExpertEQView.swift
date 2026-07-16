@@ -326,10 +326,10 @@ struct ExpertEQView: View {
 
             Spacer()
 
-            Label("\(activeBands.count) band\(activeBands.count == 1 ? "" : "s")",
-                  systemImage: "rectangle.stack")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            // Label("\(activeBands.count) band\(activeBands.count == 1 ? "" : "s")",
+            //      systemImage: "rectangle.stack")
+            //    .font(.caption)
+            //    .foregroundStyle(.secondary)
 
             // Bandwidth unit switch — labeled so "Q | Oct" isn't a bare
             // pair of jargon abbreviations.

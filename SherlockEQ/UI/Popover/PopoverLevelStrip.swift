@@ -15,17 +15,29 @@ struct PopoverLevelStrip: View {
     /// Same value as the sidebar/Safe Listening uses, so colour
     /// boundaries land at consistent dBFS positions.
     let calibrationOffsetDBA: Double
+    /// False when nothing is playing — the meters are replaced by a plain
+    /// "Waiting for audio" rather than sitting empty.
+    var isReceivingAudio: Bool = true
 
     var body: some View {
         HStack(spacing: 8) {
-            Text("Level")
+            Text("Output level")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
-                .frame(width: 80, alignment: .leading)
+                .frame(width: 108, alignment: .leading)
 
-            VStack(spacing: 3) {
-                bar(label: "L", peak: monitor.leftPeak)
-                bar(label: "R", peak: monitor.rightPeak)
+            // Two empty tracks look like unset sliders rather than idle
+            // meters, so when nothing is playing say so in words instead.
+            if isReceivingAudio {
+                VStack(spacing: 3) {
+                    bar(label: "L", peak: monitor.leftPeak)
+                    bar(label: "R", peak: monitor.rightPeak)
+                }
+            } else {
+                Text("Waiting for audio")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         // Subscribe ties the StereoMonitor's 60 Hz display loop on

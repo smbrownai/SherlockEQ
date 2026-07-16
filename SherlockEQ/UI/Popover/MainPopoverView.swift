@@ -1,11 +1,12 @@
 import SwiftUI
 import AppKit
 
-/// The menu-bar popover. The 5-second surface: pick a profile, scrub the
-/// compensation slider, toggle the tinnitus notch or Listening Comfort,
-/// hit Reference Mode. Configuration (audiogram entry, parametric EQ,
-/// per-processor comfort tuning, etc.) lives in the main window — opened
-/// by the "Open Main Window" button at the bottom.
+/// The menu-bar popover — a status dashboard and remote for *today's
+/// listening session*, not a compressed copy of the app. It answers, in
+/// order: is SherlockEQ running and what is it processing, how loud is it,
+/// how much exposure has accumulated, and the handful of controls worth
+/// reaching without opening a window (gain, balance, profile, Reference
+/// Mode). Configuring *how* SherlockEQ works stays in the main window.
 struct MainPopoverView: View {
     @EnvironmentObject private var audioState: AudioState
     @EnvironmentObject private var profileStore: ProfileStore
@@ -28,15 +29,18 @@ struct MainPopoverView: View {
                 }
             }
             Divider()
-            DoseBarView(
-                percent: audioState.sessionDosePercent,
-                remainingMinutes: audioState.remainingMinutes
-            )
             PopoverLevelStrip(
                 monitor: audioState.stereoMonitor,
                 // Effective (volume-tracked) offset so the zone boundaries
                 // reflect at-ear level, not calibration-time level.
-                calibrationOffsetDBA: audioState.effectiveCalibrationOffsetDBA
+                calibrationOffsetDBA: audioState.effectiveCalibrationOffsetDBA,
+                isReceivingAudio: audioState.isReceivingAudio
+            )
+            DoseBarView(
+                percent: audioState.sessionDosePercent,
+                status: audioState.exposureStatus,
+                severity: audioState.safeListening.doseSeverity,
+                remainingMinutes: audioState.remainingMinutes
             )
             masterGainRow
             balanceRow
@@ -64,20 +68,56 @@ struct MainPopoverView: View {
     }
 
     @ViewBuilder private var header: some View {
-        HStack(spacing: 8) {
-            Text("SherlockEQ").font(.headline)
-            Spacer()
-            // Output device — read-only label for now; full picker comes when
-            // we enumerate audio devices in a follow-on session.
-            HStack(spacing: 4) {
-                Image(systemName: deviceSymbol).font(.callout)
-                Text(audioState.tap.currentOutputDeviceName)
-                    .font(.callout)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                Text("SherlockEQ").font(.headline)
+                Spacer()
+                // Output device — read-only label for now; full picker comes when
+                // we enumerate audio devices in a follow-on session.
+                HStack(spacing: 4) {
+                    Image(systemName: deviceSymbol).font(.callout)
+                    Text(audioState.tap.currentOutputDeviceName)
+                        .font(.callout)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .foregroundStyle(.secondary)
             }
-            .foregroundStyle(.secondary)
+            // "Is it actually doing anything, and to what?" is the first
+            // question the popover exists to answer — so it's answered before
+            // any control.
+            processingStatus
         }
+    }
+
+    /// Reference Mode is called out here because it's the one state where the
+    /// app is running, a profile is active, and yet nothing is being applied —
+    /// the exact case where a bare "Processing <profile>" would be a lie.
+    @ViewBuilder private var processingStatus: some View {
+        if audioState.eqChain.referenceMode {
+            statusLine("Reference Mode — processing bypassed",
+                       symbol: "circle.fill", tint: .red)
+        } else if let profile = audioState.activeProfile(in: profileStore) {
+            statusLine("Processing \(profile.name)",
+                       symbol: "waveform", tint: .green)
+        } else {
+            statusLine("No active profile — audio passing through",
+                       symbol: "waveform.slash", tint: .secondary)
+        }
+    }
+
+    private func statusLine(_ text: String, symbol: String, tint: Color) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol)
+                .font(.system(size: 9))
+                .foregroundStyle(tint)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     /// Explicit, labeled way into the main window. The header used to carry
@@ -125,17 +165,22 @@ struct MainPopoverView: View {
 
     // MARK: - Master gain + balance
 
-    /// Same visual rhythm as `PopoverLevelStrip`: a 56 pt gutter label
-    /// on the left so the row aligns with the level strip's "Level"
-    /// label, then the slider, then the numeric readout, then a tiny
-    /// recenter button. Master gain spans -60…+12 dB; reset returns
-    /// to 0 dB.
+    /// Same visual rhythm as `PopoverLevelStrip`: a 108 pt gutter label on
+    /// the left (wide enough for the label plus its scope badge) so every row
+    /// aligns, then the slider, the numeric readout, and a tiny reset button.
+    /// Master gain spans -60…+12 dB; reset returns to 0 dB.
     @ViewBuilder private var masterGainRow: some View {
         HStack(spacing: 8) {
-            Text("Gain")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 80, alignment: .leading)
+            // Scope badges here for the same reason as the main window: the
+            // popover mixes an app-wide value and a per-profile one in
+            // adjacent rows, and nothing else distinguishes them.
+            HStack(spacing: 4) {
+                Text("Gain")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                ScopeBadge(scope: .app)
+            }
+            .frame(width: 108, alignment: .leading)
             Slider(
                 value: Binding(
                     get: { audioState.engineParameters.masterGainDB },
@@ -165,10 +210,13 @@ struct MainPopoverView: View {
     @ViewBuilder private var balanceRow: some View {
         if let profile = audioState.activeProfile(in: profileStore) {
             HStack(spacing: 8) {
-                Text("Balance")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 80, alignment: .leading)
+                HStack(spacing: 4) {
+                    Text("Balance")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    ScopeBadge(scope: .profile)
+                }
+                .frame(width: 108, alignment: .leading)
                 Slider(
                     value: Binding(
                         get: { profile.balance },
