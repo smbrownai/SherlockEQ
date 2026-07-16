@@ -177,12 +177,17 @@ private struct MonitorStatusButton: View {
                 HStack(spacing: 5) {
                     labeled("Gain", gainText)
                     bullet
-                    labeled("Exposure", doseText, tint: doseColor)
+                    labeled("Balance", balanceText)
                     bullet
-                    Text(balanceText)
+                    labeled("Exposure", doseText, tint: doseColor)
                 }
                 .font(.callout)
                 .monospacedDigit()
+                // Chevron so the summary reads as a clickable disclosure, not
+                // just a status readout.
+                Image(systemName: "chevron.up.chevron.down")
+                    .imageScale(.small)
+                    .foregroundStyle(.tertiary)
             }
         }
         .help(isOpen
