@@ -25,6 +25,12 @@ struct ToneFinderView: View {
     /// cause (finder) and effect (notch) read as connected.
     @State private var highlightNotch = false
     @State private var showCheckIn = false
+    /// True once the user has played the tone or touched the pitch — gates
+    /// "Use this pitch" so the notch can't be placed on an un-auditioned tone.
+    @State private var hasAuditioned = false
+    /// Collapses Step 1 to a compact "Tone level set" summary once the user has
+    /// moved on to sweeping for the pitch. Reopened by the summary's Change.
+    @State private var step1Collapsed = false
 
     var body: some View {
         ScrollView {
@@ -78,11 +84,20 @@ struct ToneFinderView: View {
 
     // MARK: - Step 1 — level + transport (prominent stop while playing)
 
-    private var step1Level: some View {
+    @ViewBuilder private var step1Level: some View {
+        if step1Collapsed {
+            completedStepCard(1, "Tone level set: \(amplitudeLabel)") { step1Collapsed = false }
+        } else {
+            step1Expanded
+        }
+    }
+
+    private var step1Expanded: some View {
         stepCard(1, "Set a comfortable tone level") {
             HStack(spacing: 14) {
                 Button {
                     generator.toggle()
+                    if generator.isPlaying { hasAuditioned = true }
                 } label: {
                     Label(generator.isPlaying ? "Stop" : "Play tone",
                           systemImage: generator.isPlaying ? "stop.fill" : "play.fill")
@@ -185,6 +200,7 @@ struct ToneFinderView: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         generator.targetFrequencyHz = hzFor(x: value.location.x, width: geo.size.width)
+                        markPitchTouched()
                     }
             )
             .accessibilityElement(children: .ignore)
@@ -327,6 +343,7 @@ struct ToneFinderView: View {
             }
             Button {
                 generator.targetFrequencyHz = avg.rounded()
+                markPitchTouched()
             } label: {
                 Label("Move tone to the average", systemImage: "arrow.right.circle")
             }
@@ -343,7 +360,7 @@ struct ToneFinderView: View {
                 useThisPitchButton
                 Spacer()
                 if let confirmed = lastConfirmedFrequency {
-                    Label("Notch set to \(Int(confirmed)) Hz", systemImage: "checkmark.circle.fill")
+                    Label("Applied at \(Int(confirmed)) Hz", systemImage: "checkmark.circle.fill")
                         .font(.callout)
                         .foregroundStyle(.green)
                 }
@@ -370,7 +387,8 @@ struct ToneFinderView: View {
             }
             .menuStyle(.borderedButton)
             .controlSize(.large)
-            .disabled(profile == nil)
+            .disabled(profile == nil || !hasAuditioned)
+            .help(useThisPitchHelp(profile: profile))
         } else {
             Button {
                 setAsNotch(.both)
@@ -379,8 +397,15 @@ struct ToneFinderView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .disabled(profile == nil)
+            .disabled(profile == nil || !hasAuditioned)
+            .help(useThisPitchHelp(profile: profile))
         }
+    }
+
+    private func useThisPitchHelp(profile: HearingProfile?) -> String {
+        if profile == nil { return "Make a profile active to place the notch." }
+        if !hasAuditioned { return "Play the tone and sweep to a pitch first." }
+        return "Place the notch filter at this pitch and turn it on."
     }
 
     // MARK: - Notch configuration
@@ -591,6 +616,33 @@ struct ToneFinderView: View {
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.06)))
     }
 
+    /// Compact "done" row for a completed step — a green check, a one-line
+    /// summary, and a Change button that reopens the full step.
+    private func completedStepCard(_ number: Int, _ summary: String, onChange: @escaping () -> Void) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+                .frame(width: 22, height: 22)
+            Text(summary)
+                .font(.subheadline.weight(.medium))
+            Spacer()
+            Button("Change", action: onChange)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.06)))
+    }
+
+    /// The user has touched the pitch (swept/nudged) — so they've auditioned a
+    /// tone and moved past setting the level. Unlocks "Use this pitch" and
+    /// collapses Step 1.
+    private func markPitchTouched() {
+        hasAuditioned = true
+        step1Collapsed = true
+    }
+
     // MARK: - Generator + notch plumbing
 
     private var generator: SineToneGenerator { audioState.audio.toneGenerator }
@@ -688,15 +740,18 @@ struct ToneFinderView: View {
 
     private func nudge(_ delta: Int) {
         generator.targetFrequencyHz = max(minHz, min(maxHz, generator.targetFrequencyHz + Double(delta)))
+        markPitchTouched()
     }
 
     private func nudgePercent(_ fraction: Double) {
         generator.targetFrequencyHz = max(minHz, min(maxHz, generator.targetFrequencyHz * (1 + fraction)))
+        markPitchTouched()
     }
 
     private func jumpOctave(_ direction: Int) {
         let factor = direction >= 0 ? 2.0 : 0.5
         generator.targetFrequencyHz = max(minHz, min(maxHz, generator.targetFrequencyHz * factor))
+        markPitchTouched()
     }
 
     private func recordMatch() {
