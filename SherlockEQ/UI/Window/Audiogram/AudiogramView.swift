@@ -211,7 +211,7 @@ struct AudiogramView: View {
                 .frame(maxWidth: 240)
                 Spacer()
             }
-            Text("Steady applies the same adjustment at every volume. Adaptive gives quiet sounds more help and loud sounds less — closer to how hearing actually works — using your playback calibration to judge levels. Start with Steady; try Adaptive when your calibration is set.")
+            Text("Steady applies the same adjustment at every volume. Adaptive gives quieter passages more adjustment and louder passages less, using your playback calibration to judge levels. Start with Steady; try Adaptive once your calibration is set.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
