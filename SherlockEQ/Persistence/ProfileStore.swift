@@ -161,12 +161,41 @@ final class ProfileStore: ObservableObject {
     /// Encode `profile` to a user-chosen location. Independent of the
     /// internal profiles directory — used for sharing profiles between
     /// machines or with other users.
+    ///
+    /// Exports are sanitized: `HearingProfile` uses synthesized encoding, so
+    /// a raw encode would ship every stored field — including
+    /// `autoEQSourcePath` (a local filesystem path that can embed the macOS
+    /// username), the exporter's device UIDs/names, and the device link.
+    /// None of those mean anything on another machine, and a "share this EQ
+    /// preset" file shouldn't disclose who exported it or what hardware they
+    /// own. The on-disk save format is unchanged; only exports are filtered.
+    /// (Import tolerates the absent fields — they're all optionals.)
     func exportProfile(_ profile: HearingProfile, to url: URL) throws {
         try tracking("Export") {
-            let data = try encoder.encode(profile)
+            let data = try encoder.encode(Self.sanitizedForSharing(profile))
             try data.write(to: url, options: .atomic)
             log.info("Exported \(profile.name, privacy: .public) to \(url.lastPathComponent, privacy: .public)")
         }
+    }
+
+    /// Strip machine- and identity-revealing fields for export. The recipient
+    /// keeps everything that shapes sound (bands, audiogram, notch, comfort
+    /// settings, the AutoEQ correction itself + its `autoEQName`, which lets
+    /// their own library re-match it by name). Removed:
+    /// - `autoEQSourcePath` — local path from the exporter's file import
+    /// - `autoEQDeviceUID` / `autoEQDeviceName` — the exporter's output device
+    /// - `linkedDeviceUID` — device-link auto-activation is per-machine
+    ///
+    /// Cost: a same-machine export/import round trip loses the device link
+    /// and mismatch anchor (two clicks to restore). Audiogram/notch data is
+    /// intentionally kept — it's the point of sharing a hearing profile.
+    static func sanitizedForSharing(_ profile: HearingProfile) -> HearingProfile {
+        var shared = profile
+        shared.autoEQSourcePath = nil
+        shared.autoEQDeviceUID = nil
+        shared.autoEQDeviceName = nil
+        shared.linkedDeviceUID = nil
+        return shared
     }
 
     /// Read a profile JSON from `url`, dedupe its ID and name against the

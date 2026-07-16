@@ -341,6 +341,60 @@ struct ProfileStoreTests {
         #expect(imported.leftEar.bands.audiblyEquivalent(to: original.leftEar.bands))
     }
 
+    /// Exports are for sharing, and hearing data is health-adjacent — the
+    /// file must not also carry fields that identify the exporter's machine:
+    /// `autoEQSourcePath` (a local path that can embed the macOS username),
+    /// the exporter's device UID/name, or the device link. Everything that
+    /// shapes sound (including the AutoEQ correction and its name, which lets
+    /// the recipient's library re-match it) must survive. The INTERNAL save
+    /// format is deliberately unfiltered — losing those fields on relaunch
+    /// would break AutoEQ re-matching and device-linked activation locally.
+    @Test func exportStripsMachineIdentifyingFieldsButSaveKeepsThem() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+
+        let store = Self.makeStore(at: dir)
+        var original = HearingProfile.makeDefault(name: "Share me")
+        original.autoEQSourcePath = "/Users/someone/Downloads/HD650 ParametricEQ.txt"
+        original.autoEQDeviceUID = "device-uid-1234"
+        original.autoEQDeviceName = "RODECaster Pro II"
+        original.linkedDeviceUID = "linked-uid-5678"
+        original.autoEQName = "Sennheiser HD650"
+        original.autoEQPreampDB = -3.5
+        try store.save(original)
+
+        // Export: identifying fields stripped, sound-shaping fields kept.
+        let exportURL = dir.appendingPathComponent("shared.json")
+        try store.exportProfile(original, to: exportURL)
+        // Mirror the store's decoder config — profile dates are ISO-8601.
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let exported = try decoder.decode(
+            HearingProfile.self, from: Data(contentsOf: exportURL))
+        #expect(exported.autoEQSourcePath == nil)
+        #expect(exported.autoEQDeviceUID == nil)
+        #expect(exported.autoEQDeviceName == nil)
+        #expect(exported.linkedDeviceUID == nil)
+        #expect(exported.autoEQName == "Sennheiser HD650")
+        #expect(exported.autoEQPreampDB == -3.5)
+        #expect(exported.name == "Share me")
+
+        // The raw bytes shouldn't mention the fields at all (an explicit
+        // `"autoEQSourcePath": null` would still advertise the schema, but
+        // more importantly must not carry the path).
+        let raw = String(decoding: try Data(contentsOf: exportURL), as: UTF8.self)
+        #expect(!raw.contains("/Users/someone"))
+        #expect(!raw.contains("device-uid-1234"))
+        #expect(!raw.contains("linked-uid-5678"))
+
+        // Internal persistence keeps everything — sanitizing is export-only.
+        let fresh = Self.makeStore(at: dir)
+        let reloaded = try #require(fresh.loadAll().first { $0.id == original.id })
+        #expect(reloaded.autoEQSourcePath == original.autoEQSourcePath)
+        #expect(reloaded.autoEQDeviceUID == "device-uid-1234")
+        #expect(reloaded.linkedDeviceUID == "linked-uid-5678")
+    }
+
     @Test func importDedupesIDAgainstExisting() throws {
         let dir = Self.makeTempDir()
         defer { Self.cleanup(dir) }
