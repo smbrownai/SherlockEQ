@@ -546,7 +546,11 @@ struct ToneFinderView: View {
             TinnitusCheckInView(store: audioState.tinnitusCheckIns)
         }
         .padding(24)
-        .frame(minWidth: 460, minHeight: 380)
+        // Size to content (was a fixed 380 pt tall box with a lot of empty
+        // space); a fixed width keeps the copy readable and the height hugs
+        // the slider + trend.
+        .frame(width: 440)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: - Disclaimer

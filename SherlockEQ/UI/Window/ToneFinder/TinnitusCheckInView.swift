@@ -18,7 +18,6 @@ struct TinnitusCheckInView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            header
 
             HStack(spacing: 12) {
                 Text("Not at all").font(.caption).foregroundStyle(.secondary)
@@ -69,14 +68,6 @@ struct TinnitusCheckInView: View {
                 draft = Double(today)
                 savedToday = true
             }
-        }
-    }
-
-    private var header: some View {
-        HStack {
-            Label("Tinnitus check-in", systemImage: "calendar.badge.clock")
-                .font(.title3.weight(.semibold))
-            Spacer()
         }
     }
 

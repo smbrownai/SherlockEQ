@@ -41,11 +41,11 @@ struct SafeListeningView: View {
         }
         .sheet(isPresented: $showCalibration) { calibrationSheet }
         .confirmationDialog(
-            "Reset today's dose to 0 %?",
+            "Reset today's exposure to 0 %?",
             isPresented: $confirmingReset,
             titleVisibility: .visible
         ) {
-            Button("Reset dose", role: .destructive) { state.safeListening.resetDose() }
+            Button("Reset exposure", role: .destructive) { state.safeListening.resetDose() }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This clears the exposure counted so far today. It can't be undone.")
@@ -268,7 +268,7 @@ struct SafeListeningView: View {
                     Button {
                         confirmingReset = true
                     } label: {
-                        Label("Reset today's dose", systemImage: "arrow.counterclockwise")
+                        Label("Reset today's exposure", systemImage: "arrow.counterclockwise")
                     }
                     .controlSize(.small)
                     Spacer()

@@ -110,8 +110,7 @@ struct GraphicEQView: View {
 
     private var topBar: some View {
         HStack(spacing: 10) {
-            presetButton
-            toneFlavorButton
+            presetMenu
             Spacer()
             Toggle(isOn: $showToneGuide) {
                 Label("Tone guide", systemImage: "text.below.photo")
@@ -137,47 +136,49 @@ struct GraphicEQView: View {
         return PresetCurve.matching(leftGains: left, rightGains: right, trimDB: profile.globalTrimDB)
     }
 
-    /// The purpose-preset selector (spec §3.2): a small outcome-named set —
-    /// what the user wants to improve, not a genre or a skill level. Rendered
-    /// as a real bordered menu button (previously a borderless capsule that
-    /// read as a link / status). The label reflects the current state,
-    /// including "Custom" whenever the sliders diverge from every curve.
-    private var presetButton: some View {
-        Menu {
-            ForEach(PresetCurve.allCases) { curve in
-                Button {
-                    apply(curve)
-                } label: {
-                    VStack(alignment: .leading) {
-                        Label(curve.label, systemImage: curve.symbol)
-                        Text(curve.tagline)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .accessibilityLabel("\(curve.label) preset. \(curve.tagline)")
+    /// The current tone flavor the sliders match, or nil. Lets the combined
+    /// selector's label read the flavor name (not just "Custom") when one is
+    /// applied.
+    private var currentToneFlavor: ToneFlavorPreset? {
+        guard let profile = audioState.activeProfile(in: profileStore) else { return nil }
+        return ToneFlavorPreset.allCases.first { preset in
+            Self.frequencies.allSatisfy { freq in
+                abs(EQBandLookup.gain(at: freq, filterType: .parametric, in: profile.leftEar.bands)
+                    - preset.gain(forHz: freq)) < 0.5
             }
-        } label: {
-            Label("Preset: \(currentCurve?.label ?? "Custom")",
-                  systemImage: currentCurve?.symbol ?? "slider.horizontal.3")
         }
-        .menuStyle(.button)
-        .buttonStyle(.bordered)
-        .controlSize(.large)
-        .fixedSize()
-        .help("Outcome presets for the graphic bands — pick what you want to improve.")
-        .accessibilityLabel("Graphic EQ preset")
-        .accessibilityValue(currentCurve?.label ?? "Custom")
     }
 
-    /// Genre / taste curves, as their OWN top-level menu button. Previously a
-    /// nested submenu inside the preset menu — SwiftUI's nested `Menu` on
-    /// macOS flashed open then auto-dismissed after ~1 s, so the flavors were
-    /// effectively unreachable. A sibling button sidesteps the nesting bug
-    /// entirely and reads as clearly clickable.
-    private var toneFlavorButton: some View {
+    private var currentSelectionLabel: String {
+        currentCurve?.label ?? currentToneFlavor?.label ?? "Custom"
+    }
+    private var currentSelectionSymbol: String {
+        currentCurve?.symbol ?? currentToneFlavor?.symbol ?? "slider.horizontal.3"
+    }
+
+    /// One combined selector: outcome **Presets** and genre **Tone flavors**
+    /// as two flat `Section`s in a single menu. (Two separate buttons were
+    /// confusing — only one applies at a time; and a nested submenu hits
+    /// SwiftUI's macOS flash-close bug, so flat sections are the fix.) The
+    /// label reflects whichever is active, or "Custom".
+    private var presetMenu: some View {
         Menu {
-            Section("Taste presets — not a hearing adjustment. They stack with your profile's hearing adjustment.") {
+            Section("Presets — what you want to improve") {
+                ForEach(PresetCurve.allCases) { curve in
+                    Button {
+                        apply(curve)
+                    } label: {
+                        VStack(alignment: .leading) {
+                            Label(curve.label, systemImage: curve.symbol)
+                            Text(curve.tagline)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .accessibilityLabel("\(curve.label) preset. \(curve.tagline)")
+                }
+            }
+            Section("Tone flavors — taste, not a hearing adjustment") {
                 ForEach(ToneFlavorPreset.allCases) { preset in
                     Button {
                         apply(preset)
@@ -193,14 +194,15 @@ struct GraphicEQView: View {
                 }
             }
         } label: {
-            Label("Tone flavors", systemImage: "guitars")
+            Label("Preset: \(currentSelectionLabel)", systemImage: currentSelectionSymbol)
         }
         .menuStyle(.button)
         .buttonStyle(.bordered)
         .controlSize(.large)
         .fixedSize()
-        .help("Genre and taste curves — a matter of preference, not a hearing adjustment. They stack on top of your profile's hearing adjustment.")
-        .accessibilityLabel("Tone flavor presets")
+        .help("Graphic EQ presets and genre tone flavors — pick what you want to improve, or a taste curve.")
+        .accessibilityLabel("Graphic EQ preset")
+        .accessibilityValue(currentSelectionLabel)
     }
 
     /// Apply a purpose preset: writes every slider on both ears AND the

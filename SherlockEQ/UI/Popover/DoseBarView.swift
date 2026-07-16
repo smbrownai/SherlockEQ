@@ -31,7 +31,7 @@ struct DoseBarView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text("Today's Dose")
+            Text("Today's exposure")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
                 // minWidth instead of width so localized strings
