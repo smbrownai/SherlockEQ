@@ -123,14 +123,14 @@ struct ProfileDetailView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(profile.name).font(.title2.weight(.semibold))
                     // "Editing" always applies (this is the selected profile);
-                    // the green "Processing audio now" pill only shows when it's
+                    // the green "Currently processing" pill only shows when it's
                     // also the active profile. Two distinct meanings, two labels.
                     HStack(spacing: 8) {
                         Text("Editing")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         if isActive {
-                            Label("Processing audio now", systemImage: "waveform")
+                            Label("Currently processing", systemImage: "waveform")
                                 .font(.caption.weight(.medium))
                                 .foregroundStyle(.green)
                                 .padding(.horizontal, 7)
@@ -140,14 +140,18 @@ struct ProfileDetailView: View {
                     }
                 }
                 Spacer()
-                Button {
-                    audioState.activeProfileID = profile.id
-                } label: {
-                    Label(isActive ? "Active" : "Make Active",
-                          systemImage: isActive ? "checkmark.circle.fill" : "circle")
+                // No disabled "Active" button — a greyed status control reads as
+                // an unavailable action, and the "Currently processing" badge
+                // already says this profile is active. Only offer the real
+                // action (make active) when it isn't.
+                if !isActive {
+                    Button {
+                        audioState.activeProfileID = profile.id
+                    } label: {
+                        Label("Make Active", systemImage: "circle")
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.bordered)
-                .disabled(isActive)
             }
             if let description = profile.presetDescription, !description.isEmpty {
                 Text(description)
@@ -167,7 +171,7 @@ struct ProfileDetailView: View {
         let items: [(label: String, value: String, symbol: String)] = [
             ("Output device", deviceSummary(profile), "hifispeaker"),
             ("Headphone correction", profile.autoEQName ?? "None", "headphones"),
-            ("Hearing profile", hearingSummary(profile), "ear"),
+            ("Hearing adjustment", hearingSummary(profile), "ear"),
             ("Per-ear", profile.separateChannels ? "Separate L/R" : "Linked", "person.2"),
         ]
         return LazyVGrid(
@@ -265,7 +269,7 @@ struct ProfileDetailView: View {
             }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: profile.linkedDeviceUID == nil ? "circle" : "headphones")
+                Image(systemName: profile.linkedDeviceUID == nil ? "hifispeaker" : "headphones")
                 Text(currentDeviceLabel(profile))
                 Image(systemName: "chevron.up.chevron.down").font(.caption2)
             }
@@ -340,7 +344,7 @@ struct ProfileDetailView: View {
                 } label: {
                     Label("Find my headphones…", systemImage: "magnifyingglass")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.bordered)
                 .controlSize(.small)
             }
         }
