@@ -176,6 +176,16 @@ are replaced by the compact **`HealthSafetyChip`** ("Consumer audio tools —
 not medical care. Health & Safety…"), which opens the same sheet. This changes
 none of the app's medical-device status, intended purpose, audio behavior, or
 safety policies — only how the disclosure is organized and surfaced.
+
+**Testing.** `HealthSafetyDisclosureTests` (unit) pins the content — all
+sections present, every required plain-language statement present, all Help
+links resolve. A dedicated **`SherlockEQUITests`** XCUITest bundle (in the
+shared `SherlockEQ` scheme's test action alongside `SherlockEQTests`) covers
+the interaction: opening/dismissing the sheet (footer button, Done, Escape),
+reachability from every main destination, the required section headings, and
+Help-link navigation. UI tests launch the app with the **`-uitest`** argument
+(`AppDelegate.isUITesting`), which opens the main window and skips the audio
+pipeline, CLI, notifications, and onboarding for a deterministic run.
 Defaults to **closed**: the panel's usual state was an idle low-information
 repeat, and the live glance now lives in the toolbar status.
 

@@ -55,6 +55,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static let isRunningUnderXCTest =
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
 
+    /// UI-test launch (`-uitest`): the runner launches the real app as a
+    /// separate process (so `isRunningUnderXCTest` is false there). This flag
+    /// makes that launch deterministic — open the main window immediately and
+    /// skip the audio pipeline, CLI port, notification prompts, and onboarding
+    /// — so XCUITests can drive the UI without the CATap permission prompt,
+    /// muting output, or a first-run wizard in the way.
+    static let isUITesting =
+        ProcessInfo.processInfo.arguments.contains("-uitest")
+
     func applicationWillFinishLaunching(_ notification: Notification) {
         // Under XCTest the host just needs to stay alive for the test bundle;
         // the multi-instance terminate below would otherwise kill it on a dev
@@ -130,6 +139,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         profileStore.reconcileFactoryPresets()
         audioState.adoptDefaultProfileIfNeeded(from: profileStore)
         audioState.connect(profileStore: profileStore)
+        if Self.isUITesting {
+            // Deterministic UI-test launch: open the main window and stop —
+            // no audio, CLI, notifications, or onboarding.
+            Task { @MainActor in installMainMenu(); showMainWindow() }
+            return
+        }
         startCLIServer()
         applyGlobalReferenceShortcut(enabled: audioState.preferences.globalReferenceShortcutEnabled)
         audioState.preferences.$globalReferenceShortcutEnabled
