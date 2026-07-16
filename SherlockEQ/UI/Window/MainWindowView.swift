@@ -104,14 +104,23 @@ struct MainWindowView: View {
                 }
             }
         }
-        // Sized so the Expert layer-chip strip (Output / Input / Result /
-        // EQ / Correction / Safety chips) fits on one row at the default
-        // Dynamic Type size, with the top header bar (ear picker + bands
-        // badge + Q/Oct + Link L+R + Add band) above it and the main
-        // sidebar at left. The monitor panel is no longer a persistent
-        // gutter — it opens as an inspector — so the minimum drops by its
-        // former 240 pt; the ideal keeps room for the inspector open.
-        .frame(minWidth: 1126, idealWidth: 1400, minHeight: 716, idealHeight: 800)
+        // Minimum width is per-state, because the monitor panel is an
+        // inspector *inside* the detail column — opening it takes its width
+        // straight out of the content.
+        //
+        //   Graphic EQ content — the widest screen, and fixed-width so it
+        //   can't reflow: 12 × 62 pt columns + 11 × 4 pt gaps + 2 × 12 pt row
+        //   padding = 812, + 2 × 20 pt content padding = 852 pt.
+        //
+        //   closed: 240 (nav sidebar) + 886 detail  = 1126  → 34 pt slack
+        //   open:   240 + 886 + 1 (divider) + 260 (panel) = 1387
+        //
+        // Holding a single 1126 minimum with the panel open left the sliders
+        // ~227 pt short, so they and the panel both clipped. Scaling the
+        // minimum with the panel keeps the narrow window the inspector was
+        // introduced to allow, and widens only while the panel is out.
+        .frame(minWidth: monitorSidebarVisible ? 1387 : 1126,
+               idealWidth: 1400, minHeight: 716, idealHeight: 800)
         // Consolidated Health & Safety disclosure — presented at the window
         // level so it's reachable identically from the sidebar item and every
         // screen's compact disclosure chip (all set `audioState.showHealthSafety`).
