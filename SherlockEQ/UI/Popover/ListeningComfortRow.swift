@@ -1,84 +1,76 @@
 import SwiftUI
 
-/// Popover row for the Listening Comfort stage: on/off toggle + a count
-/// of how many processors are active. Per-processor Strength / Sensitivity
-/// and per-ear control live on the Listening Comfort (Clarity) screen.
+/// Popover status row for Adaptive Comfort.
 ///
-/// Mirrors `TinnitusNotchRow`: writes the **active profile's** own
-/// per-feature `enabled` flags (not the global `dynamicsEnabled` stage
-/// flag), so the on/off state travels with the profile. The global stage
-/// toggle is on by default and gates audibility the same way
-/// `notchFilterEnabled` gates the notch.
+/// This used to be a single switch plus an "N active" count. One switch can't
+/// honestly represent three independently-configurable processors and the
+/// Dialogue/Gentle presets layered on them: flipping it on enabled all three
+/// regardless of what the user had chosen on the Adaptive Comfort screen, and
+/// a bare "Off" flattened whatever mixed state sat underneath.
 ///
-/// Like the notch toggle, this is deliberately coarse: "On" means any of
-/// the three processors is enabled on either ear, and flipping the switch
-/// writes all of them in lockstep, leaving each processor's Strength and
-/// Sensitivity untouched. One consequence the single-filter notch doesn't
-/// have: turning Comfort on enables all three processors. A user who wants
-/// only a subset manages that on the Listening Comfort screen.
+/// So it reports the state the screen actually models — `Gentle · 2 active` —
+/// and hands off to that screen to change it. Deliberately no trailing switch:
+/// restoring the previous per-feature configuration on toggle-back would need
+/// somewhere to remember it, and a switch that silently enables all three is
+/// the exact behaviour this replaces.
 struct ListeningComfortRow: View {
     @EnvironmentObject private var audioState: AudioState
     @EnvironmentObject private var profileStore: ProfileStore
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text("Adaptive Comfort")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .frame(minWidth: 100, alignment: .leading)
-                .layoutPriority(1)
-
-            Toggle("", isOn: toggleBinding)
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                .labelsHidden()
-
-            Spacer(minLength: 0)
-
-            Text(activityLabel)
-                .font(.caption.monospaced())
-                .foregroundStyle(comfortEnabled ? .primary : .tertiary)
+        Button(action: openAdaptiveComfort) {
+            HStack(spacing: 8) {
+                Text("Adaptive Comfort")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 108, alignment: .leading)
+                    .layoutPriority(1)
+                Spacer(minLength: 0)
+                Text(summary)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(activeCount > 0 ? .primary : .tertiary)
+                    .lineLimit(1)
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .disabled(audioState.activeProfile(in: profileStore) == nil)
+        .help("Open the Adaptive Comfort screen to change these features.")
+        .accessibilityLabel("Adaptive Comfort")
+        .accessibilityValue(summary)
+        .accessibilityHint("Opens the Adaptive Comfort screen in the main window.")
     }
 
-    /// "On" when any processor is enabled on either ear. The popover is
-    /// the 5-second surface; the per-processor, per-ear story lives on the
-    /// Listening Comfort screen, so we keep this binary.
-    private var comfortEnabled: Bool {
-        audioState.activeProfile(in: profileStore)?.dynamics.hasAnyEnabled ?? false
+    private var profile: HearingProfile? {
+        audioState.activeProfile(in: profileStore)
     }
 
-    /// Number of processors (of three) active on at least one ear — the
-    /// notch shows its frequency here; comfort has no single value, so a
-    /// count is the glanceable summary. "Off" when none are active.
-    private var activityLabel: String {
-        guard let profile = audioState.activeProfile(in: profileStore) else { return "—" }
-        let active = DynamicFeatureKind.allCases.filter { kind in
+    /// Features (of three) enabled on at least one ear.
+    private var activeCount: Int {
+        guard let profile else { return 0 }
+        return DynamicFeatureKind.allCases.filter { kind in
             profile.dynamics.settings(for: kind, ear: .left).enabled
                 || profile.dynamics.settings(for: kind, ear: .right).enabled
         }.count
-        return active == 0 ? "Off" : "\(active) active"
     }
 
-    /// Quick toggle writes every processor on both ears in lockstep,
-    /// regardless of `separateChannels` — the popover is for "turn it on" /
-    /// "turn it off", not fine per-ear management. Strength and Sensitivity
-    /// are preserved so the processors keep their dialed-in character.
-    private var toggleBinding: Binding<Bool> {
-        Binding(
-            get: { comfortEnabled },
-            set: { newValue in
-                guard var p = audioState.activeProfile(in: profileStore) else { return }
-                for kind in DynamicFeatureKind.allCases {
-                    for ear in [EQBandLookup.Ear.left, .right] {
-                        var settings = p.dynamics.settings(for: kind, ear: ear)
-                        settings.enabled = newValue
-                        p.dynamics.setSettings(settings, for: kind, ear: ear)
-                    }
-                }
-                try? profileStore.save(p)
-            }
-        )
+    /// `Gentle · 2 active`, or `Custom · 1 active` for a mix no preset
+    /// describes. "Off" only when nothing at all is enabled — a genuinely
+    /// singular state, not a mixed one being flattened.
+    private var summary: String {
+        guard let profile else { return "—" }
+        guard activeCount > 0 else { return "Off" }
+        let preset = ComfortPreset.matching(profile.dynamics)?.label ?? "Custom"
+        return "\(preset) · \(activeCount) active"
+    }
+
+    private func openAdaptiveComfort() {
+        audioState.pendingMainSection = .clarity
+        dismiss()
+        AppDelegate.shared?.showMainWindow()
     }
 }

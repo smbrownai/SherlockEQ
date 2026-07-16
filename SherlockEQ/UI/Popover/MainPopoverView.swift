@@ -14,6 +14,12 @@ struct MainPopoverView: View {
     /// off to the main window so the popover doesn't linger behind it.
     @Environment(\.dismiss) private var dismiss
 
+    /// Collapsed by default: the processing rows are occasional state, and the
+    /// popover's job is to be fast for the everyday controls. @AppStorage (not
+    /// @State) because the popover is rebuilt on every open, which would
+    /// otherwise re-collapse it every time.
+    @AppStorage("sherlockeq.popover.processingDetails") private var showProcessingDetails = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
@@ -46,15 +52,14 @@ struct MainPopoverView: View {
             balanceRow
             Divider()
             ProfilePickerRow()
-            CompensationSliderView()
-            // Headphone-correction device mismatch (spec §7) — menu-bar-only
-            // users must see this without opening the main window.
-            AutoEQMismatchRow(compact: true)
-            TinnitusNotchRow()
-            ListeningComfortRow()
             ReferenceButton()
+            // Headphone-correction device mismatch (spec §7) — a warning, so
+            // it stays outside the collapsed section where it could be missed.
+            AutoEQMismatchRow(compact: true)
+            processingDetails
             Divider()
             openWindowRow
+            healthSafetyRow
             quitRow
         }
         .padding(14)
@@ -118,6 +123,42 @@ struct MainPopoverView: View {
                 .truncationMode(.tail)
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// Hearing adjustment / Adaptive Comfort / Tinnitus notch — occasional
+    /// state, collapsed by default so it doesn't compete with the everyday
+    /// controls above it (gain, balance, profile, Reference Mode). Expansion
+    /// persists, so users who do want them see them every time.
+    @ViewBuilder private var processingDetails: some View {
+        DisclosureGroup(isExpanded: $showProcessingDetails) {
+            VStack(alignment: .leading, spacing: 10) {
+                HearingAdjustmentRow()
+                ListeningComfortRow()
+                TinnitusNotchRow()
+            }
+            .padding(.top, 8)
+        } label: {
+            Text("Processing details")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// The popover may be the only surface some users ever open, so the
+    /// centralized disclosure needs a way in from here. A link, not the
+    /// disclosure itself — the popover starts no test tones and exposes no
+    /// action with immediate risk, so there's nothing here needing an
+    /// in-context warning.
+    @ViewBuilder private var healthSafetyRow: some View {
+        footerRow("Health & Safety", systemImage: "heart.text.square",
+                  help: "Read the Health & Safety information") {
+            // The sheet is hosted by the main window, so it has to be open for
+            // the flag to present anything. Set the intent first, then show the
+            // window — it renders with the flag already true.
+            audioState.showHealthSafety = true
+            dismiss()
+            AppDelegate.shared?.showMainWindow()
+        }
     }
 
     /// Explicit, labeled way into the main window. The header used to carry
