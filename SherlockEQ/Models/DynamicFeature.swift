@@ -65,7 +65,7 @@ enum DynamicFeatureKind: String, Codable, CaseIterable, Identifiable {
     var comfortSubtitle: String {
         switch self {
         case .speechPresence:
-            return "Lifts dialogue when it\u{2019}s buried under music or background noise."
+            return "Gently lifts speech-range detail when voice-like energy is detected."
         case .harshnessControl:
             return "Eases shouty, compressed midrange \u{2014} only while it\u{2019}s harsh."
         case .sibilanceTamer:

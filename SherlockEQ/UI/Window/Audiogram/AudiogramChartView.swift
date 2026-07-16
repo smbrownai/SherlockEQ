@@ -63,6 +63,7 @@ struct AudiogramChartView: View {
         // Audiology convention: 0 dB HL at the TOP, 110 at the bottom.
         // Reversed by passing the domain as a [high, low] array.
         .chartYScale(domain: [yRange.upperBound, yRange.lowerBound])
+        .chartYAxisLabel("dB HL", position: .leading)
         .chartYAxis {
             AxisMarks(values: stride(from: 0, through: 110, by: 20).map { Double($0) }) { value in
                 AxisGridLine()

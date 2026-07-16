@@ -65,7 +65,7 @@ struct AdaptivePreviewView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
-            Text(String(format: "Strength %.0f%%", strength * 100))
+            Text(String(format: "Adjustment strength %.0f%%", strength * 100))
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
         }

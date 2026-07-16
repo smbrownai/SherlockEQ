@@ -16,6 +16,9 @@ struct AudiogramView: View {
     @State private var tab: EarTab = .left
     @State private var showingApplySheet = false
     @State private var showingListeningCheck = false
+    /// Numeric threshold table starts collapsed on a fresh profile (the chart
+    /// and Listening Check lead); expands once an audiogram has been entered.
+    @State private var numericExpanded = false
 
     var body: some View {
         if let profile = audioState.activeProfile(in: profileStore) {
@@ -101,22 +104,21 @@ struct AudiogramView: View {
                 }
             }
             Spacer()
-            Button {
-                showingListeningCheck = true
-            } label: {
-                Label("Listening Check…", systemImage: "ear.badge.waveform")
-            }
-            .help("Estimate your thresholds with a guided tone check — no clinical audiogram needed.")
+            listeningCheckButton(profile)
             Menu {
                 Button("Import Audiogram…", systemImage: "square.and.arrow.down") { importAudiogram(into: profile) }
                 Button("Export Audiogram…", systemImage: "square.and.arrow.up") { exportAudiogram(profile) }
                 Divider()
                 Button("Apply to Other Profiles…", systemImage: "person.2") { showingApplySheet = true }
+                if profile.hasEnteredAudiogram {
+                    Divider()
+                    Button("Clear Audiogram…", systemImage: "trash", role: .destructive) { clearAudiogram(profile) }
+                }
             } label: {
                 Label("Manage Audiogram", systemImage: "ear")
             }
             .fixedSize()
-            .help("Import or export this audiogram, or copy it to your other profiles")
+            .help("Import, export, clear, or copy this audiogram to your other profiles")
             HelpContextButton(.audiogramProfiles, label: "audiogram and hearing profiles")
         }
     }
@@ -160,6 +162,22 @@ struct AudiogramView: View {
         )
     }
 
+    /// Reset the audiogram back to the not-entered state (flat thresholds, no
+    /// derived correction, no provenance/ramp). Leaves EQ, notch, and device
+    /// links alone — only the hearing-adjustment layer is cleared.
+    private func clearAudiogram(_ profile: HearingProfile) {
+        var updated = profile
+        updated.leftEar.thresholds = AudiogramPoint.flat
+        updated.rightEar.thresholds = AudiogramPoint.flat
+        updated.leftEar.correctionBands = []
+        updated.rightEar.correctionBands = []
+        updated.audiogramDate = nil
+        updated.audiogramSource = .manual
+        updated.acclimatizationStartDate = nil
+        try? profileStore.save(updated, actionName: "Clear audiogram for \(profile.name)")
+        numericExpanded = false
+    }
+
     private var earPicker: some View {
         Picker("", selection: $tab) {
             ForEach(EarTab.allCases, id: \.self) { tab in
@@ -179,18 +197,43 @@ struct AudiogramView: View {
                 earColor: earColor,
                 entered: profile.hasEnteredAudiogram
             )
+            Text("Lower on the chart means a higher threshold — you need more level to hear that pitch. 0 dB HL (normal) sits at the top, per the audiology convention.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     @ViewBuilder private func editorCard(_ profile: HearingProfile) -> some View {
         card {
-            Text("Numeric entry")
-                .font(.subheadline.weight(.semibold))
-            ThresholdEditor(
-                thresholds: audiogramBinding(for: profile),
-                earColor: earColor,
-                entered: profile.hasEnteredAudiogram
-            )
+            DisclosureGroup(isExpanded: $numericExpanded) {
+                ThresholdEditor(
+                    thresholds: audiogramBinding(for: profile),
+                    earColor: earColor,
+                    entered: profile.hasEnteredAudiogram
+                )
+                .padding(.top, 8)
+            } label: {
+                Text("Numeric entry")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .onAppear { numericExpanded = profile.hasEnteredAudiogram }
+        }
+    }
+
+    /// Listening Check entry point — prominent on an empty profile (the
+    /// easiest path to a first audiogram), secondary once one exists.
+    @ViewBuilder private func listeningCheckButton(_ profile: HearingProfile) -> some View {
+        let label = Label("Listening Check…", systemImage: "ear.badge.waveform")
+        let help = "Estimate your thresholds with a guided tone check — no clinical audiogram needed."
+        if profile.hasEnteredAudiogram {
+            Button { showingListeningCheck = true } label: { label }
+                .buttonStyle(.bordered)
+                .help(help)
+        } else {
+            Button { showingListeningCheck = true } label: { label }
+                .buttonStyle(.borderedProminent)
+                .help(help)
         }
     }
 

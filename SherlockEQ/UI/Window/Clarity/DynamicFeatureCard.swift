@@ -39,7 +39,7 @@ struct DynamicFeatureCard: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(settings.enabled ? tint.opacity(0.35) : .clear, lineWidth: 1)
+                .strokeBorder(settings.enabled ? tint.opacity(0.15) : .clear, lineWidth: 1)
         )
         .animation(.easeInOut(duration: 0.18), value: settings.enabled)
     }
