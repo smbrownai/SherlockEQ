@@ -151,7 +151,7 @@ struct ClarityView: View {
     @ViewBuilder
     private func separateToggleRow(_ profile: HearingProfile) -> some View {
         HStack {
-            Toggle("Separate L + R", isOn: Binding(
+            Toggle("Adjust ears separately", isOn: Binding(
                 get: { profile.dynamics.separateChannels },
                 set: { newValue in
                     var updated = profile
