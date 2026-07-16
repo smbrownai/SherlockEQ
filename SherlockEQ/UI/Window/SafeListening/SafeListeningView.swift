@@ -34,11 +34,11 @@ struct SafeListeningView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Safe Listening")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                HelpContextButton(.safetyLimits, label: "safety, limits, and listening responsibility")
-            }
-        }
+        // No toolbar help button: `.primaryAction` put a bare "?" flush against
+        // the window-level monitor-panel toggle, where it read as a stray
+        // control belonging to that toggle rather than to this page. Every
+        // other screen keeps its help inline; this one's now sits in the
+        // "About this estimate" card, which is what the topic explains.
         .sheet(isPresented: $showCalibration) { calibrationSheet }
         .confirmationDialog(
             "Reset today's exposure to 0 %?",
@@ -491,7 +491,14 @@ struct SafeListeningView: View {
     // device" statement moved to the shared chip → Health & Safety sheet.
     @ViewBuilder private var disclaimerCard: some View {
         card {
-            cardHeader("About this estimate", systemImage: "info.circle")
+            // Help lives here rather than in the toolbar: this card is what the
+            // safety-limits article explains, so the "?" has visible context
+            // instead of floating next to an unrelated window control.
+            HStack {
+                cardHeader("About this estimate", systemImage: "info.circle")
+                Spacer()
+                HelpContextButton(.safetyLimits, label: "safety, limits, and listening responsibility")
+            }
             VStack(alignment: .leading, spacing: 8) {
                 bullet("Loudness is estimated from the digital signal level, not measured at your ear. Actual SPL still depends on your hardware and headphone fit.")
                 bullet("Dose uses the NIOSH 3 dB exchange rate: 85 dBA over 8 hours is 100 %; every +3 dBA halves the safe duration. It's a daily-listening guide, not a clinical reading.")
