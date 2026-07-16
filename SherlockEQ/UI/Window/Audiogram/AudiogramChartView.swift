@@ -8,26 +8,43 @@ import Charts
 struct AudiogramChartView: View {
     @Binding var thresholds: [AudiogramPoint]
     let earColor: Color
+    /// False when no audiogram has been entered/imported yet. The points are
+    /// still the flat-0 defaults, so they're drawn as hollow ghosts (never a
+    /// solid measured line) to avoid presenting missing data as a normal result.
+    var entered: Bool = true
 
     private let yRange: ClosedRange<Double> = 0...110
 
     var body: some View {
         Chart {
             ForEach(thresholds, id: \.frequencyHz) { point in
-                LineMark(
-                    x: .value("Hz", Double(point.frequencyHz)),
-                    y: .value("dB HL", point.thresholddBHL)
-                )
-                .foregroundStyle(earColor)
-                .lineStyle(StrokeStyle(lineWidth: 2))
-                .interpolationMethod(.catmullRom)
+                if entered {
+                    LineMark(
+                        x: .value("Hz", Double(point.frequencyHz)),
+                        y: .value("dB HL", point.thresholddBHL)
+                    )
+                    .foregroundStyle(earColor)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+                    .interpolationMethod(.catmullRom)
 
-                PointMark(
-                    x: .value("Hz", Double(point.frequencyHz)),
-                    y: .value("dB HL", point.thresholddBHL)
-                )
-                .foregroundStyle(earColor)
-                .symbolSize(80)
+                    PointMark(
+                        x: .value("Hz", Double(point.frequencyHz)),
+                        y: .value("dB HL", point.thresholddBHL)
+                    )
+                    .foregroundStyle(earColor)
+                    .symbolSize(80)
+                } else {
+                    PointMark(
+                        x: .value("Hz", Double(point.frequencyHz)),
+                        y: .value("dB HL", point.thresholddBHL)
+                    )
+                    .foregroundStyle(earColor.opacity(0.35))
+                    .symbol {
+                        Circle()
+                            .strokeBorder(earColor.opacity(0.5), lineWidth: 1.5)
+                            .frame(width: 9, height: 9)
+                    }
+                }
             }
         }
         .chartXScale(domain: 200...10_000, type: .log)
@@ -62,6 +79,15 @@ struct AudiogramChartView: View {
                 Color.clear
                     .contentShape(Rectangle())
                     .gesture(dragGesture(proxy: proxy, geo: geo))
+            }
+        }
+        .overlay {
+            if !entered {
+                Text("No thresholds entered yet — drag here, use the Listening Check, or import a report.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
             }
         }
         .frame(minHeight: 220)

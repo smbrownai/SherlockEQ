@@ -94,6 +94,10 @@ struct AudiogramView: View {
                     Text("Audiogram from \(profile.audiogramSource.label), \(date.formatted(date: .abbreviated, time: .omitted))")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
+                } else {
+                    Text("No hearing thresholds have been entered.")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                 }
             }
             Spacer()
@@ -172,7 +176,8 @@ struct AudiogramView: View {
                 .font(.subheadline.weight(.semibold))
             AudiogramChartView(
                 thresholds: audiogramBinding(for: profile),
-                earColor: earColor
+                earColor: earColor,
+                entered: profile.hasEnteredAudiogram
             )
         }
     }
@@ -183,7 +188,8 @@ struct AudiogramView: View {
                 .font(.subheadline.weight(.semibold))
             ThresholdEditor(
                 thresholds: audiogramBinding(for: profile),
-                earColor: earColor
+                earColor: earColor,
+                entered: profile.hasEnteredAudiogram
             )
         }
     }

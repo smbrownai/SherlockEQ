@@ -203,6 +203,14 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         ear.correctionBands = derived
     }
 
+    /// Whether the user or an import has ever provided an audiogram. Nil
+    /// `audiogramDate` means the thresholds are still the flat-0 defaults —
+    /// missing data, not a measured normal result — so UI must render them as
+    /// "not entered" rather than classifying every frequency as "Normal". Once
+    /// any audiogram is entered, hand-typed 0 dB HL rows are legitimately
+    /// measured-normal, which is why this is provenance-based, not value-based.
+    var hasEnteredAudiogram: Bool { audiogramDate != nil }
+
     /// The applied strength right now: the user's target
     /// (`compensationFactor`) × the acclimatization ramp.
     func effectiveCorrectionStrength(now: Date = Date()) -> Double {
