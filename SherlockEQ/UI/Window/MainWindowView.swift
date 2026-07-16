@@ -175,9 +175,9 @@ private struct MonitorStatusButton: View {
                 Image(systemName: isOpen ? "sidebar.right" : "sidebar.squares.right")
                     .imageScale(.medium)
                 HStack(spacing: 5) {
-                    labeled("Output", gainText)
+                    labeled("Gain", gainText)
                     bullet
-                    labeled("Dose", doseText, tint: doseColor)
+                    labeled("Exposure", doseText, tint: doseColor)
                     bullet
                     Text(balanceText)
                 }

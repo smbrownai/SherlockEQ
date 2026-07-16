@@ -168,7 +168,6 @@ struct ProfileDetailView: View {
             ("Output device", deviceSummary(profile), "hifispeaker"),
             ("Headphone correction", profile.autoEQName ?? "None", "headphones"),
             ("Hearing profile", hearingSummary(profile), "ear"),
-            ("EQ surface", profile.eqMode.label, "slider.horizontal.3"),
             ("Per-ear", profile.separateChannels ? "Separate L/R" : "Linked", "person.2"),
         ]
         return LazyVGrid(
@@ -832,6 +831,7 @@ struct ProfileDetailView: View {
             $0.autoEQName = nil
             $0.autoEQBands = nil
             $0.autoEQPreampDB = nil
+            $0.autoEQSourcePath = nil
             $0.autoEQDeviceUID = nil
             $0.autoEQDeviceName = nil
         }
