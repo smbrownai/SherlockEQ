@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Right-hand monitoring panel — a slide-in trailing column opened on demand
-/// from the toolbar's `MonitorStatusButton` (it used to be a persistent
+/// from the toolbar's `MonitorToggleButton` (it used to be a persistent
 /// gutter, but its usual state was an idle low-information repeat, so it's
 /// collapsed by default now). Its visibility flag `monitorSidebarVisible`
 /// persists in @AppStorage. Each control here carries an explicit scope
