@@ -30,11 +30,7 @@ struct GraphicEQView: View {
     @AppStorage("sherlockeq.layer.eq")        private var showEQLayer        = false
     @AppStorage("sherlockeq.layer.audiogram") private var showAudiogramLayer = false
     @AppStorage("sherlockeq.layer.safety")    private var showSafetyLayer    = false
-
-    /// Perceptual "tone guide" captions under each band (Rumble, Bass,
-    /// Warmth, …). On by default — they're what make the surface
-    /// approachable rather than a test panel; power users can hide them.
-    @AppStorage("sherlockeq.graphic.toneGuide") private var showToneGuide = true
+    @AppStorage("sherlockeq.layer.notch")     private var showNotchLayer     = true
 
     var body: some View {
         if let profile = audioState.activeProfile(in: profileStore) {
@@ -69,8 +65,10 @@ struct GraphicEQView: View {
                     // Dynamic-feature overlay is an Expert-canvas affordance
                     // (live node semantics); the graphic-EQ canvas hides it.
                     showDynamics: .constant(false),
+                    showNotch: $showNotchLayer,
                     hasAudiogram: hasAudiogram,
                     hasDynamics: false,
+                    hasNotch: profile.leftNotch.enabled || profile.rightNotch.enabled,
                     earColor: audioState.preferences.leftEarColor
                 )
                 previewCanvas(profile, leftCorrection: leftCorrection, rightCorrection: rightCorrection)
@@ -80,6 +78,7 @@ struct GraphicEQView: View {
                 // (spec §1.4) sits between curve and sliders because its copy
                 // references the curve ABOVE and the sliders BELOW.
                 correctionLayerNote(profile)
+                earAsymmetryNote(left: leftCorrection, right: rightCorrection)
                 otherFiltersRow(profile)
                 slidersRow(profile)
                 largeBoostNote(profile)
@@ -112,13 +111,6 @@ struct GraphicEQView: View {
         HStack(spacing: 10) {
             presetMenu
             Spacer()
-            Toggle(isOn: $showToneGuide) {
-                Label("Tone guide", systemImage: "text.below.photo")
-            }
-            .toggleStyle(.button)
-            .controlSize(.large)
-            .help("Show what each band affects — Rumble, Bass, Warmth, Voice body, Clarity, Sibilance, Air.")
-            .accessibilityLabel("Tone guide labels")
         }
     }
 
@@ -234,6 +226,24 @@ struct GraphicEQView: View {
         try? profileStore.save(updated, actionName: "Apply \(preset.label)")
     }
 
+    /// When the graphic sliders are linked (one set of bands for both ears)
+    /// but the underlying hearing adjustment differs per ear, the Result curve
+    /// legitimately shows two different lines. Say so, so the divergence never
+    /// reads as a bug.
+    @ViewBuilder private func earAsymmetryNote(left: [EQBand], right: [EQBand]) -> some View {
+        if linkChannels && left != right {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "ear.and.waveform")
+                    .foregroundStyle(.secondary)
+                Text("Manual EQ applies to both ears; the hearing adjustment differs by ear, so the Result curve can differ left vs right.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer()
+            }
+        }
+    }
+
     // MARK: - Correction layer note (audiogram + headphone)
 
     /// Plain-language note that a correction layer is running *beneath* the
@@ -250,21 +260,16 @@ struct GraphicEQView: View {
         if hasAudiogram || hasHeadphone {
             let sources: [String] = {
                 var s: [String] = []
-                if hasAudiogram { s.append("Audiogram") }
+                if hasAudiogram { s.append("Hearing adjustment") }
                 if hasHeadphone { s.append("headphone correction") }
                 return s
             }()
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: "checkmark.seal.fill")
                     .foregroundStyle(.tint)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Additional processing is active")
-                        .font(.callout.weight(.semibold))
-                    Text("\(sources.joined(separator: " + ")) — included in the curve above, beneath your graphic bands.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text("\(sources.joined(separator: " + ")) included in Result — beneath your manual bands.")
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer()
             }
             .padding(10)
@@ -403,6 +408,7 @@ struct GraphicEQView: View {
             showAudiogramTarget: showAudiogramLayer,
             showResultCurve: showResultLayer,
             showSafetyOverlay: showSafetyLayer,
+            showNotch: showNotchLayer,
             safetyCeilingDBA: profile.safeListeningCeilingDB,
             calibrationOffsetDBA: audioState.effectiveCalibrationOffsetDBA,
             // Adaptive Correction live response (phase4 §6.2), left ear
@@ -484,16 +490,16 @@ struct GraphicEQView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
 
-            if showToneGuide {
-                Text(Self.perceptualLabel(forHz: frequency))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.75)
-                    .frame(height: 26)
-                    .accessibilityHidden(true)
-            }
+            // Persistent region strip (Rumble … Air): always shown so the
+            // surface reads as tone regions rather than a bare test panel.
+            Text(Self.perceptualLabel(forHz: frequency))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
+                .frame(height: 26)
+                .accessibilityHidden(true)
         }
         .frame(maxWidth: .infinity)
     }

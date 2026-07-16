@@ -23,10 +23,14 @@ struct CanvasLayerChipStrip: View {
     @Binding var showSafetyOverlay: Bool
     /// Live dynamic-feature bells overlay (Listening Comfort features).
     @Binding var showDynamics: Bool
+    /// The tinnitus-notch marker, toggled independently of the notch itself.
+    @Binding var showNotch: Bool
     /// When false the Audiogram chip is hidden (no thresholds entered yet).
     let hasAudiogram: Bool
     /// When false the Dynamics chip is hidden (no enabled dynamic features).
     let hasDynamics: Bool
+    /// When false the Notch chip is hidden (no enabled tinnitus notch).
+    let hasNotch: Bool
     /// Used as the swatch hue for the EQ / Audiogram chips.
     let earColor: Color
     /// When false the spectrum / curve / safety chips (Output, Input,
@@ -87,22 +91,22 @@ struct CanvasLayerChipStrip: View {
                     // only appear when an audiogram makes them carry distinct
                     // information.
                     chip(
-                        hasAudiogram ? "Result" : "EQ",
+                        hasAudiogram ? "Result" : "Manual EQ",
                         swatch: earColor,
                         isOn: $showResultCurve,
                         hint: hasAudiogram
-                            ? "What you actually hear — the hearing adjustment and your EQ combined."
+                            ? "What you actually hear — the hearing adjustment and your manual EQ combined."
                             : "Your active equaliser curve and band handles."
                     )
                     if hasAudiogram {
                         chip(
-                            "EQ",
+                            "Manual EQ",
                             swatch: earColor,
                             isOn: $showEQCurve,
-                            hint: "Your tone EQ on its own, without the hearing adjustment — the difference from Result is what the adjustment adds."
+                            hint: "Your manual EQ on its own, without the hearing adjustment — the difference from Result is what the adjustment adds."
                         )
                         chip(
-                            "Adjustment",
+                            "Hearing adjustment",
                             swatch: earColor,
                             pattern: .dashed,
                             isOn: $showAudiogramTarget,
@@ -114,6 +118,15 @@ struct CanvasLayerChipStrip: View {
                         swatch: Self.safetyColor,
                         isOn: $showSafetyOverlay,
                         hint: "Highlights frequency regions where sustained energy exceeds a hearing-safety threshold."
+                    )
+                }
+                if hasNotch {
+                    chip(
+                        "Notch",
+                        swatch: Self.notchColor,
+                        pattern: .dashed,
+                        isOn: $showNotch,
+                        hint: "The tinnitus-notch marker. Hides the marker only — the notch itself keeps filtering."
                     )
                 }
                 if hasDynamics {
@@ -197,18 +210,18 @@ struct CanvasLayerChipStrip: View {
                 isOn: $showInputSpectrum
             )
             popoverRow(
-                hasAudiogram ? "Result" : "EQ",
+                hasAudiogram ? "Result" : "Manual EQ",
                 swatch: earColor,
                 isOn: $showResultCurve
             )
             if hasAudiogram {
                 popoverRow(
-                    "EQ",
+                    "Manual EQ",
                     swatch: earColor,
                     isOn: $showEQCurve
                 )
                 popoverRow(
-                    "Adjustment",
+                    "Hearing adjustment",
                     swatch: earColor,
                     pattern: .dashed,
                     isOn: $showAudiogramTarget
@@ -219,6 +232,14 @@ struct CanvasLayerChipStrip: View {
                 swatch: Self.safetyColor,
                 isOn: $showSafetyOverlay
             )
+            if hasNotch {
+                popoverRow(
+                    "Notch",
+                    swatch: Self.notchColor,
+                    pattern: .dashed,
+                    isOn: $showNotch
+                )
+            }
             if hasDynamics {
                 popoverRow(
                     "Dynamics",
@@ -335,4 +356,6 @@ struct CanvasLayerChipStrip: View {
     static let inputColor = Color(red: 0.55, green: 0.60, blue: 0.68)
     /// Amber — matches the safety overlay.
     static let safetyColor = Color(red: 1.0, green: 0.65, blue: 0.20)
+    /// Purple — matches the tinnitus-notch marker.
+    static let notchColor = Color.purple
 }

@@ -65,6 +65,9 @@ struct ParametricCanvasView: View {
     /// curve drops to a thinner weight so Result reads as the dominant line.
     var showResultCurve: Bool = false
     var showSafetyOverlay: Bool = true
+    /// The tinnitus-notch marker(s). A layer like any other so the user can
+    /// hide it from the Layers chips without disabling the notch itself.
+    var showNotch: Bool = true
 
     /// Live dynamic-feature contributions to draw as separate animated
     /// strokes under the static EQ curve. Each is one feature's main bell
@@ -217,8 +220,10 @@ struct ParametricCanvasView: View {
                         }
                         drawTypedCurve(context, size: size, cachedDB: cachedResultDB, color: earColor, kind: .result)
                     }
-                    drawShadowNotchMarker(context, size: size)
-                    drawNotchMarker(context, size: size)
+                    if showNotch {
+                        drawShadowNotchMarker(context, size: size)
+                        drawNotchMarker(context, size: size)
+                    }
                     // Editable handles show whenever an EQ-derived curve is
                     // visible — either the EQ-only trace or the Result line —
                     // so dragging works even when only Result is shown.
@@ -444,32 +449,16 @@ struct ParametricCanvasView: View {
     /// needs no legend.
     @ViewBuilder
     private var curveLegend: some View {
-        let types: [(CurveKind, String)] = {
-            var t: [(CurveKind, String)] = []
-            if showResultCurve { t.append((.result, "Result")) }
-            if showEQCurve { t.append((.eq, "EQ")) }
-            if showAudiogramTarget { t.append((.correction, "Adjustment")) }
-            return t
-        }()
-        if !types.isEmpty && (types.count > 1 || earsAsymmetric) {
-            // When both ears are drawn the line samples stay neutral (the ear
-            // key carries colour); when symmetric, tint them the single hue
-            // in play so the sample matches the on-screen line.
-            let sampleColor: Color = earsAsymmetric ? .white.opacity(0.9) : earColor
-            VStack(alignment: .leading, spacing: 5) {
-                ForEach(Array(types.enumerated()), id: \.offset) { _, item in
-                    HStack(spacing: 6) {
-                        legendSampleLine(item.0, color: sampleColor)
-                        Text(item.1).font(.caption2)
-                    }
-                }
-                if earsAsymmetric {
-                    Divider().frame(width: 92)
-                    HStack(spacing: 12) {
-                        legendEarKey(earColor, "Left")
-                        legendEarKey(shadowColor, "Right")
-                    }
-                }
+        // The layer chips already name and toggle each curve type (Result /
+        // Manual EQ / Hearing adjustment), so re-listing them here would be
+        // pure duplication. The one thing the chips can't show is the per-ear
+        // colour key — so the legend carries only that, and only when the two
+        // ears actually differ (otherwise a single hue needs no key).
+        let anyCurveVisible = showResultCurve || showEQCurve || showAudiogramTarget
+        if earsAsymmetric && anyCurveVisible {
+            HStack(spacing: 12) {
+                legendEarKey(earColor, "Left")
+                legendEarKey(shadowColor, "Right")
             }
             .foregroundStyle(.white)
             .padding(.horizontal, 9)
@@ -1234,6 +1223,7 @@ struct LiveParametricCanvas: View {
     var showAudiogramTarget: Bool = true
     var showResultCurve: Bool = false
     var showSafetyOverlay: Bool = true
+    var showNotch: Bool = true
     var safetyCeilingDBA: Double = 85
     var calibrationOffsetDBA: Double = 100
     /// Forwarded EQ-curve gain range. Expert passes ±24 to match its clamp.
@@ -1436,6 +1426,7 @@ struct LiveParametricCanvas: View {
             showAudiogramTarget: showAudiogramTarget,
             showResultCurve: showResultCurve,
             showSafetyOverlay: showSafetyOverlay,
+            showNotch: showNotch,
             dynamicOverlays: overlays,
             showDynamicsOverlay: showDynamicsOverlay,
             adaptiveGainsDB: adaptiveGains,

@@ -36,6 +36,7 @@ struct ExpertEQView: View {
     @AppStorage("sherlockeq.layer.eq")        private var showEQLayer        = false
     @AppStorage("sherlockeq.layer.audiogram") private var showAudiogramLayer = false
     @AppStorage("sherlockeq.layer.safety")    private var showSafetyLayer    = false
+    @AppStorage("sherlockeq.layer.notch")     private var showNotchLayer     = true
     /// Live dynamic-feature (Listening Comfort) overlay. Default on, but the
     /// chip is hidden whenever the active profile has no enabled features.
     @AppStorage("sherlockeq.layer.dynamics")  private var showDynamicsLayer  = true
@@ -89,8 +90,10 @@ struct ExpertEQView: View {
                     showResultCurve: $showResultLayer,
                     showSafetyOverlay: $showSafetyLayer,
                     showDynamics: $showDynamicsLayer,
+                    showNotch: $showNotchLayer,
                     hasAudiogram: hasAudiogram,
                     hasDynamics: hasEnabledDynamics,
+                    hasNotch: profile.leftNotch.enabled || profile.rightNotch.enabled,
                     earColor: earColor,
                     hasContent: hasContent
                 )
@@ -124,6 +127,7 @@ struct ExpertEQView: View {
                 showAudiogramTarget: showAudiogramLayer,
                 showResultCurve: showResultLayer,
                 showSafetyOverlay: showSafetyLayer,
+                showNotch: showNotchLayer,
                 // Profile's user-set ceiling + AudioState's SPL calibration
                 // drive the safety threshold curve. With both at their
                 // defaults the curve sits where the old heuristic was;
@@ -164,6 +168,16 @@ struct ExpertEQView: View {
             }
             .onKeyPress { press in handleKey(press, in: profile) }
             .onTapGesture { canvasFocused = true }
+            if linkChannels && correction != shadowCorrection {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: "ear.and.waveform").foregroundStyle(.secondary)
+                    Text("Nodes edit both ears. The hearing adjustment differs by ear, so the Result draws a separate left and right curve (see the Left/Right key).")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                }
+            }
             // Selected-band controls sit immediately below the canvas so the
             // edit loop (select on canvas → tune here) stays visually tight.
             controlsBar(profile)
@@ -460,7 +474,7 @@ struct ExpertEQView: View {
         } else {
             HStack {
                 Image(systemName: "hand.point.up.left.fill").foregroundStyle(.secondary)
-                Text("Drag a node on the curve to edit it, or **Add band** above.")
+                Text("Click or drag a node on the curve to select and edit it, or **Add band** above.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
