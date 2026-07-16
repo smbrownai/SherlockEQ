@@ -172,7 +172,7 @@ struct ProfileDetailView: View {
             ("Output device", deviceSummary(profile), "hifispeaker"),
             ("Headphone correction", profile.autoEQName ?? "None", "headphones"),
             ("Hearing adjustment", hearingSummary(profile), "ear"),
-            ("Per-ear", profile.separateChannels ? "Separate L/R" : "Linked", "person.2"),
+            ("Per-ear", profile.separateChannels ? "Adjust ears separately" : "Same for both ears", "person.2"),
         ]
         return LazyVGrid(
             columns: [GridItem(.adaptive(minimum: 170), spacing: 10)],
@@ -569,7 +569,7 @@ struct ProfileDetailView: View {
         let asymmetric = !profile.leftEar.bands.audiblyEquivalent(to: profile.rightEar.bands)
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text("Separate L + R")
+                Text("Adjust ears separately")
                     .foregroundStyle(.secondary)
                     .frame(width: 120, alignment: .leading)
                 Toggle("", isOn: Binding(

@@ -41,7 +41,7 @@ struct ToneFinderView: View {
             .padding(28)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .navigationTitle("Tinnitus Notch")
+        .navigationTitle("Tinnitus Tools")
         .onChange(of: lastConfirmedFrequency) { _, newValue in
             guard newValue != nil else { return }
             highlightNotch = true
@@ -489,7 +489,7 @@ struct ToneFinderView: View {
 
     @ViewBuilder private func separateToggleRow(_ profile: HearingProfile) -> some View {
         HStack {
-            Toggle("Separate L + R notch", isOn: Binding(
+            Toggle("Adjust ears separately", isOn: Binding(
                 get: { profile.separateNotch },
                 set: { newValue in
                     var updated = profile
