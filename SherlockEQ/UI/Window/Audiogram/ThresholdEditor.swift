@@ -6,6 +6,10 @@ import SwiftUI
 struct ThresholdEditor: View {
     @Binding var thresholds: [AudiogramPoint]
     let earColor: Color
+    /// False until an audiogram has been entered/imported. While false the
+    /// severity column reads "Not entered" rather than classifying the flat-0
+    /// defaults as "Normal". Editing any row stamps the audiogram as entered.
+    var entered: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -25,7 +29,8 @@ struct ThresholdEditor: View {
             ForEach(Array(thresholds.indices), id: \.self) { idx in
                 ThresholdRow(
                     threshold: $thresholds[idx],
-                    earColor: earColor
+                    earColor: earColor,
+                    entered: entered
                 )
             }
         }
@@ -35,6 +40,7 @@ struct ThresholdEditor: View {
 private struct ThresholdRow: View {
     @Binding var threshold: AudiogramPoint
     let earColor: Color
+    var entered: Bool = true
 
     var body: some View {
         HStack {
@@ -102,13 +108,15 @@ private struct ThresholdRow: View {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule().fill(.quaternary)
-                    Capsule()
-                        .fill(severityTint)
-                        .frame(width: geo.size.width * (threshold.thresholddBHL / 110))
+                    if entered {
+                        Capsule()
+                            .fill(severityTint)
+                            .frame(width: geo.size.width * (threshold.thresholddBHL / 110))
+                    }
                 }
             }
             .frame(height: 6)
-            Text(severityCategory)
+            Text(entered ? severityCategory : "Not entered")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(width: 90, alignment: .leading)
