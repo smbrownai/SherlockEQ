@@ -123,6 +123,11 @@ final class AudioState: ObservableObject {
     @Published var sessionDosePercent: Double = 0
     @Published var remainingMinutes: Double?
 
+    /// Slow mirror of "is audio actually flowing" for the toolbar glance, so it
+    /// can show an honest `Exposure: —` instead of a misleading `0%` when there's
+    /// nothing to measure. Matches SafeListeningView's meter floor (31 dBA).
+    @Published var exposureAudioPresent: Bool = false
+
     /// Banner state — see `NoticeCenter`. Views access it via
     /// `audioState.noticeCenter.userVisibleNotice`.
     let noticeCenter = NoticeCenter()
@@ -981,6 +986,8 @@ final class AudioState: ObservableObject {
         if sessionDosePercent != newDose { sessionDosePercent = newDose }
         let newRemaining = safeListening.remainingMinutes
         if remainingMinutes != newRemaining { remainingMinutes = newRemaining }
+        let present = safeListening.currentLevelDBA >= 31
+        if exposureAudioPresent != present { exposureAudioPresent = present }
         checkNotificationsDeniedAtAmberDose()
     }
 
