@@ -585,14 +585,15 @@ struct ToneFinderView: View {
     /// non-clinical statement and the deeper "when a notch helps / evidence"
     /// background move to the shared chip and the tinnitus Help article.
     private var disclaimer: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SafetyNote(
-                text: "Pulsatile (heartbeat-like) tinnitus, a sudden change in one ear, new hearing loss, dizziness, or pain deserve medical evaluation — not more audio tweaking.",
-                symbol: "stethoscope",
-                tint: .orange
-            )
-            HealthSafetyChip()
-        }
+        // The red-flag "see a professional" note is context-specific and stays.
+        // The generic "not medical care" strip is dropped — the persistent
+        // Health & Safety link in the sidebar footer already carries it.
+        SafetyNote(
+            text: "Pulsatile (heartbeat-like) tinnitus, a sudden change in one ear, new hearing loss, dizziness, or pain deserve medical evaluation — not more audio tweaking.",
+            symbol: "stethoscope",
+            tint: .orange,
+            learnMoreTopic: .tinnitusToneMatching
+        )
     }
 
     // MARK: - Step scaffold

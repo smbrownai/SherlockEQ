@@ -501,7 +501,9 @@ struct SafeListeningView: View {
                 }
             }
         }
-        HealthSafetyChip()
+        // "About this estimate" is context-specific methodology and stays. The
+        // generic "not medical care" strip is dropped — the persistent Health
+        // & Safety link in the sidebar footer already carries it.
     }
 
     // MARK: - Building blocks

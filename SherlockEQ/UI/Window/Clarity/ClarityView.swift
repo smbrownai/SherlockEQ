@@ -39,9 +39,9 @@ struct ClarityView: View {
                 presetRow(profile)
                 separateToggleRow(profile)
                 featureCards(profile)
-                // The former "not a medical device" card is now the shared
-                // compact chip → Health & Safety sheet (single source).
-                HealthSafetyChip()
+                // No generic "not medical care" strip here — the persistent
+                // Health & Safety link in the sidebar footer covers it. This
+                // screen has no context-specific safety warning to add.
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
