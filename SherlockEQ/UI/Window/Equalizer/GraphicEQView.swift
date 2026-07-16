@@ -54,7 +54,6 @@ struct GraphicEQView: View {
         let hasAudiogram = !leftCorrection.isEmpty || !rightCorrection.isEmpty
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                topBar
                 CanvasLayerChipStrip(
                     showInputSpectrum: $showInputLayer,
                     showOutputSpectrum: $showOutputLayer,
@@ -82,7 +81,7 @@ struct GraphicEQView: View {
                 otherFiltersRow(profile)
                 slidersRow(profile)
                 largeBoostNote(profile)
-                resetButton(profile)
+                presetAndResetRow(profile)
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -104,13 +103,6 @@ struct GraphicEQView: View {
                 tint: .orange,
                 learnMoreTopic: .gainVolume
             )
-        }
-    }
-
-    private var topBar: some View {
-        HStack(spacing: 10) {
-            presetMenu
-            Spacer()
         }
     }
 
@@ -563,8 +555,14 @@ struct GraphicEQView: View {
 
     private typealias Ear = EQBandLookup.Ear
 
-    private func resetButton(_ profile: HearingProfile) -> some View {
-        HStack {
+    /// Bulk slider actions, placed *below* the sliders they act on: pick a
+    /// starting curve, or flatten everything. The preset menu lives here
+    /// rather than at the top of the screen because it's guidance — a way to
+    /// get a sensible starting point — not a headline feature that deserves
+    /// the most prominent slot above the curve.
+    private func presetAndResetRow(_ profile: HearingProfile) -> some View {
+        HStack(spacing: 10) {
+            presetMenu
             Spacer()
             Button(role: .destructive) {
                 reset(profile)
