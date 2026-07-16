@@ -50,19 +50,20 @@ struct EqualizerView: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 10)
         }
-        .navigationTitle("Equalizer")
         .toolbar {
-            // Surface switch, next to the title where its effect is —
-            // it swaps this entire screen. `.navigation` keeps it at the
-            // leading edge beside "Equalizer"; the window-level Reference
-            // Mode + monitor-panel controls keep the trailing edge to
-            // themselves. Disabled (not hidden) with no active profile so
-            // the control's existence stays discoverable.
-            ToolbarItem(placement: .navigation) {
-                if let profile = activeProfile {
-                    surfacePicker(profile)
-                } else {
-                    surfacePickerDisabled
+            // Title + surface switch share one line, so the selector reads as
+            // part of "Equalizer" (which it reshapes) rather than a detached
+            // toolbar control off to the side. `.principal` centres them on the
+            // title line; the picker is disabled (not hidden) with no active
+            // profile so the control stays discoverable.
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 10) {
+                    Text("Equalizer").font(.headline)
+                    if let profile = activeProfile {
+                        surfacePicker(profile)
+                    } else {
+                        surfacePickerDisabled
+                    }
                 }
             }
         }
@@ -88,7 +89,7 @@ struct EqualizerView: View {
         .pickerStyle(.segmented)
         .labelsHidden()
         .fixedSize()
-        .help("Choose the editing surface: Graphic (12 sliders) or Parametric (full-control canvas). Both edit the same EQ — switching never loses settings.")
+        .help("Choose the editing surface: Graphic (12 sliders aligned to the audiogram frequencies) or Parametric (full-control canvas). Both edit the same EQ — switching never loses settings.")
     }
 
     private var surfacePickerDisabled: some View {

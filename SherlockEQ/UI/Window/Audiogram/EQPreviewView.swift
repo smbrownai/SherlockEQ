@@ -54,7 +54,7 @@ struct EQPreviewView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
-            Text(String(format: "Compensation %.0f%%", compensationFactor * 100))
+            Text(String(format: "Adjustment strength %.0f%%", compensationFactor * 100))
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
         }
