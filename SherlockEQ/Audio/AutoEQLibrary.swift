@@ -4,7 +4,7 @@ import Foundation
 /// folder. `AudioState.autoEQPreferences.libraryFolder` holds the directory; when
 /// it's set, Profile Detail's Headphone-correction picker shows these
 /// entries directly so users don't have to NSOpenPanel a file every time.
-enum AutoEQLibrary {
+nonisolated enum AutoEQLibrary {
 
     struct Entry: Identifiable, Hashable {
         let name: String

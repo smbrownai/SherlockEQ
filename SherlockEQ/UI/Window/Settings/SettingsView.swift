@@ -6,6 +6,10 @@ import SwiftUI
 /// **Files & data**, so the page reads as preferences first, engineering
 /// second.
 struct SettingsView: View {
+    /// Cached count of the AutoEQ library folder — enumerated off-main per
+    /// folder change instead of inside the body (perf review M1; a real
+    /// AutoEQ checkout is thousands of files).
+    @State private var autoEQLibraryCount: Int = 0
     @EnvironmentObject private var audioState: AudioState
     @EnvironmentObject private var preferences: AppPreferences
     @EnvironmentObject private var profileStore: ProfileStore
@@ -63,6 +67,14 @@ struct SettingsView: View {
                     performRelocate(to: prompt.url, moveExisting: false)
                 }
             )
+        }
+        // Enumerate the AutoEQ library off-main, once per folder change,
+        // instead of inside the body (perf review M1).
+        .task(id: audioState.autoEQPreferences.libraryFolder) {
+            let folder = audioState.autoEQPreferences.libraryFolder
+            autoEQLibraryCount = await Task.detached {
+                AutoEQLibrary.entries(in: folder).count
+            }.value
         }
     }
 
@@ -266,7 +278,7 @@ struct SettingsView: View {
                         .font(.callout.monospaced())
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    let count = AutoEQLibrary.entries(in: folder).count
+                    let count = autoEQLibraryCount
                     Text("Headphone correction library · \(count) .txt file\(count == 1 ? "" : "s")")
                         .font(.caption)
                         .foregroundStyle(.secondary)
