@@ -42,6 +42,7 @@ struct ProfileStoreTests {
         let store = Self.makeStore(at: dir)
         let original = HearingProfile.makeDefault(name: "Round-trip")
         try store.save(original)
+        store.flushPendingWrites()   // durability point — writes are debounced
 
         // Fresh store reading the same dir sees the saved file.
         let fresh = Self.makeStore(at: dir)
@@ -58,6 +59,7 @@ struct ProfileStoreTests {
         let store = Self.makeStore(at: dir)
         let profile = HearingProfile.makeDefault(name: "Perm check")
         try store.save(profile)
+        store.flushPendingWrites()
 
         let url = dir.appendingPathComponent("\(profile.id.uuidString).json")
         let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
@@ -71,6 +73,7 @@ struct ProfileStoreTests {
 
         let store = Self.makeStore(at: dir)
         try store.save(HearingProfile.makeDefault(name: "Backup check"))
+        store.flushPendingWrites()
 
         let values = try dir.resourceValues(forKeys: [.isExcludedFromBackupKey])
         #expect(values.isExcludedFromBackup == true)
@@ -93,6 +96,7 @@ struct ProfileStoreTests {
         let store = Self.makeStore(at: dir)
         let p = HearingProfile.makeDefault(name: "To be deleted")
         try store.save(p)
+        store.flushPendingWrites()
         #expect(store.profiles.count == 1)
 
         try store.delete(p)
@@ -362,9 +366,15 @@ struct ProfileStoreTests {
         original.autoEQName = "Sennheiser HD650"
         original.autoEQPreampDB = -3.5
         try store.save(original)
+        store.flushPendingWrites()
 
-        // Export: identifying fields stripped, sound-shaping fields kept.
-        let exportURL = dir.appendingPathComponent("shared.json")
+        // Export into a SEPARATE directory: the store's loadAll() decodes
+        // every .json in its own dir, so an export dropped there would load
+        // as a second profile with the same id and make the reload
+        // assertions below depend on an unstable sort.
+        let exportDir = Self.makeTempDir()
+        defer { Self.cleanup(exportDir) }
+        let exportURL = exportDir.appendingPathComponent("shared.json")
         try store.exportProfile(original, to: exportURL)
         // Mirror the store's decoder config — profile dates are ISO-8601.
         let decoder = JSONDecoder()
@@ -569,5 +579,83 @@ struct ProfileStoreTests {
         try store.save(HearingProfile.makeDefault(name: "Custom Mix"))
         undo.endUndoGrouping()
         #expect(undo.undoActionName == "Create Custom Mix")
+    }
+
+    // MARK: - Debounced writes (audit CX-02)
+
+    /// save() publishes to memory immediately but defers the disk write —
+    /// the file appears at the flush, not per call.
+    @Test func saveDefersDiskWriteUntilFlush() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+
+        let store = Self.makeStore(at: dir)
+        let p = HearingProfile.makeDefault(name: "Deferred")
+        try store.save(p)
+
+        let url = dir.appendingPathComponent("\(p.id.uuidString).json")
+        #expect(store.profiles.count == 1, "memory updates immediately")
+        #expect(!FileManager.default.fileExists(atPath: url.path),
+                "disk write must be deferred past save()")
+
+        store.flushPendingWrites()
+        #expect(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    /// The trailing debounce lands the write on its own — no explicit flush.
+    @Test func debounceLandsWriteWithoutExplicitFlush() async throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+
+        let store = Self.makeStore(at: dir)
+        let p = HearingProfile.makeDefault(name: "Timer path")
+        try store.save(p)
+
+        // Debounce is 0.3 s; sleeping suspends the main actor so the
+        // main-queue work item can run.
+        try await Task.sleep(for: .milliseconds(700))
+        let url = dir.appendingPathComponent("\(p.id.uuidString).json")
+        #expect(FileManager.default.fileExists(atPath: url.path),
+                "trailing debounce should have written without a flush")
+    }
+
+    /// A burst of saves costs one write carrying the LAST snapshot.
+    @Test func burstOfSavesLandsLastSnapshot() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+
+        let store = Self.makeStore(at: dir)
+        var p = HearingProfile.makeDefault(name: "v0")
+        try store.save(p)
+        for i in 1...5 {
+            p.name = "v\(i)"
+            try store.save(p)
+        }
+        store.flushPendingWrites()
+
+        let url = dir.appendingPathComponent("\(p.id.uuidString).json")
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let onDisk = try decoder.decode(HearingProfile.self,
+                                        from: Data(contentsOf: url))
+        #expect(onDisk.name == "v5")
+    }
+
+    /// delete() cancels its profile's pending write — the debounce firing
+    /// later must not resurrect the file from memory.
+    @Test func deleteCancelsPendingWrite() async throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+
+        let store = Self.makeStore(at: dir)
+        let p = HearingProfile.makeDefault(name: "Doomed")
+        try store.save(p)               // pending, not yet on disk
+        try store.delete(p)             // must cancel the pending snapshot
+
+        try await Task.sleep(for: .milliseconds(700))
+        let url = dir.appendingPathComponent("\(p.id.uuidString).json")
+        #expect(!FileManager.default.fileExists(atPath: url.path),
+                "debounce resurrected a deleted profile")
+        #expect(store.profiles.isEmpty)
     }
 }

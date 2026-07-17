@@ -251,7 +251,10 @@ struct MainPopoverView: View {
                     value: Binding(
                         get: { profile.balance },
                         set: { newValue in
-                            var updated = profile
+                            // Live copy, not the body-render snapshot — saving
+                            // the stale whole struct would clobber concurrent
+                            // edits from the main window (audit CX-05).
+                            var updated = profileStore.profiles.first { $0.id == profile.id } ?? profile
                             updated.balance = newValue
                             try? profileStore.save(updated)
                         }
@@ -265,7 +268,7 @@ struct MainPopoverView: View {
                     .lineLimit(1)
                     .frame(width: 56, alignment: .trailing)
                 Button {
-                    var updated = profile
+                    var updated = profileStore.profiles.first { $0.id == profile.id } ?? profile
                     updated.balance = 0
                     try? profileStore.save(updated)
                 } label: {

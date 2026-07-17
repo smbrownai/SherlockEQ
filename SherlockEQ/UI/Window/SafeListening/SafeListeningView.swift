@@ -138,7 +138,8 @@ struct SafeListeningView: View {
                     range: 70...100,
                     format: { String(format: "%.0f dBA", $0) },
                     set: { newValue in
-                        var copy = profile
+                        // Live copy, not the body-render snapshot (audit CX-05).
+                        var copy = profileStore.profiles.first { $0.id == profile.id } ?? profile
                         copy.safeListeningCeilingDB = newValue
                         try? profileStore.save(copy)
                     }

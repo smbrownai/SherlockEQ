@@ -347,12 +347,15 @@ struct AudiogramView: View {
         Binding(
             get: { tab == .left ? profile.leftEar.thresholds : profile.rightEar.thresholds },
             set: { newPoints in
-                var updated = profile
+                // Mutate the store's LIVE copy — `profile` is a body-render
+                // snapshot, and saving it whole would clobber any edit made
+                // from another surface since this view last rendered.
+                var updated = profileStore.profiles.first { $0.id == profile.id } ?? profile
                 // Derived at FULL strength — the user's target strength ×
                 // the acclimatization ramp is applied at consumption time
                 // via effectiveCorrectionBands (phase3 §5).
-                let hadCorrectionBefore = !profile.leftEar.correctionBands.isEmpty
-                    || !profile.rightEar.correctionBands.isEmpty
+                let hadCorrectionBefore = !updated.leftEar.correctionBands.isEmpty
+                    || !updated.rightEar.correctionBands.isEmpty
                 let derived = AudiogramConversion.bands(
                     for: newPoints,
                     compensationFactor: 1.0
