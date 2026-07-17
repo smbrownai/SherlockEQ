@@ -119,6 +119,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Land any profile edits still inside the store's write debounce —
+        // quitting within ~300 ms of a slider release must not lose the edit.
+        profileStore.flushPendingWrites()
         cliServer?.stop()
     }
 

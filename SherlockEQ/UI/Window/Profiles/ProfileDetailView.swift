@@ -778,8 +778,12 @@ struct ProfileDetailView: View {
         )
     }
 
+    /// Mutate against the store's LIVE copy, not the body-render snapshot the
+    /// caller captured: another surface (popover balance, CLI, an intent) may
+    /// have edited this profile between our render and this action firing,
+    /// and saving the stale whole struct would silently clobber that edit.
     private func update(_ profile: HearingProfile, _ mutate: (inout HearingProfile) -> Void) {
-        var copy = profile
+        var copy = profileStore.profiles.first { $0.id == profile.id } ?? profile
         mutate(&copy)
         try? profileStore.save(copy)
     }

@@ -37,6 +37,18 @@ final class ProfileStore: ObservableObject {
     private var lastBurstSaveAt: [UUID: Date] = [:]
     private let coalesceWindow: TimeInterval = 0.5
 
+    /// Latest unwritten snapshot per profile, flushed by a trailing debounce.
+    /// `save(_:)` applies the change to memory and publishes immediately — the
+    /// UI and the audio engine follow live — but the JSON encode + atomic
+    /// write costs are paid once per burst, not per slider tick: a 60 Hz drag
+    /// used to mean ~60 full-profile encodes + temp-write/rename/chmod per
+    /// second on the main thread. Durability points: the debounce firing,
+    /// `flushPendingWrites()` (called by relocate, loadAll, and app
+    /// termination), and `delete(_:)` cancelling its profile's entry.
+    private var pendingWrites: [UUID: HearingProfile] = [:]
+    private var pendingFlush: DispatchWorkItem?
+    private let writeDebounce: TimeInterval = 0.3
+
     init(directory: URL? = nil) {
         self.directory = directory ?? Self.bootDirectory()
         self.encoder = {
@@ -58,6 +70,10 @@ final class ProfileStore: ObservableObject {
     /// files are logged and skipped rather than aborting the load.
     @discardableResult
     func loadAll() -> [HearingProfile] {
+        // Land any unwritten snapshots first — reading the directory with
+        // writes still pending would replace newer in-memory state with
+        // stale disk contents.
+        flushPendingWrites()
         ensureDirectory()
         let fm = FileManager.default
         do {
@@ -101,14 +117,15 @@ final class ProfileStore: ObservableObject {
         }
     }
 
-    /// Write `profile` to its `<uuid>.json` file (atomic via temp + rename).
-    /// Bumps `modifiedAt` to now. Registers an undo entry against the
-    /// current `undoManager` unless we're inside a coalescing burst (rapid
-    /// repeated saves of the same profile, e.g. slider drags).
+    /// Apply `profile` to the in-memory store (publishing immediately, so the
+    /// UI and audio engine follow live) and schedule its `<uuid>.json` write
+    /// behind a trailing debounce. Bumps `modifiedAt` to now. Registers an
+    /// undo entry against the current `undoManager` unless we're inside a
+    /// coalescing burst (rapid repeated saves, e.g. slider drags).
     ///
-    /// On failure `lastError` is set and the error is re-thrown — callers
-    /// using `try?` get the silent ignore they asked for, but the value
-    /// shows up in DebugView's Profiles section.
+    /// Disk errors surface asynchronously via `lastError` (→ the notice
+    /// banner) when the deferred write runs — same visibility as before,
+    /// since effectively every caller used `try?` anyway.
     func save(_ profile: HearingProfile, actionName: String? = nil) throws {
         try tracking("Save") {
             ensureDirectory()
@@ -121,20 +138,13 @@ final class ProfileStore: ObservableObject {
 
             var p = profile
             p.modifiedAt = now
-            let data = try encoder.encode(p)
-            let url = directory.appendingPathComponent("\(p.id.uuidString).json")
-            try data.write(to: url, options: .atomic)
-            // Owner-only, independent of the containing directory's mode —
-            // profiles encode a user's hearing thresholds. Best-effort: a
-            // failure here still leaves the directory-level 0700 from
-            // `ensureDirectory()` in place.
-            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
             if let idx = profiles.firstIndex(where: { $0.id == p.id }) {
                 profiles[idx] = p
             } else {
                 profiles.append(p)
                 profiles.sort { $0.createdAt < $1.createdAt }
             }
+            scheduleWrite(p)
 
             if let undoManager, !inBurst {
                 // Caller-supplied name (e.g. "Adjust 1 kHz" from a band drag)
@@ -155,6 +165,51 @@ final class ProfileStore: ObservableObject {
             lastBurstSaveAt[profile.id] = now
 
             log.info("Saved profile \(p.name, privacy: .public) (\(p.id.uuidString, privacy: .public))")
+        }
+    }
+
+    /// Queue `p` as its profile's latest unwritten snapshot and (re)arm the
+    /// trailing debounce. Later snapshots of the same profile replace earlier
+    /// ones — only the last state of a burst ever touches the disk.
+    private func scheduleWrite(_ p: HearingProfile) {
+        pendingWrites[p.id] = p
+        pendingFlush?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated { self?.flushPendingWrites() }
+        }
+        pendingFlush = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + writeDebounce, execute: item)
+    }
+
+    /// Write every pending snapshot to disk now. The durability point —
+    /// called by the debounce, by `loadAll`/`relocate` before they read or
+    /// move the directory, and by app termination. Safe to call when nothing
+    /// is pending.
+    func flushPendingWrites() {
+        pendingFlush?.cancel()
+        pendingFlush = nil
+        guard !pendingWrites.isEmpty else { return }
+        let batch = pendingWrites
+        pendingWrites = [:]
+        for p in batch.values { writeToDisk(p) }
+    }
+
+    /// The former inline body of `save(_:)`: atomic temp-write/rename plus
+    /// owner-only permissions (profiles encode hearing thresholds). Runs at
+    /// most once per profile per debounce window. Failures land in
+    /// `lastError` (→ notice banner) — the same surface synchronous save
+    /// errors used, just later.
+    private func writeToDisk(_ p: HearingProfile) {
+        do {
+            let data = try encoder.encode(p)
+            let url = directory.appendingPathComponent("\(p.id.uuidString).json")
+            try data.write(to: url, options: .atomic)
+            // Best-effort: a failure here still leaves the directory-level
+            // 0700 from `ensureDirectory()` in place.
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        } catch {
+            log.error("Deferred save of \(p.name, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            lastError = "Save failed: \(error.localizedDescription)"
         }
     }
 
@@ -251,6 +306,9 @@ final class ProfileStore: ObservableObject {
     /// array. Registers an undo that re-saves the deleted snapshot.
     func delete(_ profile: HearingProfile) throws {
         try tracking("Delete") {
+            // Drop any unwritten snapshot first — otherwise the debounce could
+            // fire after this delete and resurrect the file from memory.
+            pendingWrites[profile.id] = nil
             let url = directory.appendingPathComponent("\(profile.id.uuidString).json")
             if FileManager.default.fileExists(atPath: url.path) {
                 try FileManager.default.removeItem(at: url)
@@ -581,6 +639,9 @@ final class ProfileStore: ObservableObject {
     /// the in-memory profile list reflects whatever's in the new folder.
     func relocate(to newDirectory: URL, moveExisting: Bool) throws {
         try tracking("Relocate") {
+            // Land pending snapshots before enumerating/moving the old
+            // directory, so in-flight edits relocate with everything else.
+            flushPendingWrites()
             let oldDirectory = directory
             if newDirectory.standardizedFileURL == oldDirectory.standardizedFileURL {
                 throw RelocationError.sourceIsDestination
