@@ -152,9 +152,9 @@ Health/safety disclosure follows one architecture with a single source of
 truth (`HealthSafetyDisclosure`) so wording can't drift into slightly
 different per-view copies:
 
-1. **Persistent access** — a **Health & Safety** row in the sidebar footer
-   (below the active-profile control, a compact secondary row so it never
-   obscures it at the minimum window size). Reachable from every main screen,
+1. **Persistent access** — a **Health & Safety Info** row in the sidebar's
+   App group, above Settings (the bottom safe-area footer holds only the
+   active-profile control). Reachable from every main screen,
    keyboard-operable, VoiceOver-labeled, understandable from its text alone
    (icon decorative). Opens the consolidated **`HealthSafetySheet`** (native
    `.sheet`, presented at the window level via `AudioState.showHealthSafety`).
@@ -1106,10 +1106,11 @@ column below its slider-friendly width.
 **Sidebar groups** (`SidebarView`):
 
 - **Audio Processor** — Audiogram, Equalizer, Tinnitus Notch, Adaptive Comfort, Safe Listening
-- **App** — Settings, Debug
-- Bottom safe-area inset: active profile name (read-only label) + "Manage
-  Profiles" button (selects the Profiles section). Profiles is reachable via this
-  shortcut, not from the section list, to avoid a duplicated top+bottom entry.
+- **App** — Health & Safety Info (opens the disclosure sheet; not a
+  navigation destination), Settings, Debug
+- Bottom safe-area inset: the active-profile button alone (name + chevron;
+  selects the Profiles section). Profiles is reachable via this shortcut, not
+  from the section list, to avoid a duplicated top+bottom entry.
 
 **Profiles** — master/detail. The list column's toolbar is a labeled **New
 Profile** button plus a **More** overflow menu (duplicate / delete / import /

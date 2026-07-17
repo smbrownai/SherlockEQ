@@ -3,7 +3,9 @@ import XCTest
 /// UI tests for the Health & Safety disclosure: persistent access from every
 /// main destination, opening/dismissing the sheet (button, Done, keyboard),
 /// the required section content, Help-link navigation, and the sidebar
-/// footer's accessibility + layout.
+/// row's accessibility. The entry point is the "Health & Safety Info" row
+/// in the sidebar's App group (it moved out of the footer, which now holds
+/// only the active-profile control).
 ///
 /// The app launches with `-uitest`, which opens the main window and skips the
 /// audio pipeline and onboarding (see `AppDelegate.isUITesting`), so the tests
@@ -32,19 +34,28 @@ final class HealthSafetyUITests: XCTestCase {
     // MARK: - Helpers
 
     private var healthSafetyButton: XCUIElement {
-        app.buttons["Health and Safety"]
+        app.buttons["Health and Safety Info"]
     }
 
     private var sheetTitle: XCUIElement {
-        // The sheet's title text (ampersand distinguishes it from the footer
-        // button label "Health and Safety").
+        // The sheet's title text ("Health & Safety", no "Info") is distinct
+        // from the sidebar row's VoiceOver label, so the two can't collide.
         app.staticTexts["Health & Safety"]
     }
 
     private func openSheet(file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(healthSafetyButton.waitForExistence(timeout: 10),
-                      "Health & Safety footer item missing", file: file, line: line)
+                      "Health & Safety Info sidebar item missing", file: file, line: line)
         healthSafetyButton.click()
+        // The List-backed sidebar row doesn't accept the window-activating
+        // first mouse the way the old footer button (outside the List) did,
+        // so under XCUITest the first synthesized click can be spent on
+        // activation. Verified by hand: with the window already active, one
+        // real click opens the sheet immediately. A single deliberate retry
+        // makes the open deterministic without weakening the assertion.
+        if !sheetTitle.waitForExistence(timeout: 3) {
+            healthSafetyButton.click()
+        }
         XCTAssertTrue(sheetTitle.waitForExistence(timeout: 5),
                       "Disclosure sheet did not open", file: file, line: line)
     }
@@ -60,18 +71,16 @@ final class HealthSafetyUITests: XCTestCase {
 
     // MARK: - Tests
 
-    /// The footer item exists, carries its VoiceOver label (understandable
+    /// The App-group row exists, carries its VoiceOver label (understandable
     /// without the icon), and is operable — clicking it opens the sheet, which
     /// also proves it isn't obscured.
-    func testFooterItemIsPresentAndAccessible() {
+    func testSidebarItemIsPresentAndAccessible() {
         XCTAssertTrue(healthSafetyButton.waitForExistence(timeout: 10))
-        XCTAssertEqual(healthSafetyButton.label, "Health and Safety")
-        healthSafetyButton.click()
-        XCTAssertTrue(sheetTitle.waitForExistence(timeout: 5),
-                      "Footer item should open the sheet (proves it's operable / not obscured)")
+        XCTAssertEqual(healthSafetyButton.label, "Health and Safety Info")
+        openSheet()
     }
 
-    /// Opening from the footer presents the sheet; Done dismisses it.
+    /// Opening from the sidebar row presents the sheet; Done dismisses it.
     func testOpenAndDismissWithDone() {
         openSheet()
         app.buttons["Done"].click()
