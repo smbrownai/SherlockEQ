@@ -167,8 +167,9 @@ different per-view copies:
    meaning.
 2. **Contextual just-in-time notices** — one-or-two-sentence `SafetyNote`s (or
    inline copy) kept where timing matters, each with a "Learn more" link:
-   tinnitus red-flag symptoms (Tinnitus Tools), start-quiet/stop-if-
-   uncomfortable at the tone transport, large-boost warning past +9 dB
+   start-quiet/stop-if-uncomfortable at the tone transport (the tinnitus
+   red-flag symptom list lives only in the Health & Safety sheet's "What
+   SherlockEQ can't assess" section), large-boost warning past +9 dB
    (Graphic EQ), audiogram "starting point, not a clinical fitting"
    (Audiogram), the calibration-confidence badge + "Waiting for audio"
    (Safe Listening), and the Listening Check's estimate framing. These never
@@ -1362,9 +1363,8 @@ SherlockEQ/
 │       ├── CanvasLayerChipStrip.swift
 │       ├── ScopeBadge.swift                 ← control-scope pill (App / Profile / Device / ear / Today)
 │       ├── HealthSafetySheet.swift          ← consolidated Health & Safety disclosure sheet
-│       ├── DisclosureChip.swift             ← HealthSafetyChip (compact) + SafetyNote (contextual)
+│       ├── SafetyNote.swift                 ← contextual just-in-time safety notice
 │       ├── LogFreqAxis.swift
-│       ├── PlaceholderView.swift
 │       ├── ColorHex.swift
 │       └── UndoManagerLink.swift           ← Pipes SwiftUI undoManager into ProfileStore
 │
