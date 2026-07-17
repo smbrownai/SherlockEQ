@@ -46,6 +46,19 @@ struct AutoEQRemoteParserTests {
         #expect(parsed.preampGain == 0)
     }
 
+    /// Same guard as the local parser: a non-finite Fc/Gain row drops while
+    /// healthy rows survive (audit SEC-03).
+    @Test func nonFiniteFcOrGainRowIsDropped() throws {
+        let text = """
+        Filter 1: ON PK Fc nan Hz Gain 3 dB Q 1.0
+        Filter 2: ON PK Fc 1000 Hz Gain -inf dB Q 1.0
+        Filter 3: ON PK Fc 4000 Hz Gain -2 dB Q 1.0
+        """
+        let parsed = try #require(AutoEQRemoteParser.parse(text, entry: Self.entry))
+        #expect(parsed.filters.count == 1)
+        #expect(parsed.filters[0].frequency == 4000)
+    }
+
     @Test func normalPreampIsUnaffectedByClamp() throws {
         let text = """
         Preamp: -6.5 dB

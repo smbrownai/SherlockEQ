@@ -69,7 +69,11 @@ enum AutoEQParser {
         }
 
         guard let fc   = doubleAfter("Fc",   in: tokens),
-              let gain = doubleAfter("Gain", in: tokens) else { return nil }
+              let gain = doubleAfter("Gain", in: tokens),
+              // "nan"/"inf" parse as valid Doubles but poison downstream
+              // math; Preamp/Q were already guarded (audit SEC-03). Drop the
+              // row like any other malformed line.
+              fc.isFinite, gain.isFinite else { return nil }
         // Q is optional — EqualizerAPO / oratory1990 exports omit it for
         // default-Q rows. Fall back to 0.707 (Butterworth) instead of dropping
         // the band, which silently yielded a partial correction. Clamped the

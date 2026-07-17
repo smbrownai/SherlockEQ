@@ -270,6 +270,14 @@ enum AutoEQRemoteParser {
             log.warning("Missing Fc/Gain in: \(line, privacy: .public)")
             return nil
         }
+        // Non-finite values parse as valid Doubles ("Fc nan Hz") but poison
+        // every downstream computation. Preamp and Q were already guarded;
+        // this closes the same door for Fc/Gain (audit SEC-03) — drop the
+        // row, matching the other malformed-line paths.
+        guard fc.isFinite, gain.isFinite else {
+            log.warning("Non-finite Fc/Gain in: \(line, privacy: .public)")
+            return nil
+        }
         // Q optional — default to Butterworth (0.707) when absent rather than
         // dropping the row, which silently produced a partial correction.
         let q = max(0.1, min(16.0, numericAfter("Q", in: tokens) ?? 0.707))

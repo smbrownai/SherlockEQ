@@ -298,7 +298,10 @@ final class SafeListeningTracker: ObservableObject {
     /// Manual reset (user action or midnight rollover, spec §5.4).
     func resetDose(reason: String = "manual") {
         if sessionDose > 0 {
-            log.info("Dose reset (\(reason, privacy: .public)) from \(self.sessionDose, format: .fixed(precision: 2))")
+            // Reason is app-internal ("manual"/"sustained quiet"); the dose
+            // VALUE is the user's health-adjacent listening history — private
+            // (audit SEC-04).
+            log.info("Dose reset (\(reason, privacy: .public)) from \(self.sessionDose, format: .fixed(precision: 2), privacy: .private)")
         }
         sessionDose = 0
         quietStartTime = nil
