@@ -239,7 +239,7 @@ struct SafeListeningView: View {
                         .keyboardShortcut(.defaultAction)
                 }
 
-                Text("Match SherlockEQ's dBA estimate to a real measurement so dose tracking and the safety overlay reflect your actual output. You'll need an SPL meter or a supported phone app.")
+                Text("Match SherlockEQ's dBA estimate to a real measurement so exposure tracking and the safety overlay reflect your actual output. You'll need an SPL meter or a supported phone app.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -366,8 +366,8 @@ struct SafeListeningView: View {
             cardHeader(state.hasUserCalibration ? "7-day history" : "7-day history (estimated)",
                        systemImage: "calendar")
             Text(state.hasUserCalibration
-                 ? "Each day's peak dose, captured at the midnight rollover. Today reflects your exposure so far."
-                 : "Each day's peak dose, captured at the midnight rollover. Recorded without calibration, so these are rough estimates. Today reflects your exposure so far.")
+                 ? "Each day's peak exposure, captured at the midnight rollover. Today reflects your exposure so far."
+                 : "Each day's peak exposure, captured at the midnight rollover. Recorded without calibration, so these are rough estimates. Today reflects your exposure so far.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             DoseHistoryChart(history: state.doseHistory, tracker: state.safeListening)
@@ -390,7 +390,7 @@ struct SafeListeningView: View {
             }
             VStack(alignment: .leading, spacing: 8) {
                 bullet("Loudness is estimated from the digital signal level, not measured at your ear. Actual SPL still depends on your hardware and headphone fit.")
-                bullet("Dose uses the NIOSH 3 dB exchange rate: 85 dBA over 8 hours is 100 %; every +3 dBA halves the safe duration. It's a daily-listening guide, not a clinical reading.")
+                bullet("The exposure estimate uses the NIOSH 3 dB exchange rate: 85 dBA over 8 hours is 100 %; every +3 dBA halves the safe duration. It's a daily-listening guide, not a clinical reading.")
                 Link(destination: URL(string: "https://www.cdc.gov/niosh/topics/noise/")!) {
                     Label("NIOSH noise & hearing-loss prevention", systemImage: "arrow.up.right.square")
                         .font(.callout)

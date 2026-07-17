@@ -38,6 +38,9 @@ struct ProfilePickerRow: View {
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
+                // The "Profile" text is an unassociated sibling; VO otherwise
+                // reads this as a bare "menu button" (audit UX-03).
+                .accessibilityLabel("Profile")
                 // Subtle visual emphasis when there's nothing
                 // selected — the menu reads as "missing input" rather
                 // than just an em-dash placeholder.

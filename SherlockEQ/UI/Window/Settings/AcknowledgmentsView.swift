@@ -13,7 +13,7 @@ struct AcknowledgmentsView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     section(
                         title: "Hearing-safety math",
-                        body: "Listening-dose calculations follow NIOSH's recommended exposure limit (REL): 85 dBA over 8 hours with a 3 dB exchange rate. Source: U.S. National Institute for Occupational Safety and Health, Criteria for a Recommended Standard: Occupational Noise Exposure (DHHS Publication No. 98-126, 1998)."
+                        body: "Listening-exposure calculations follow NIOSH's recommended exposure limit (REL): 85 dBA over 8 hours with a 3 dB exchange rate. Source: U.S. National Institute for Occupational Safety and Health, Criteria for a Recommended Standard: Occupational Noise Exposure (DHHS Publication No. 98-126, 1998)."
                     )
                     section(
                         title: "Biquad filter coefficients",

@@ -313,7 +313,7 @@ private struct OnboardingPermissionsStep: View {
                 Spacer()
                 statusBadge(forNotifications: notifications.authorizationStatus)
             }
-            Text("Optional. Get a notification when your daily listening dose climbs into the at-risk range. You can skip this and turn it on later.")
+            Text("Optional. Get a notification when your daily listening exposure climbs into the at-risk range. You can skip this and turn it on later.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -485,7 +485,7 @@ private struct OnboardingPersonalizationStep: View {
                     subtitle: "Match a tone to your ringing and notch it out.")
             infoRow(symbol: "shield.lefthalf.filled",
                     title: "Safe-listening calibration",
-                    subtitle: "Match levels to an SPL meter for accurate dose tracking.")
+                    subtitle: "Match levels to an SPL meter for accurate exposure tracking.")
 
             OnboardingCard {
                 Label {

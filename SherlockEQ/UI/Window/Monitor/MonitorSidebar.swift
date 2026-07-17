@@ -126,6 +126,7 @@ struct MonitorSidebar: View {
                     ),
                     in: -60...12
                 )
+                .accessibilityLabel("Master gain")
                 .controlSize(.small)
                 Button {
                     audioState.engineParameters.masterGainDB = 0
@@ -172,6 +173,7 @@ struct MonitorSidebar: View {
                         in: -1...1
                     )
                     .controlSize(.small)
+                    .accessibilityLabel("Balance")
                     Button {
                         var updated = profileStore.profiles.first { $0.id == profile.id } ?? profile
                         updated.balance = 0
@@ -231,7 +233,7 @@ struct MonitorSidebar: View {
             .frame(height: 5)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Today's listening dose")
+        .accessibilityLabel("Today's exposure")
         .accessibilityValue(doseAccessibilityValue)
     }
 
