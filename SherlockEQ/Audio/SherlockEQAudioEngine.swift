@@ -56,6 +56,10 @@ final class SherlockEQAudioEngine: ObservableObject {
     /// `avaudiounit-eq-extreme-attenuation-leak.md`.
     private var leftBalanceMixer: AVAudioMixerNode?
     private var rightBalanceMixer: AVAudioMixerNode?
+    /// The active profile's balance as linear per-ear volumes, kept even
+    /// while Reference Mode holds the mixers at unity so exiting restores
+    /// the exact applied values (audit: reference-mode balance).
+    private var appliedBalanceLinear: (left: Float, right: Float) = (1, 1)
     private var leftSource: AVAudioSourceNode?
     private var rightSource: AVAudioSourceNode?
 
@@ -517,6 +521,14 @@ final class SherlockEQAudioEngine: ObservableObject {
         rightAutoEQCascade?.setBypassed(on)
         leftAdaptive?.setBypassed(on)
         rightAdaptive?.setBypassed(on)
+        // Balance is profile-scope processing too: an asymmetric-hearing
+        // user comparing with/without processing must hear the source
+        // unpanned, or every comparison is silently skewed. Unity while
+        // on; the profile's applied values return on exit. (Master gain
+        // and the limiter deliberately stay — app-scope volume and
+        // safety, not profile processing.)
+        leftBalanceMixer?.outputVolume = on ? 1 : appliedBalanceLinear.left
+        rightBalanceMixer?.outputVolume = on ? 1 : appliedBalanceLinear.right
     }
 
     /// Live level anchor for the adaptive stage (phase4 §4.2): the
@@ -603,6 +615,7 @@ final class SherlockEQAudioEngine: ObservableObject {
     /// would still be hearing the deleted profile's EQ even though the
     /// UI shows "no profile selected".
     func flattenChain() {
+        appliedBalanceLinear = (1, 1)
         leftBalanceMixer?.outputVolume = 1
         rightBalanceMixer?.outputVolume = 1
         leftEQCascade?.setBands([], preampDB: 0, sampleRate: tapSampleRate)
@@ -630,8 +643,15 @@ final class SherlockEQAudioEngine: ObservableObject {
         // that re-introduces signal from an attenuated bus — when the
         // bus volume goes to 0, no signal reaches the sum.
         let (leftLinear, rightLinear) = Self.balanceLinear(profile.balance)
-        leftBalanceMixer?.outputVolume = Float(leftLinear)
-        rightBalanceMixer?.outputVolume = Float(rightLinear)
+        appliedBalanceLinear = (Float(leftLinear), Float(rightLinear))
+        // While Reference Mode holds the chain flat the mixers stay at
+        // unity — the stored values land when reference exits. (Editing
+        // balance during reference behaves like editing EQ during
+        // reference: saved now, audible on exit.)
+        if !referenceMode {
+            leftBalanceMixer?.outputVolume = appliedBalanceLinear.left
+            rightBalanceMixer?.outputVolume = appliedBalanceLinear.right
+        }
 
         // Combined per-ear EQ stack (cascaded in series → summed in dB):
         //   1. AutoEQ headphone-correction bands (same for both ears —

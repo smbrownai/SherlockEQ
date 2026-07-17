@@ -502,9 +502,13 @@ match it to a known SPL with an external meter.
 
 ### 5.5 Reference Mode
 
-A momentary bypass for A/B comparison. Implemented as a single `setBypassed(true)`
-call on both per-ear `BiquadCascade` nodes — the entire EQ stack (AutoEQ + profile
-bands + notch + trim) drops out at once. No graph reconfiguration, no audio dropout.
+A momentary bypass for A/B comparison. `setBypassed(true)` on every per-ear
+stage — AutoEQ, adaptive correction, EQ cascade (correction + bands + notch +
+trim), dynamics — and the per-ear balance mixers go to unity, so the source is
+truly unprocessed (an asymmetric balance would otherwise skew every
+comparison). Exiting restores the profile's applied balance exactly. App-scope
+master gain and the safety limiter deliberately stay active. No graph
+reconfiguration, no audio dropout.
 
 **Popover:** prominent Reference Mode button.
 **Main window:** Reference button also present in the Expert EQ toolbar.
