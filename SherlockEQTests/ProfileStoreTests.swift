@@ -39,9 +39,28 @@ struct ProfileStoreTests {
     private struct ScratchDefaults {
         let suite = "SherlockEQTests.\(UUID().uuidString)"
         let defaults: UserDefaults
-        init() { defaults = UserDefaults(suiteName: suite)! }
+        init() {
+            _ = ProfileStoreTests.huskSweep
+            defaults = UserDefaults(suiteName: suite)!
+        }
         func cleanup() { defaults.removePersistentDomain(forName: suite) }
     }
+
+    /// One-time-per-run reaper for the empty plists scratch suites leave in
+    /// ~/Library/Preferences. `removePersistentDomain` empties the domain
+    /// but cfprefsd keeps (or asynchronously re-materializes) the file —
+    /// deleting it per test verifiably loses that race. So litter is bounded
+    /// instead of fought: every run starts by sweeping what previous runs
+    /// left, and the UUID suite names guarantee nothing swept is live.
+    private static let huskSweep: Void = {
+        let prefs = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Preferences", isDirectory: true)
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: prefs, includingPropertiesForKeys: nil) else { return }
+        for f in files where f.lastPathComponent.hasPrefix("SherlockEQTests.") {
+            try? FileManager.default.removeItem(at: f)
+        }
+    }()
 
     private static func makeStore(at url: URL, defaults: UserDefaults? = nil) -> ProfileStore {
         ProfileStore(directory: url, defaults: defaults ?? ScratchDefaults().defaults)
