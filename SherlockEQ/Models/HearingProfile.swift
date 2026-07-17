@@ -570,6 +570,26 @@ extension HearingProfile {
     /// provenance, and start the acclimatization ramp on first
     /// application. One shared path for the Listening Check and the
     /// interchange import so the two can't drift.
+    /// Reset the hearing-adjustment layer to its never-entered state: flat
+    /// thresholds, no derived correction, no provenance, no ramp — and the
+    /// strength dial back at its 1.0 default. Resetting the strength here is
+    /// deliberate (audit CX-07): re-entering an audiogram later runs
+    /// `startAcclimatizationIfFirstAudiogram`, which force-resets the target
+    /// to 1.0 anyway — clearing it now makes that explicit at the moment the
+    /// user chose "Clear", instead of silently discarding a lowered strength
+    /// on the next entry. Manual EQ, the tinnitus notch, headphone
+    /// correction, and device links are untouched.
+    mutating func clearAudiogram() {
+        leftEar.thresholds = AudiogramPoint.flat
+        rightEar.thresholds = AudiogramPoint.flat
+        leftEar.correctionBands = []
+        rightEar.correctionBands = []
+        audiogramDate = nil
+        audiogramSource = .manual
+        acclimatizationStartDate = nil
+        compensationFactor = 1.0
+    }
+
     mutating func applyMeasuredAudiogram(
         left: [AudiogramPoint], right: [AudiogramPoint],
         source: AudiogramSource, now: Date = Date()

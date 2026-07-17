@@ -13,7 +13,11 @@ struct EQPreviewView: View {
 
     let leftBands: [EQBand]
     let rightBands: [EQBand]
-    let compensationFactor: Double
+    /// The user's strength dial (the target).
+    let targetStrength: Double
+    /// What's applied right now — target × the gradual-introduction ramp.
+    /// The bands passed in are already scaled by this; it's display-only here.
+    let effectiveStrength: Double
 
     private let minHz: Double = 20
     private let maxHz: Double = 20_000
@@ -54,7 +58,7 @@ struct EQPreviewView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
-            Text(String(format: "Adjustment strength %.0f%%", compensationFactor * 100))
+            Text(AdjustmentStrengthLabel.text(target: targetStrength, effective: effectiveStrength))
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
         }
@@ -149,5 +153,21 @@ struct EQPreviewView: View {
             let dB = BiquadResponse.compositeMagnitudeDB(at: hz, bands: bands)
             return SamplePoint(hz: hz, dB: dB, ear: label)
         }
+    }
+}
+
+/// One wording for every adjustment-strength readout. During the gradual
+/// introduction the target and the currently-applied strength differ, and
+/// showing either number alone under the same word misled: Profile Detail's
+/// dial said 100% while the Audiogram previews said 61% (audit CX-06). While
+/// they differ, show both; once the ramp completes, collapse to one.
+/// `nonisolated` so the pure formatting is testable off the main actor.
+nonisolated enum AdjustmentStrengthLabel {
+    static func text(target: Double, effective: Double) -> String {
+        let tgt = Int((target * 100).rounded())
+        let eff = Int((effective * 100).rounded())
+        return tgt == eff
+            ? "Adjustment strength \(tgt)%"
+            : "Adjustment strength \(tgt)% · currently \(eff)%"
     }
 }
