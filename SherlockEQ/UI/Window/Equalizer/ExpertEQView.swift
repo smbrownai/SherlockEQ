@@ -80,7 +80,7 @@ struct ExpertEQView: View {
         // section don't visually crowd each other.
         ScrollView {
             VStack(spacing: 18) {
-                header
+                earTabRow
             if hasContent || hasEnabledDynamics {
                 CanvasLayerChipStrip(
                     showInputSpectrum: $showInputLayer,
@@ -168,6 +168,7 @@ struct ExpertEQView: View {
             }
             .onKeyPress { press in handleKey(press, in: profile) }
             .onTapGesture { canvasFocused = true }
+            bandControlsRow
             if linkChannels && correction != shadowCorrection {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(systemName: "ear.and.waveform").foregroundStyle(.secondary)
@@ -305,16 +306,18 @@ struct ExpertEQView: View {
 
     // MARK: - Sections
 
-    private var header: some View {
-        HStack(spacing: 12) {
-            // Ear-tab picker is only meaningful when L and R are being
-            // edited independently. In linked mode (the default) every
-            // edit propagates to both ears, so showing the picker
-            // would suggest a choice that doesn't exist. Drives off
-            // the same `auditumeq.separateChannels` AppStorage key as
-            // every other EQ tab — single switch in Settings →
-            // Equalizer flips the whole app's behaviour at once.
-            if !linkChannels {
+    /// Ear-tab picker row — only meaningful when L and R are being
+    /// edited independently. In linked mode (the default) every
+    /// edit propagates to both ears, so showing the picker
+    /// would suggest a choice that doesn't exist. Drives off
+    /// the same `auditumeq.separateChannels` AppStorage key as
+    /// every other EQ tab — single switch in Settings →
+    /// Equalizer flips the whole app's behaviour at once.
+    /// (Renders nothing in linked mode rather than an empty row, so the
+    /// canvas doesn't inherit a blank 18pt spacing slot above it.)
+    @ViewBuilder private var earTabRow: some View {
+        if !linkChannels {
+            HStack {
                 Picker("", selection: $tab) {
                     ForEach(EarTab.allCases, id: \.self) { t in
                         Text(t.rawValue).tag(t)
@@ -322,14 +325,18 @@ struct ExpertEQView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 240)
+                Spacer()
             }
+        }
+    }
 
+    /// Bandwidth unit / keyboard-shortcuts / Add band — the band-editing
+    /// affordances. Below the canvas (it used to sit above), so the whole
+    /// edit loop reads top-to-bottom: canvas → this row → selected-band
+    /// controls. Trailing-aligned, where the eye already knew it.
+    private var bandControlsRow: some View {
+        HStack(spacing: 12) {
             Spacer()
-
-            // Label("\(activeBands.count) band\(activeBands.count == 1 ? "" : "s")",
-            //      systemImage: "rectangle.stack")
-            //    .font(.caption)
-            //    .foregroundStyle(.secondary)
 
             // Bandwidth unit switch — labeled so "Q | Oct" isn't a bare
             // pair of jargon abbreviations.
