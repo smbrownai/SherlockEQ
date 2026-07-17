@@ -104,7 +104,7 @@ struct DoseHistoryChart: View {
             }
         }
         .frame(height: 170)
-        .accessibilityLabel("7-day listening dose history")
+        .accessibilityLabel("7-day listening exposure history")
         .accessibilityValue(accessibilitySummary)
     }
 

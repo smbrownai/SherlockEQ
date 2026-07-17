@@ -92,7 +92,7 @@ to your per-ear EQ chain — it does not change the tone generator.
 
 - If your [audiogram](help:audiogram-profiles) correction **boosts** the same frequency your notch **cuts**, a warning explains the collision — a narrower notch keeps more of the correction, a shallower notch keeps more relief. Common with high-frequency hearing loss, where tinnitus usually sits in the region of maximum loss.
 
-- A notch is a dedicated per-profile control, shown only as a marker on the [Parametric EQ](help:parametric-eq) curve. You adjust or remove it on the Tinnitus Notch screen, not as an ordinary EQ band.
+- A notch is a dedicated per-profile control, shown only as a marker on the [Parametric EQ](help:parametric-eq) curve. You adjust or remove it on the Tinnitus Tools screen, not as an ordinary EQ band.
 - With [Per-Ear EQ](help:per-ear-eq), you can notch one ear independently.
 - The reference tone ignores your profile EQ so the pitch you hear isn't colored by it.
 

@@ -87,7 +87,7 @@ struct DebugView: View {
     }
 
     @ViewBuilder private var levelsAndDoseSection: some View {
-        Text("Levels & dose").font(.subheadline).foregroundStyle(.secondary)
+        Text("Levels & exposure").font(.subheadline).foregroundStyle(.secondary)
         labeled("Post-EQ level (dBFS)", value: String(format: "%.1f", state.spectrum.aWeightedDBFS))
         labeled("Pre-EQ level (dBFS)", value: String(format: "%.1f", state.preSpectrum.aWeightedDBFS))
         labeled("Estimated dBA", value: String(format: "%.1f", state.spectrum.estimateDBA))
@@ -164,7 +164,7 @@ struct DebugView: View {
         }
 
         HStack(spacing: 12) {
-            Button("Reset dose") { state.safeListening.resetDose() }
+            Button("Reset exposure") { state.safeListening.resetDose() }
             Button("Force 80% (amber)") {
                 state.safeListening.forceForTesting(dose: 0.80)
             }
@@ -174,7 +174,7 @@ struct DebugView: View {
         }
         HStack(spacing: 12) {
             Button("Seed 7-day history") { seedDoseHistory() }
-            Button("Clear dose history (last 7 days)") { clearRecentDoseHistory() }
+            Button("Clear exposure history (last 7 days)") { clearRecentDoseHistory() }
         }
         labeled("History records", value: "\(state.doseHistory.records.count)")
     }

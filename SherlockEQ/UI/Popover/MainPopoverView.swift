@@ -219,10 +219,14 @@ struct MainPopoverView: View {
                 in: -60...12
             )
             .controlSize(.small)
+            // The visible "Gain" text is a sibling, not this control's label —
+            // without this VO announces only a bare value (audit UX-03).
+            .accessibilityLabel("Master gain")
             Text(formatGain(audioState.engineParameters.masterGainDB))
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.75)
                 .frame(width: 56, alignment: .trailing)
             Button { audioState.engineParameters.masterGainDB = 0 } label: {
                 Image(systemName: "arrow.counterclockwise")
@@ -262,10 +266,12 @@ struct MainPopoverView: View {
                     in: -1...1
                 )
                 .controlSize(.small)
+                .accessibilityLabel("Balance")
                 Text(balanceLabel(profile.balance))
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                     .frame(width: 56, alignment: .trailing)
                 Button {
                     var updated = profileStore.profiles.first { $0.id == profile.id } ?? profile

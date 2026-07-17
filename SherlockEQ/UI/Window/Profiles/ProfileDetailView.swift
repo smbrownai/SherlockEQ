@@ -597,7 +597,7 @@ struct ProfileDetailView: View {
                     Label("L ≠ R", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.orange)
-                        .help("This profile has different bands on each ear, but the EQ is in linked mode. Linked-mode edits will collapse the difference on bands you touch; untouched bands stay asymmetric.")
+                        .help("This profile has different bands on each ear, but ears are currently adjusted together. Edits will collapse the difference on bands you touch; untouched bands stay asymmetric.")
                 }
             }
             Text(profile.separateChannels

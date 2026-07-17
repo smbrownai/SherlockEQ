@@ -31,6 +31,7 @@ struct ListeningComfortRow: View {
                     .font(.caption.monospaced())
                     .foregroundStyle(activeCount > 0 ? .primary : .tertiary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                 Image(systemName: "chevron.right")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.tertiary)

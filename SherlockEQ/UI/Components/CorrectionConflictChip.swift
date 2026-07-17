@@ -32,14 +32,14 @@ struct CorrectionConflictChip: View {
                         if let right = conflicts.right { conflictLine(right, ear: "Right ear") }
                     }
                     HStack {
-                        Button(crossLink == .audiogram ? "Open Audiogram" : "Open Tinnitus Notch") {
+                        Button(crossLink == .audiogram ? "Open Audiogram" : "Open Tinnitus Tools") {
                             audioState.pendingMainSection =
                                 crossLink == .audiogram ? .audiogram : .toneFinder
                         }
                         .controlSize(.small)
                         .help(crossLink == .audiogram
                               ? "Adjust the hearing-adjustment strength on the Audiogram screen."
-                              : "Adjust the notch depth or width on the Tinnitus Notch screen.")
+                              : "Adjust the notch depth or width on the Tinnitus Tools screen.")
                         Spacer()
                     }
                 }

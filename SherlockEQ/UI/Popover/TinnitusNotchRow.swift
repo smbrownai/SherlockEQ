@@ -28,6 +28,7 @@ struct TinnitusNotchRow: View {
                 .font(.caption.monospaced())
                 .foregroundStyle(notchEnabled ? .primary : .tertiary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.75)
 
             Toggle("", isOn: toggleBinding)
                 .toggleStyle(.switch)
