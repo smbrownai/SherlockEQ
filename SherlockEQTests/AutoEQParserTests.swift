@@ -169,6 +169,21 @@ struct AutoEQParserTests {
         #expect(AutoEQParser.parse("Preamp: -3.0 dB\n") == nil)
     }
 
+    /// "nan"/"inf" parse as valid Doubles, so without an explicit guard a
+    /// poisoned Fc or Gain sails through to the biquad math (audit SEC-03 —
+    /// Preamp and Q were already guarded). The row must drop; its healthy
+    /// neighbours must survive.
+    @Test func nonFiniteFcOrGainRowIsSkipped() throws {
+        let text = """
+        Filter 1: ON PK Fc nan Hz Gain 3 dB Q 1.0
+        Filter 2: ON PK Fc 1000 Hz Gain inf dB Q 1.0
+        Filter 3: ON PK Fc 4000 Hz Gain -2 dB Q 1.0
+        """
+        let parsed = try #require(AutoEQParser.parse(text))
+        #expect(parsed.bands.count == 1)
+        #expect(parsed.bands[0].frequencyHz == 4000)
+    }
+
     @Test func malformedFilterLineIsSkipped() throws {
         // Bad lines are dropped, good lines survive — robust to one
         // typo in a long file.

@@ -164,7 +164,7 @@ final class ProfileStore: ObservableObject {
             }
             lastBurstSaveAt[profile.id] = now
 
-            log.info("Saved profile \(p.name, privacy: .public) (\(p.id.uuidString, privacy: .public))")
+            log.info("Saved profile \(p.name, privacy: .private) (\(p.id.uuidString, privacy: .public))")
         }
     }
 
@@ -235,7 +235,7 @@ final class ProfileStore: ObservableObject {
             // 0700 from `ensureDirectory()` in place.
             try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         } catch {
-            log.error("Deferred save of \(p.name, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            log.error("Deferred save of \(p.name, privacy: .private) failed: \(error.localizedDescription, privacy: .public)")
             lastError = "Save failed: \(error.localizedDescription)"
         }
     }
@@ -256,7 +256,7 @@ final class ProfileStore: ObservableObject {
         try tracking("Export") {
             let data = try encoder.encode(Self.sanitizedForSharing(profile))
             try data.write(to: url, options: .atomic)
-            log.info("Exported \(profile.name, privacy: .public) to \(url.lastPathComponent, privacy: .public)")
+            log.info("Exported \(profile.name, privacy: .private) to \(url.lastPathComponent, privacy: .private)")
         }
     }
 
@@ -295,7 +295,7 @@ final class ProfileStore: ObservableObject {
             imported.name = uniqueName(base: imported.name)
             imported.isBuiltIn = false
             try save(imported)
-            log.info("Imported \(imported.name, privacy: .public) from \(url.lastPathComponent, privacy: .public)")
+            log.info("Imported \(imported.name, privacy: .private) from \(url.lastPathComponent, privacy: .private)")
             return imported
         }
     }
@@ -308,7 +308,7 @@ final class ProfileStore: ObservableObject {
         try tracking("Export audiogram") {
             let data = try encoder.encode(doc)
             try data.write(to: url, options: .atomic)
-            log.info("Exported audiogram to \(url.lastPathComponent, privacy: .public)")
+            log.info("Exported audiogram to \(url.lastPathComponent, privacy: .private)")
         }
     }
 
@@ -350,7 +350,7 @@ final class ProfileStore: ObservableObject {
                 undoManager.setActionName("Delete \(profile.name)")
             }
 
-            log.info("Deleted profile \(profile.name, privacy: .public)")
+            log.info("Deleted profile \(profile.name, privacy: .private)")
         }
     }
 
@@ -473,7 +473,7 @@ final class ProfileStore: ObservableObject {
                     demoted.presetDescription = nil
                     demoted.presetTags = []
                     try save(demoted)
-                    log.info("Demoted edited retired preset \(demoted.name, privacy: .public) to user profile")
+                    log.info("Demoted edited retired preset \(demoted.name, privacy: .private) to user profile")
                 }
             }
             for preset in HearingProfile.factoryProfiles {
@@ -521,7 +521,7 @@ final class ProfileStore: ObservableObject {
         guard let canonical = HearingProfile.factoryCanonical(forID: id) else { return }
         do {
             try save(canonical)
-            log.info("Reset \(canonical.name, privacy: .public) to factory default")
+            log.info("Reset \(canonical.name, privacy: .private) to factory default")
         } catch {
             lastError = "Could not reset profile: \(error.localizedDescription)"
             log.error("Factory reset failed: \(error.localizedDescription, privacy: .public)")

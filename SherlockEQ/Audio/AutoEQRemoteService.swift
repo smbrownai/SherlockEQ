@@ -20,6 +20,9 @@ final class AutoEQRemoteService: ObservableObject {
     /// User-facing categorisation of fetch failures. Display copy is
     /// derived in the view layer so the same error can show as a banner
     /// or an inline row label depending on context.
+    /// Upper bound for any single fetched body — see fetchString (SEC-02).
+    static let maxResponseBytes = 8 * 1024 * 1024
+
     enum AutoEQFetchError: Error, Equatable {
         case offline           // URL host unreachable
         case rateLimited       // GitHub 403, surface backoff message
@@ -265,6 +268,16 @@ final class AutoEQRemoteService: ObservableObject {
                 default:
                     throw AutoEQFetchError.other("HTTP \(http.statusCode)")
                 }
+            }
+            // Defense-in-depth (audit SEC-02): never hand an absurd body to
+            // the decoder/parsers/cache. AutoEQ payloads are a ~1 MB index
+            // and KB-sized filter files; a compromised origin or MITM
+            // shouldn't get to feed us hundreds of MB. `session.data` has
+            // already buffered the download by this point, so this bounds
+            // what we PROCESS, not transfer — a mid-stream abort would need
+            // a delegate-based reader, unwarranted for a DoS-only threat.
+            guard data.count <= Self.maxResponseBytes else {
+                throw AutoEQFetchError.other("Response too large (\(data.count) bytes)")
             }
             guard let text = String(data: data, encoding: .utf8) else {
                 throw AutoEQFetchError.parseFailure

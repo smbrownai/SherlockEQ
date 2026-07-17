@@ -415,7 +415,7 @@ final class AudioState: ObservableObject {
         }
 
         guard match.id != activeProfileID else { return }
-        log.info("Auto-switching to \(match.name, privacy: .public) for device UID \(uid, privacy: .public)")
+        log.info("Auto-switching to \(match.name, privacy: .private) for device UID \(uid, privacy: .private)")
         activeProfileID = match.id
     }
 
