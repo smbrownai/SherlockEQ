@@ -383,11 +383,32 @@ final class AudioState: ObservableObject {
     /// any profile linked to that device's UID. First match wins. No-op if
     /// no profile is linked to the new device — the user keeps whichever
     /// profile they had active.
+    /// Device UIDs we've already warned carry duplicate (legacy) links —
+    /// once per session per device keeps the banner informative, not naggy.
+    private var warnedShadowedLinkUIDs: Set<String> = []
+
     private func autoSwitchProfileIfLinked(deviceID: AudioDeviceID) {
         guard let store = connectedStore,
-              let uid = try? CATapEngine.deviceUID(deviceID),
-              let match = store.profiles.first(where: { $0.linkedDeviceUID == uid }),
-              match.id != activeProfileID else { return }
+              let uid = try? CATapEngine.deviceUID(deviceID) else { return }
+        let matches = store.profiles.filter { $0.linkedDeviceUID == uid }
+        guard let match = matches.first else { return }
+
+        // ProfileStore.linkDevice enforces one-device-one-profile on every
+        // new link, so duplicates can only be legacy data from before that
+        // invariant existed. Keep the historical winner (first in the
+        // createdAt-sorted array) for those users rather than silently
+        // changing which profile activates — but say so, once per device per
+        // session, since the shadowed link otherwise fails with no feedback.
+        if matches.count > 1, !warnedShadowedLinkUIDs.contains(uid) {
+            warnedShadowedLinkUIDs.insert(uid)
+            let names = matches.map(\.name).joined(separator: ", ")
+            noticeCenter.showNotice(TransientNotice(
+                severity: .warning,
+                message: "\(matches.count) profiles are linked to this output device (\(names)). Using “\(match.name)” — relink a profile in Profiles to choose a different one."
+            ))
+        }
+
+        guard match.id != activeProfileID else { return }
         log.info("Auto-switching to \(match.name, privacy: .public) for device UID \(uid, privacy: .public)")
         activeProfileID = match.id
     }

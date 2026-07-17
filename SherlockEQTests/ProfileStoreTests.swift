@@ -581,6 +581,80 @@ struct ProfileStoreTests {
         #expect(undo.undoActionName == "Create Custom Mix")
     }
 
+    // MARK: - Device links (audit CX-03)
+
+    /// One device, one auto-activated profile: linking steals the link from
+    /// any other holder — before this, auto-switch resolved duplicates by
+    /// profile age, so the newer link silently never worked.
+    @Test func linkDeviceStealsExistingLink() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+        let store = Self.makeStore(at: dir)
+
+        var a = HearingProfile.makeDefault(name: "Older")
+        a.linkedDeviceUID = "uid-headphones"
+        try store.save(a)
+        let b = HearingProfile.makeDefault(name: "Newer")
+        try store.save(b)
+
+        let displaced = try store.linkDevice(uid: "uid-headphones", to: b)
+
+        #expect(displaced.map(\.id) == [a.id])
+        #expect(store.profiles.first { $0.id == a.id }?.linkedDeviceUID == nil)
+        #expect(store.profiles.first { $0.id == b.id }?.linkedDeviceUID == "uid-headphones")
+    }
+
+    @Test func linkDeviceNilUnlinks() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+        let store = Self.makeStore(at: dir)
+
+        var p = HearingProfile.makeDefault(name: "Linked")
+        p.linkedDeviceUID = "uid-x"
+        try store.save(p)
+
+        let displaced = try store.linkDevice(uid: nil, to: p)
+        #expect(displaced.isEmpty)
+        #expect(store.profiles.first { $0.id == p.id }?.linkedDeviceUID == nil)
+    }
+
+    /// Re-linking the profile that already holds the link displaces nothing.
+    @Test func relinkSameProfileDisplacesNothing() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+        let store = Self.makeStore(at: dir)
+
+        var p = HearingProfile.makeDefault(name: "Holder")
+        p.linkedDeviceUID = "uid-x"
+        try store.save(p)
+
+        let displaced = try store.linkDevice(uid: "uid-x", to: p)
+        #expect(displaced.isEmpty)
+        #expect(store.profiles.first { $0.id == p.id }?.linkedDeviceUID == "uid-x")
+    }
+
+    /// Stealing is per-device: links to OTHER devices are untouched.
+    @Test func linkDeviceLeavesOtherDevicesAlone() throws {
+        let dir = Self.makeTempDir()
+        defer { Self.cleanup(dir) }
+        let store = Self.makeStore(at: dir)
+
+        var a = HearingProfile.makeDefault(name: "Speakers")
+        a.linkedDeviceUID = "uid-speakers"
+        try store.save(a)
+        var b = HearingProfile.makeDefault(name: "Headphones")
+        b.linkedDeviceUID = "uid-headphones"
+        try store.save(b)
+        let c = HearingProfile.makeDefault(name: "Contender")
+        try store.save(c)
+
+        let displaced = try store.linkDevice(uid: "uid-headphones", to: c)
+
+        #expect(displaced.map(\.id) == [b.id])
+        #expect(store.profiles.first { $0.id == a.id }?.linkedDeviceUID == "uid-speakers")
+        #expect(store.profiles.first { $0.id == c.id }?.linkedDeviceUID == "uid-headphones")
+    }
+
     // MARK: - Debounced writes (audit CX-02)
 
     /// save() publishes to memory immediately but defers the disk write —

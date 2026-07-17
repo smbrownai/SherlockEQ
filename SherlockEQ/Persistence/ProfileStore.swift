@@ -168,6 +168,33 @@ final class ProfileStore: ObservableObject {
         }
     }
 
+    /// Link `profile` to an output device for automatic activation — or pass
+    /// nil to unlink — enforcing the one-device-one-profile invariant: any
+    /// OTHER profile holding the same link loses it, because the newest link
+    /// is the user's current intent. Without this, auto-switch resolved
+    /// duplicates by profile age, so a second profile linked to the same
+    /// device silently never activated (audit CX-03).
+    ///
+    /// Returns the profiles whose links were cleared, so callers can tell the
+    /// user what moved.
+    @discardableResult
+    func linkDevice(uid: String?, to profile: HearingProfile) throws -> [HearingProfile] {
+        var displaced: [HearingProfile] = []
+        if let uid {
+            for other in profiles where other.id != profile.id && other.linkedDeviceUID == uid {
+                var cleared = other
+                cleared.linkedDeviceUID = nil
+                try save(cleared, actionName: "Unlink \(other.name)")
+                displaced.append(other)
+            }
+        }
+        // Live copy, not the caller's render snapshot (audit CX-05).
+        var updated = profiles.first { $0.id == profile.id } ?? profile
+        updated.linkedDeviceUID = uid
+        try save(updated, actionName: uid == nil ? "Unlink device" : "Link device")
+        return displaced
+    }
+
     /// Queue `p` as its profile's latest unwritten snapshot and (re)arm the
     /// trailing debounce. Later snapshots of the same profile replace earlier
     /// ones — only the last state of a burst ever touches the disk.

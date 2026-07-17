@@ -247,13 +247,23 @@ struct ProfileDetailView: View {
 
         Menu {
             Button("Any device (manual)") {
-                update(profile) { $0.linkedDeviceUID = nil }
+                try? profileStore.linkDevice(uid: nil, to: profile)
             }
             if !availableDevices.isEmpty {
                 Divider()
                 ForEach(availableDevices) { dev in
                     Button {
-                        update(profile) { $0.linkedDeviceUID = dev.uid }
+                        // The store enforces one-device-one-profile, stealing
+                        // the link from any other holder; surface the move so
+                        // the other profile's owner-hat user isn't left
+                        // wondering why its auto-switch stopped.
+                        let displaced = (try? profileStore.linkDevice(uid: dev.uid, to: profile)) ?? []
+                        if let moved = displaced.first {
+                            audioState.noticeCenter.showNotice(TransientNotice(
+                                severity: .warning,
+                                message: "Moved the \(dev.name) link from “\(moved.name)” — a device can auto-activate only one profile."
+                            ))
+                        }
                     } label: {
                         Label(dev.name, systemImage: profile.linkedDeviceUID == dev.uid ? "checkmark" : "")
                     }
@@ -262,7 +272,7 @@ struct ProfileDetailView: View {
             if let stubName {
                 Divider()
                 Button {
-                    update(profile) { $0.linkedDeviceUID = nil }
+                    try? profileStore.linkDevice(uid: nil, to: profile)
                 } label: {
                     Label("Disconnected: \(stubName)", systemImage: "exclamationmark.triangle")
                 }
