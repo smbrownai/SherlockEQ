@@ -313,32 +313,35 @@ struct AnalogControlUnitView: View {
     }
 
     // MARK: - Label formatters
+    //
+    // `nonisolated`: pure string math handed to AnalogKnob as callbacks that
+    // may run outside the main actor (audit BLD-02).
 
-    static func percentLabel(_ v: Double) -> String {
+    nonisolated static func percentLabel(_ v: Double) -> String {
         "\(Int((v * 100).rounded()))%"
     }
 
-    static func percentSpoken(_ v: Double) -> String {
+    nonisolated static func percentSpoken(_ v: Double) -> String {
         "\(Int((v * 100).rounded())) percent"
     }
 
-    static func dbLabel(_ v: Double) -> String {
+    nonisolated static func dbLabel(_ v: Double) -> String {
         if abs(v) < 0.05 { return "0 dB" }
         return String(format: "%@%.1f dB", v > 0 ? "+" : "\u{2212}", abs(v))
     }
 
-    static func dbSpoken(_ v: Double) -> String {
+    nonisolated static func dbSpoken(_ v: Double) -> String {
         if abs(v) < 0.05 { return "0 decibels" }
         return String(format: "%@ %.1f decibels", v > 0 ? "plus" : "minus", abs(v))
     }
 
-    static func balanceLabel(_ v: Double) -> String {
+    nonisolated static func balanceLabel(_ v: Double) -> String {
         if abs(v) < 0.005 { return "C" }
         let pct = Int((abs(v) * 100).rounded())
         return v < 0 ? "L \(pct)" : "R \(pct)"
     }
 
-    static func balanceSpoken(_ v: Double) -> String {
+    nonisolated static func balanceSpoken(_ v: Double) -> String {
         if abs(v) < 0.005 { return "centered" }
         let pct = Int((abs(v) * 100).rounded())
         return v < 0 ? "\(pct) percent left" : "\(pct) percent right"

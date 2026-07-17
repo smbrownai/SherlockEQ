@@ -20,8 +20,8 @@ import Combine
 @MainActor
 final class SpectrumAnalyzer: ObservableObject {
 
-    static let fftSize: Int = 2048
-    static let halfFFT: Int = fftSize / 2
+    nonisolated static let fftSize: Int = 2048
+    nonisolated static let halfFFT: Int = fftSize / 2
     /// Output log-bucket count for the canvas. ~3 buckets per pixel at
     /// 800 pt wide → 256 is plenty and keeps each bucket cheap to draw.
     static let logBucketCount: Int = 256
@@ -101,7 +101,7 @@ final class SpectrumAnalyzer: ObservableObject {
     /// unboundedly. ~150 ms of audio at 48 kHz. When we exceed this we
     /// drop oldest samples — we'd rather show a slightly truncated history
     /// than display data from a minute ago.
-    private static let maxAccumulatorSamples = fftSize * 3
+    nonisolated private static let maxAccumulatorSamples = fftSize * 3
 
     /// Inflight-publish guard. Only one publish hops to the main actor at
     /// a time; further FFT results merge their smoothing in place and
@@ -118,7 +118,7 @@ final class SpectrumAnalyzer: ObservableObject {
     /// to ~46 Hz of FFT + main-actor publish work. 20 Hz is more than
     /// the eye can resolve on a spectrum display and matches what the
     /// dose tracker explicitly tolerates ("Call rate ~10 Hz is plenty").
-    private static let minDispatchInterval: CFTimeInterval = 1.0 / 20.0
+    nonisolated private static let minDispatchInterval: CFTimeInterval = 1.0 / 20.0
 
     /// Cheap level-emit cadence. The dose tracker needs roughly 20 Hz; this
     /// path fires `onLevelUpdate` directly from `ingest` so dose accounting
@@ -245,7 +245,11 @@ final class SpectrumAnalyzer: ObservableObject {
     /// tail between the two ingest paths so the accumulator's hot path
     /// has one definition.
     private func appendToAccumulatorAndDispatch(source: UnsafeBufferPointer<Float>) {
-        let shouldDispatch = accumulatorState.withLock { state -> Bool in
+        // `withLockUnchecked`: the closure runs synchronously under the lock
+        // and `source` (a non-Sendable UnsafeBufferPointer) never escapes it;
+        // the checked variant's Sendable-capture requirement is the only
+        // thing it would add here (audit BLD-02).
+        let shouldDispatch = accumulatorState.withLockUnchecked { state -> Bool in
             state.accumulator.append(contentsOf: source)
             if state.accumulator.count > Self.maxAccumulatorSamples {
                 state.accumulator.removeFirst(state.accumulator.count - Self.maxAccumulatorSamples)

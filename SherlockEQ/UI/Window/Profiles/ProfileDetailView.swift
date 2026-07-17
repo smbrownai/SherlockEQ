@@ -247,7 +247,8 @@ struct ProfileDetailView: View {
 
         Menu {
             Button("Any device (manual)") {
-                try? profileStore.linkDevice(uid: nil, to: profile)
+                // Unlinking displaces nothing, so the returned list is moot.
+                _ = try? profileStore.linkDevice(uid: nil, to: profile)
             }
             if !availableDevices.isEmpty {
                 Divider()
@@ -272,7 +273,7 @@ struct ProfileDetailView: View {
             if let stubName {
                 Divider()
                 Button {
-                    try? profileStore.linkDevice(uid: nil, to: profile)
+                    _ = try? profileStore.linkDevice(uid: nil, to: profile)
                 } label: {
                     Label("Disconnected: \(stubName)", systemImage: "exclamationmark.triangle")
                 }

@@ -29,7 +29,7 @@ final class AdaptiveFilterbank {
     /// 2k / 4k / 8k Hz — the audiogram octave grid (3/6 kHz detail folds
     /// in via HTL interpolation, spec §10 open-Q1).
     static let crossoverHz: [Double] = [355, 710, 1400, 2800, 5600]
-    static let bandCount = 6
+    nonisolated static let bandCount = 6
     /// Nominal band centers, for prescription lookup and display.
     static let bandCenters: [Double] = [250, 500, 1000, 2000, 4000, 8000]
 

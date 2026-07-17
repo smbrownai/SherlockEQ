@@ -163,7 +163,7 @@ final class AudioState: ObservableObject {
     ///     `PopoverLiveStatusRows` (MainPopoverView).
     /// Threshold/severity helpers belong on `SafeListeningTracker` so both
     /// sides see the same answer.
-    @Published var sessionDosePercent: Double = 0
+    @Published var sessionDoseFraction: Double = 0
     @Published var remainingMinutes: Double?
 
     /// Latest dBA staged by the render thread's level pass, drained by
@@ -1072,7 +1072,7 @@ final class AudioState: ObservableObject {
     }
 
     /// Mirror the tracker's published values onto the legacy AudioState
-    /// properties the popover already binds to (sessionDosePercent etc).
+    /// properties the popover already binds to (sessionDoseFraction etc).
     ///
     /// Each assignment is guarded by an equality check — Swift's
     /// `@Published` fires `objectWillChange` on every assignment
@@ -1094,7 +1094,7 @@ final class AudioState: ObservableObject {
 
     private func mirrorTrackerState() {
         let newDose = safeListening.sessionDose
-        if sessionDosePercent != newDose { sessionDosePercent = newDose }
+        if sessionDoseFraction != newDose { sessionDoseFraction = newDose }
         let newRemaining = safeListening.remainingMinutes
         if remainingMinutes != newRemaining { remainingMinutes = newRemaining }
         checkNotificationsDeniedAtAmberDose()
