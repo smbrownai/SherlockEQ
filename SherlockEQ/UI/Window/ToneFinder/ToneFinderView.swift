@@ -42,7 +42,6 @@ struct ToneFinderView: View {
                 step4Use
                 notchSection
                 checkInFooter
-                disclaimer
             }
             .padding(28)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -576,24 +575,6 @@ struct ToneFinderView: View {
         // the slider + trend.
         .frame(width: 440)
         .fixedSize(horizontal: false, vertical: true)
-    }
-
-    // MARK: - Disclaimer
-
-    /// Contextual (kept): the red-flag "see a professional" note is
-    /// timing-relevant on the tinnitus screen and stays. The general
-    /// non-clinical statement and the deeper "when a notch helps / evidence"
-    /// background move to the shared chip and the tinnitus Help article.
-    private var disclaimer: some View {
-        // The red-flag "see a professional" note is context-specific and stays.
-        // The generic "not medical care" strip is dropped — the persistent
-        // Health & Safety link in the sidebar footer already carries it.
-        SafetyNote(
-            text: "Pulsatile (heartbeat-like) tinnitus, a sudden change in one ear, new hearing loss, dizziness, or pain deserve medical evaluation — not more audio tweaking.",
-            symbol: "stethoscope",
-            tint: .orange,
-            learnMoreTopic: .tinnitusToneMatching
-        )
     }
 
     // MARK: - Step scaffold
