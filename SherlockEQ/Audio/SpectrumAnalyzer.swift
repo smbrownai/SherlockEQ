@@ -62,19 +62,35 @@ final class SpectrumAnalyzer: ObservableObject {
     /// Calibration: spec §5.4 acknowledges this is an estimate — full-scale
     /// digital ≠ a specific dB SPL without knowing the hardware. 100 dBA at
     /// 0 dBFS is a commonly used reasonable default for consumer playback.
-    var calibrationOffsetDBA: Float = 100
+    ///
+    /// Lock-backed: the main actor writes it (AudioState's volume-tracked
+    /// effective offset) while the audio thread (`emitLevelIfDue`) and
+    /// `processingQueue` (`drainAndProcess`) read it. Before the FFT-path
+    /// isolation pass this was a plain MainActor var read off-main through
+    /// an unchecked boundary — a formal (if benign) data race.
+    nonisolated var calibrationOffsetDBA: Float {
+        get { calibrationOffset.withLock { $0 } }
+        set { calibrationOffset.withLock { $0 = newValue } }
+    }
+    private let calibrationOffset = OSAllocatedUnfairLock<Float>(initialState: 100)
 
     private let processingQueue = DispatchQueue(label: "com.shawnbrown.SherlockEQ.spectrum", qos: .userInitiated)
 
     // FFT state (created once, reused per frame).
-    private let dftSetup: vDSP.DiscreteFourierTransform<Float>
-    private var hannWindow: [Float]
+    //
+    // `nonisolated(unsafe)`: not Sendable, but written exactly once (init)
+    // and touched afterwards only inside `drainAndProcess` on the serial
+    // `processingQueue` — single-queue confinement the type system can't
+    // express. The window constants below are immutable Sendable `let`s,
+    // legal to read from any isolation.
+    nonisolated(unsafe) private let dftSetup: vDSP.DiscreteFourierTransform<Float>
+    private let hannWindow: [Float]
     /// (Σw)² for the analysis window — the coherent-gain power reference the
     /// per-bin dBFS scale divides by (see `drainAndProcess`). Precomputed from
     /// the actual window coefficients so it's exact for whatever window mode
     /// `vDSP_hann_window` produces (this NORM window is power-normalized, so
     /// Σw ≈ 0.8165·N, not the textbook 0.5·N). Set alongside `hannWindow`.
-    private var windowSumSquared: Float = 1
+    private let windowSumSquared: Float
     private var sampleRate: Double = 48000
 
     /// Render-thread-shared state, guarded by `accumulatorState`'s unfair
@@ -123,10 +139,7 @@ final class SpectrumAnalyzer: ObservableObject {
     /// Cheap level-emit cadence. The dose tracker needs roughly 20 Hz; this
     /// path fires `onLevelUpdate` directly from `ingest` so dose accounting
     /// keeps working even when nobody is observing the FFT pipeline.
-    private static let levelEmitInterval: CFTimeInterval = 1.0 / 20.0
-    /// Single-thread state: each analyzer's `ingest` is always called from
-    /// one audio thread, so no lock is needed here.
-    private var lastLevelEmitTime: CFTimeInterval = 0
+    nonisolated private static let levelEmitInterval: CFTimeInterval = 1.0 / 20.0
 
     /// Fixed capacity for the mono mixdown scratch buffer below — 16x the
     /// requested tap buffer size (1024 frames; see
@@ -135,21 +148,35 @@ final class SpectrumAnalyzer: ObservableObject {
     /// maximum for the size a tap callback can actually deliver, but no
     /// realistic buffer-size renegotiation should approach this — it's a
     /// safety margin, not a measured bound.
-    private static let monoScratchCapacity = 16_384
+    nonisolated private static let monoScratchCapacity = 16_384
 
-    /// Pre-allocated mono mixdown buffer for the channel-mix ingest path.
-    /// Fixed size, never reallocated — the render thread must never
-    /// allocate, matching `BiquadCascade`'s delay buffer and
-    /// `TapRingBuffer`'s storage. If a delivered buffer somehow exceeds
-    /// `monoScratchCapacity` (violating the assumption above), `ingest`
-    /// processes only the leading frames that fit rather than growing this
-    /// array. Touched only from the single audio-thread caller (same
-    /// invariant as `lastLevelEmitTime`), so it doesn't need synchronisation.
-    private var monoScratch: [Float] = Array(repeating: 0, count: monoScratchCapacity)
+    /// Audio-thread-confined mutable state: the mono mixdown scratch (fixed
+    /// size, never reallocated — the render thread must never allocate,
+    /// matching `BiquadCascade`'s delay buffer and `TapRingBuffer`'s
+    /// storage; oversize deliveries are clamped, never grown) and the
+    /// level-emit throttle stamp. `@unchecked Sendable` because every
+    /// access comes from the single audio-thread caller of `ingest` — the
+    /// same confinement argument the old stored properties relied on; the
+    /// box just makes it legible now that the ingest path is formally
+    /// `nonisolated` instead of fictionally MainActor.
+    /// (`nonisolated` on the type: the project's default isolation would
+    /// otherwise stamp MainActor onto these members, recreating the exact
+    /// fiction the box exists to remove.)
+    nonisolated private final class AudioThreadScratch: @unchecked Sendable {
+        var mono: [Float] = Array(repeating: 0, count: SpectrumAnalyzer.monoScratchCapacity)
+        var lastLevelEmitTime: CFTimeInterval = 0
+    }
+    private let audioScratch = AudioThreadScratch()
 
-    /// Callback for downstream consumers (SafeListeningTracker). Fires once
-    /// per FFT frame with the most recent A-weighted level.
-    var onLevelUpdate: ((_ dBA: Float) -> Void)?
+    /// Callback for downstream consumers (SafeListeningTracker). Fires at
+    /// ~20 Hz from the audio thread's cheap level pass. Lock-backed: the
+    /// main actor installs it, the audio thread calls it — `@Sendable` and
+    /// the lock make that handoff checked instead of assumed.
+    nonisolated var onLevelUpdate: (@Sendable (_ dBA: Float) -> Void)? {
+        get { levelCallback.withLock { $0 } }
+        set { levelCallback.withLock { $0 = newValue } }
+    }
+    private let levelCallback = OSAllocatedUnfairLock<(@Sendable (Float) -> Void)?>(initialState: nil)
 
     init() {
         // `vDSP.DiscreteFourierTransform` replaced the deprecated `vDSP.DFT`.
@@ -178,7 +205,11 @@ final class SpectrumAnalyzer: ObservableObject {
 
     /// Feed a freshly-captured buffer. Realtime-safe — does no allocation
     /// beyond the accumulator append (which is bounded by FFT size).
-    func ingest(_ buffer: AVAudioPCMBuffer) {
+    /// `nonisolated`: called from the engine's tap thread, never the main
+    /// actor — this and the whole chain below it (`emitLevelIfDue`,
+    /// `appendToAccumulatorAndDispatch`, `drainAndProcess`) now carry the
+    /// isolation they actually run under.
+    nonisolated func ingest(_ buffer: AVAudioPCMBuffer) {
         guard let channels = buffer.floatChannelData else { return }
         let frames = Int(buffer.frameLength)
         let chCount = Int(buffer.format.channelCount)
@@ -204,9 +235,9 @@ final class SpectrumAnalyzer: ObservableObject {
         // so we zero the scratch first and then accumulate. Clamp to the
         // scratch's fixed capacity rather than growing it — see
         // `monoScratchCapacity`'s doc comment.
-        let mixFrames = min(frames, monoScratch.count)
+        let mixFrames = min(frames, audioScratch.mono.count)
         var weight: Float = 1.0 / Float(chCount)
-        monoScratch.withUnsafeMutableBufferPointer { mPtr in
+        audioScratch.mono.withUnsafeMutableBufferPointer { mPtr in
             guard let base = mPtr.baseAddress else { return }
             memset(base, 0, mixFrames * MemoryLayout<Float>.size)
             for ch in 0..<chCount {
@@ -221,7 +252,7 @@ final class SpectrumAnalyzer: ObservableObject {
     /// Raw-mono ingest path used by the pre-EQ side-channel from
     /// `CATapEngine` — the source-node render block delivers freshly-
     /// filled L samples here, bypassing the buffer-list mixing step.
-    func ingest(monoSamples: UnsafePointer<Float>, frameCount: Int) {
+    nonisolated func ingest(monoSamples: UnsafePointer<Float>, frameCount: Int) {
         guard frameCount > 0 else { return }
 
         // Cheap always-on level pass — same shape as the AVAudioPCMBuffer
@@ -244,7 +275,7 @@ final class SpectrumAnalyzer: ObservableObject {
     /// trim to the high-water mark, and dispatch an FFT if due. Shared
     /// tail between the two ingest paths so the accumulator's hot path
     /// has one definition.
-    private func appendToAccumulatorAndDispatch(source: UnsafeBufferPointer<Float>) {
+    nonisolated private func appendToAccumulatorAndDispatch(source: UnsafeBufferPointer<Float>) {
         // `withLockUnchecked`: the closure runs synchronously under the lock
         // and `source` (a non-Sendable UnsafeBufferPointer) never escapes it;
         // the checked variant's Sendable-capture requirement is the only
@@ -280,10 +311,10 @@ final class SpectrumAnalyzer: ObservableObject {
     /// at ~20 Hz regardless of whether the FFT pipeline is running, so
     /// `SafeListeningTracker`'s NIOSH dose integration stays accurate when
     /// the canvas isn't visible and the analyzer is otherwise dormant.
-    private func emitLevelIfDue(meanSquared: Float) {
+    nonisolated private func emitLevelIfDue(meanSquared: Float) {
         let now = CACurrentMediaTime()
-        guard (now - lastLevelEmitTime) >= Self.levelEmitInterval else { return }
-        lastLevelEmitTime = now
+        guard (now - audioScratch.lastLevelEmitTime) >= Self.levelEmitInterval else { return }
+        audioScratch.lastLevelEmitTime = now
         let rms = sqrt(max(meanSquared, 1e-20))
         let dbfs = 20 * log10(rms)
         let dba = dbfs + calibrationOffsetDBA
@@ -367,7 +398,11 @@ final class SpectrumAnalyzer: ObservableObject {
 
     // MARK: - Background FFT
 
-    private func drainAndProcess() {
+    /// Runs on `processingQueue` (see the dispatch in
+    /// `appendToAccumulatorAndDispatch`) — everything it touches is a lock,
+    /// an immutable `let`, or the queue-confined `dftSetup`; results hop to
+    /// the main actor via the publish Task below.
+    nonisolated private func drainAndProcess() {
         guard let frame = accumulatorState.withLock({ state -> [Float]? in
             guard state.accumulator.count >= Self.fftSize else { return nil }
             let frame = Array(state.accumulator.prefix(Self.fftSize))
@@ -449,7 +484,7 @@ final class SpectrumAnalyzer: ObservableObject {
         }
         guard shouldPublish else { return }
 
-        Task { @MainActor [weak self] in
+        Task { @MainActor [weak self, dbBins] in
             guard let self else { return }
             self.publishSmoothed(rawDB: dbBins, dbfs: dbfs, dba: dba)
             self.publishPending.withLock { $0 = false }
