@@ -8,6 +8,7 @@
 
 import Testing
 import Foundation
+import Combine
 @testable import SherlockEQ
 
 @MainActor
@@ -202,5 +203,39 @@ struct SafeListeningTrackerTests {
     @Test func malformedDayKeyReturnsNil() {
         #expect(SafeListeningTracker.date(fromDayKey: "not-a-date") == nil)
         #expect(SafeListeningTracker.date(fromDayKey: "2026-06") == nil)
+    }
+
+    // MARK: - Observability at the dose cap (audit CX-01)
+
+    /// The tracker must keep publishing once the dose pins at the 1.0 cap.
+    /// The UI's live surfaces (LiveLevelBody, DoseCardBody,
+    /// PopoverLiveStatusRows) subscribe to the tracker's objectWillChange —
+    /// if capped-dose updates went silent, the level meter and exposure rows
+    /// would freeze at the exact moment the user hits their daily limit
+    /// (which is what happened via AudioState's equality-guarded mirror, the
+    /// bug this pins against regressing at the tracker level).
+    @Test func trackerKeepsPublishingAtDoseCap() {
+        let tracker = SafeListeningTracker()
+        tracker.notificationsEnabled = false
+        tracker.forceForTesting(dose: 1.0)
+        #expect(tracker.sessionDose == 1.0)
+
+        var publishes = 0
+        let sub = tracker.objectWillChange.sink { _ in publishes += 1 }
+        defer { sub.cancel() }
+
+        // Level samples keep arriving while capped — each must still publish
+        // (currentLevelDBA is @Published) even though the dose can't climb.
+        tracker.update(levelDBA: 70)
+        #expect(tracker.currentLevelDBA == 70)
+        #expect(publishes > 0, "tracker went silent at the dose cap")
+
+        let before = publishes
+        tracker.update(levelDBA: 72)
+        #expect(tracker.currentLevelDBA == 72)
+        #expect(publishes > before, "publishing must be continuous, not one-shot")
+
+        // And the dose itself stays pinned — the cap is the display truth.
+        #expect(tracker.sessionDose == 1.0)
     }
 }

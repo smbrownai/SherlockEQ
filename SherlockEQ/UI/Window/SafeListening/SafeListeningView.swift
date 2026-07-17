@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// Safe Listening detail surface. The top answers the two questions that
 /// matter minute to minute — **how loud is it now** and **how much have I
@@ -58,10 +59,7 @@ struct SafeListeningView: View {
                 Spacer()
                 calibrationBadge
             }
-            LevelMeterView(
-                levelDBA: state.safeListening.currentLevelDBA,
-                isReceivingAudio: state.isReceivingAudio
-            )
+            LiveLevelBody(tracker: state.safeListening)
         }
     }
 
@@ -121,100 +119,8 @@ struct SafeListeningView: View {
     @ViewBuilder private var doseCard: some View {
         card {
             cardHeader("Today's exposure", systemImage: "shield.lefthalf.filled")
-            if state.exposureStatus == .unknown {
-                unknownExposureBody
-            } else {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(String(format: "%.0f%%", state.safeListening.sessionDose * 100))
-                        .font(.system(size: 44, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(doseTint)
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(doseStatusText)
-                            .font(.callout.weight(.medium))
-                            .foregroundStyle(doseTint)
-                        remainingReadout
-                    }
-                }
-
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(.quaternary)
-                        Capsule()
-                            .fill(doseTint)
-                            .frame(width: max(0, geo.size.width * min(1, state.safeListening.sessionDose)))
-                            .animation(.easeOut(duration: 0.2), value: state.safeListening.sessionDose)
-                        Rectangle().fill(Color.orange.opacity(0.3)).frame(width: 1).offset(x: geo.size.width * 0.8)
-                        Rectangle().fill(Color.red.opacity(0.4)).frame(width: 1).offset(x: geo.size.width)
-                    }
-                }
-                .frame(height: 14)
-
-                HStack {
-                    Text("0 %").font(.caption.monospaced()).foregroundStyle(.secondary)
-                    Spacer()
-                    Text("Warn (80 %)").font(.caption.monospaced()).foregroundStyle(.orange)
-                    Spacer()
-                    Text("Limit (100 %)").font(.caption.monospaced()).foregroundStyle(.red)
-                }
-            }
-        }
-    }
-
-    /// Shown when there's no audio to measure and nothing has accumulated yet.
-    /// A missing measurement is not a safe measurement — so no green, no "0 %",
-    /// no "under limit" claim.
-    private var unknownExposureBody: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text("—")
-                .font(.system(size: 44, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Exposure unavailable")
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Text("Start audio to begin estimating exposure. Calibrate for a more accurate estimate.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer()
-        }
-    }
-
-    /// Amber/red always show (they're safety signals regardless of calibration);
-    /// the "safe" bottom state only earns green once it's a valid tracked
-    /// estimate — an approximate estimate reads neutral, never green.
-    private var doseTint: Color {
-        switch state.safeListening.doseSeverity {
-        case .red:   return .red
-        case .amber: return .orange
-        case .safe:  return state.exposureStatus == .tracked ? .green : .secondary
-        }
-    }
-
-    private var doseStatusText: String {
-        if state.safeListening.didCrossRedToday { return "Limit reached" }
-        if state.safeListening.didCrossAmberToday { return "Approaching limit" }
-        return state.exposureStatus == .tracked ? "Under your limit" : "Approximate exposure"
-    }
-
-    /// Remaining safe time is the actionable figure — but only meaningful once
-    /// calibrated. Otherwise defer to the dose percentage above.
-    @ViewBuilder private var remainingReadout: some View {
-        if state.hasUserCalibration, let mins = state.safeListening.remainingMinutes {
-            Text(formatRemaining(mins))
-                .font(.callout.weight(.semibold).monospacedDigit())
-                .foregroundStyle(.secondary)
-        } else if state.hasUserCalibration {
-            Text("Level under threshold")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        } else {
-            Text("Calibrate to see time left")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            DoseCardBody(tracker: state.safeListening,
+                         hasUserCalibration: state.hasUserCalibration)
         }
     }
 
@@ -544,6 +450,164 @@ struct SafeListeningView: View {
         }
     }
 
+}
+
+// MARK: - Tracker-observing children
+
+/// The live meter observes the tracker directly: its content (the dBA
+/// readout) changes on essentially every ~10 Hz sample, so re-rendering at
+/// the tracker's cadence is the point, not a hazard. This is required, not a
+/// nicety — SwiftUI never subscribes to a nested ObservableObject reached
+/// through a property, so the parent's `state.safeListening.…` reads refresh
+/// only when AudioState itself publishes (~1 Hz via its throttled mirror, and
+/// not at all once the dose pins at the 1.0 cap).
+private struct LiveLevelBody: View {
+    @ObservedObject var tracker: SafeListeningTracker
+
+    var body: some View {
+        LevelMeterView(
+            levelDBA: tracker.currentLevelDBA,
+            isReceivingAudio: tracker.currentLevelDBA >= ExposureStatus.audioFloorDBA
+        )
+    }
+}
+
+/// Dose-card content, subscribed to the tracker at a fixed ≤1 Hz tick.
+///
+/// Two constraints meet here. Like `LiveLevelBody`, the parent's reads don't
+/// observe the tracker — and AudioState's mirror goes quiet entirely once the
+/// dose pins at the 1.0 cap (its equality guards see no change), which froze
+/// this card at the exact moment the limit was reached. But observing the
+/// tracker raw would re-render these Texts at ~10 Hz with mostly-identical
+/// content — the sub-pixel re-rasterization twitch the mirror's throttle was
+/// added to fix. So: subscribe to the tracker's own objectWillChange,
+/// throttled to 1 Hz, **un-gated** — the same cadence as the old mirror,
+/// minus the freeze.
+private struct DoseCardBody: View {
+    let tracker: SafeListeningTracker
+    let hasUserCalibration: Bool
+
+    /// Bumped by the throttled subscription; `body` reads it so each tick
+    /// invalidates the view even though no other stored property changed.
+    @State private var tick = 0
+
+    private var status: ExposureStatus {
+        ExposureStatus.resolve(sessionDose: tracker.sessionDose,
+                               levelDBA: tracker.currentLevelDBA,
+                               hasCalibration: hasUserCalibration)
+    }
+
+    var body: some View {
+        let _ = tick   // tick dependency — see property comment
+        Group {
+            if status == .unknown {
+                unknownExposureBody
+            } else {
+                measuredBody
+            }
+        }
+        // objectWillChange fires on willSet; the main-queue throttle delivers
+        // asynchronously, so by render time the tracker's values are current
+        // (the classic willSet stale-read is not possible here).
+        .onReceive(tracker.objectWillChange
+            .throttle(for: .seconds(1), scheduler: DispatchQueue.main, latest: true)) { _ in
+            tick &+= 1
+        }
+    }
+
+    @ViewBuilder private var measuredBody: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(String(format: "%.0f%%", tracker.sessionDose * 100))
+                .font(.system(size: 44, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(doseTint)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(doseStatusText)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(doseTint)
+                remainingReadout
+            }
+        }
+
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.quaternary)
+                Capsule()
+                    .fill(doseTint)
+                    .frame(width: max(0, geo.size.width * min(1, tracker.sessionDose)))
+                    .animation(.easeOut(duration: 0.2), value: tracker.sessionDose)
+                Rectangle().fill(Color.orange.opacity(0.3)).frame(width: 1).offset(x: geo.size.width * 0.8)
+                Rectangle().fill(Color.red.opacity(0.4)).frame(width: 1).offset(x: geo.size.width)
+            }
+        }
+        .frame(height: 14)
+
+        HStack {
+            Text("0 %").font(.caption.monospaced()).foregroundStyle(.secondary)
+            Spacer()
+            Text("Warn (80 %)").font(.caption.monospaced()).foregroundStyle(.orange)
+            Spacer()
+            Text("Limit (100 %)").font(.caption.monospaced()).foregroundStyle(.red)
+        }
+    }
+
+    /// Shown when there's no audio to measure and nothing has accumulated yet.
+    /// A missing measurement is not a safe measurement — so no green, no "0 %",
+    /// no "under limit" claim.
+    private var unknownExposureBody: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text("—")
+                .font(.system(size: 44, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Exposure unavailable")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Text("Start audio to begin estimating exposure. Calibrate for a more accurate estimate.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+        }
+    }
+
+    /// Amber/red always show (they're safety signals regardless of calibration);
+    /// the "safe" bottom state only earns green once it's a valid tracked
+    /// estimate — an approximate estimate reads neutral, never green.
+    private var doseTint: Color {
+        switch tracker.doseSeverity {
+        case .red:   return .red
+        case .amber: return .orange
+        case .safe:  return status == .tracked ? .green : .secondary
+        }
+    }
+
+    private var doseStatusText: String {
+        if tracker.didCrossRedToday { return "Limit reached" }
+        if tracker.didCrossAmberToday { return "Approaching limit" }
+        return status == .tracked ? "Under your limit" : "Approximate exposure"
+    }
+
+    /// Remaining safe time is the actionable figure — but only meaningful once
+    /// calibrated. Otherwise defer to the dose percentage above.
+    @ViewBuilder private var remainingReadout: some View {
+        if hasUserCalibration, let mins = tracker.remainingMinutes {
+            Text(formatRemaining(mins))
+                .font(.callout.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.secondary)
+        } else if hasUserCalibration {
+            Text("Level under threshold")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else {
+            Text("Calibrate to see time left")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private func formatRemaining(_ minutes: Double) -> String {
         if minutes >= 24 * 60 { return "All day remaining" }
         if minutes >= 60 {
@@ -553,5 +617,4 @@ struct SafeListeningView: View {
         }
         return "\(Int(minutes))m left"
     }
-
 }
