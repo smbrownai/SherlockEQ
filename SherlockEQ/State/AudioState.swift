@@ -153,9 +153,13 @@ final class AudioState: ObservableObject {
     /// crossed 80%") has to be wired into *both* paths if it needs to be
     /// visible everywhere:
     ///   - The popover and `MonitorSidebar` read these throttled mirrors.
-    ///   - `SafeListeningView`, `MenuBarIcon`, and `DebugView` read
-    ///     `audioState.safeListening.sessionDose` / `.remainingMinutes`
-    ///     directly so they can update faster than 1 Hz.
+    ///   - Reading `audioState.safeListening.…` from a view body does NOT
+    ///     observe the tracker — SwiftUI never subscribes to a nested
+    ///     ObservableObject reached through a property, so such reads refresh
+    ///     only when AudioState itself publishes. Surfaces that need the
+    ///     tracker's own cadence hold their own subscription: see
+    ///     `LiveLevelBody` / `DoseCardBody` (SafeListeningView) and
+    ///     `PopoverLiveStatusRows` (MainPopoverView).
     /// Threshold/severity helpers belong on `SafeListeningTracker` so both
     /// sides see the same answer.
     @Published var sessionDosePercent: Double = 0
@@ -823,8 +827,14 @@ final class AudioState: ObservableObject {
         // and other Texts to re-rasterize and visibly twitch from
         // sub-pixel positioning differences. `latest: true` keeps the
         // most recent value so we never lose a tick to the throttle.
-        // Views needing finer cadence (Safe Listening's live level
-        // meter) read `safeListening` directly, bypassing this mirror.
+        // This mirror is NOT how live surfaces update: a view reading
+        // `safeListening.…` through AudioState is not observing the tracker
+        // (SwiftUI doesn't subscribe to nested ObservableObjects), and the
+        // equality guards in `mirrorTrackerState` mean this pipeline goes
+        // quiet once the dose pins at the 1.0 cap. Surfaces that need the
+        // tracker's cadence subscribe to it themselves: LiveLevelBody /
+        // DoseCardBody (SafeListeningView) and PopoverLiveStatusRows
+        // (MainPopoverView).
         trackerObserver = tracker.objectWillChange
             .throttle(for: .seconds(1), scheduler: DispatchQueue.main, latest: true)
             .sink { [weak self] _ in

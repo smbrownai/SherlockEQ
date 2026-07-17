@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 
 /// The menu-bar popover — a status dashboard and remote for *today's
 /// listening session*, not a compressed copy of the app. It answers, in
@@ -35,19 +36,7 @@ struct MainPopoverView: View {
                 }
             }
             Divider()
-            PopoverLevelStrip(
-                monitor: audioState.stereoMonitor,
-                // Effective (volume-tracked) offset so the zone boundaries
-                // reflect at-ear level, not calibration-time level.
-                calibrationOffsetDBA: audioState.effectiveCalibrationOffsetDBA,
-                isReceivingAudio: audioState.isReceivingAudio
-            )
-            DoseBarView(
-                percent: audioState.sessionDosePercent,
-                status: audioState.exposureStatus,
-                severity: audioState.safeListening.doseSeverity,
-                remainingMinutes: audioState.remainingMinutes
-            )
+            PopoverLiveStatusRows(tracker: audioState.safeListening)
             masterGainRow
             balanceRow
             Divider()
@@ -332,5 +321,52 @@ struct MainPopoverView: View {
         if name.contains("display") || name.contains("monitor") { return "display" }
         if name.contains("headphone") { return "headphones" }
         return "speaker.wave.2"
+    }
+}
+
+/// Output-level + exposure rows, subscribed to the tracker at a ≤1 Hz tick.
+///
+/// The parent used to compute these values from AudioState in its own body —
+/// but SwiftUI doesn't observe a nested ObservableObject reached through a
+/// property, so those reads refreshed only when AudioState published, and its
+/// throttled mirror goes quiet entirely once the dose pins at the 1.0 cap
+/// (equality guards see no change). Observing the tracker raw instead would
+/// rebuild these Texts at ~10 Hz — the sub-pixel re-rasterization twitch the
+/// mirror's throttle was added to prevent. So: the tracker's own
+/// objectWillChange, throttled to 1 Hz, un-gated. The meters inside
+/// `PopoverLevelStrip` stay live independently via their own StereoMonitor
+/// subscription; only the row-level state (waiting-gate, dose values) ticks
+/// at 1 Hz.
+private struct PopoverLiveStatusRows: View {
+    @EnvironmentObject private var audioState: AudioState
+    let tracker: SafeListeningTracker
+
+    /// Bumped by the throttled subscription; `body` reads it so each tick
+    /// invalidates the view even though no stored property changed.
+    @State private var tick = 0
+
+    var body: some View {
+        let _ = tick   // tick dependency — see property comment
+        Group {
+            PopoverLevelStrip(
+                monitor: audioState.stereoMonitor,
+                // Effective (volume-tracked) offset so the zone boundaries
+                // reflect at-ear level, not calibration-time level.
+                calibrationOffsetDBA: audioState.effectiveCalibrationOffsetDBA,
+                isReceivingAudio: tracker.currentLevelDBA >= ExposureStatus.audioFloorDBA
+            )
+            DoseBarView(
+                percent: tracker.sessionDose,
+                status: ExposureStatus.resolve(sessionDose: tracker.sessionDose,
+                                               levelDBA: tracker.currentLevelDBA,
+                                               hasCalibration: audioState.hasUserCalibration),
+                severity: tracker.doseSeverity,
+                remainingMinutes: tracker.remainingMinutes
+            )
+        }
+        .onReceive(tracker.objectWillChange
+            .throttle(for: .seconds(1), scheduler: DispatchQueue.main, latest: true)) { _ in
+            tick &+= 1
+        }
     }
 }
