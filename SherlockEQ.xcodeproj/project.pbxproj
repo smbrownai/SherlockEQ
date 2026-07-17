@@ -37,6 +37,16 @@
 		9789EF0F2FCF6BC6008D3A9A /* SherlockEQ.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SherlockEQ.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		978681AA2FD473BF00F6CE30 /* Exceptions for "SherlockEQ" folder in "SherlockEQ" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 9789EF0E2FCF6BC6008D3A9A /* SherlockEQ */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		977681252FD473BF00F6CE2F /* SherlockEQTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
@@ -48,6 +58,7 @@
 		9789EF112FCF6BC6008D3A9A /* SherlockEQ */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				978681AA2FD473BF00F6CE30 /* Exceptions for "SherlockEQ" folder in "SherlockEQ" target */,
 			);
 			path = SherlockEQ;
 			sourceTree = "<group>";

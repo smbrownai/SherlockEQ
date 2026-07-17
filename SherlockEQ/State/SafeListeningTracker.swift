@@ -353,8 +353,10 @@ final class SafeListeningTracker: ObservableObject {
     }
 
     private func startRolloverTimer() {
-        let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.checkDayRollover() }
+        let timer = Timer(timeInterval: 60, repeats: true) { _ in
+            // The Task takes its own weak capture — routing the timer
+            // closure's `weak self` var through it is a Swift 6 error.
+            Task { @MainActor [weak self] in self?.checkDayRollover() }
         }
         // .common so it still fires during UI tracking/menu interaction.
         RunLoop.main.add(timer, forMode: .common)

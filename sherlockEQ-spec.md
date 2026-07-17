@@ -80,17 +80,23 @@ The popover is for **operating** SherlockEQ, not configuring it. It dismisses wh
 click away. Implemented as a SwiftUI `MenuBarExtra` with `.menuBarExtraStyle(.window)`.
 
 What belongs here (top → bottom):
-- Header: app icon + name, read-only current output device label, "Open SherlockEQ"
-  arrow button (opens main window via `AppDelegate.showMainWindow`)
+- Header: app name + read-only current output device label, with a one-line
+  processing status underneath ("Processing <profile>" / "Reference Mode —
+  processing bypassed" / "No active profile — audio passing through")
 - Notice banner (shared `NoticeCenter` — also rendered in the main window)
-- Session dose bar (percent + remaining minutes)
-- Stereo level strip (live L/R peak meters, A-weighted dBA via calibration offset)
+- Output level strip (live L/R meters; shows a waiting state while no audio
+  is playing)
+- Session dose bar (percent + remaining minutes) with an honest exposure
+  status — tracked / approximate / unknown via `ExposureStatus.resolve`
 - Master gain slider (`-60…+12 dB`) with recenter button
 - Balance slider (`-1…+1`, per active profile) with recenter button
 - Profile picker row
-- Compensation strength slider
-- Tinnitus notch on/off + frequency label
 - Reference Mode button (prominent)
+- Headphone-correction device-mismatch warning row (only when mismatched)
+- "Processing details" disclosure (collapsed by default; expansion persists
+  via `@AppStorage`): read-only Hearing adjustment / Listening comfort /
+  Tinnitus notch status rows
+- Footer rows: Open Main Window · Health & Safety · Quit SherlockEQ
 
 What does **not** belong here:
 - Audiogram entry
@@ -102,7 +108,7 @@ What does **not** belong here:
   device routing follows the macOS default output. Profile→device auto-switching is
   configured per profile in Profile Detail.)
 
-### Main Window (default 1480 × 880pt, minimum 1126 × 716pt)
+### Main Window (default 1480 × 880pt, minimum 1126 × 716pt; minimum width 1387pt while the monitor panel is open)
 Opened deliberately from the popover. Appears in the Dock and CMD+Tab while open.
 Uses `NavigationSplitView` with a left sidebar and an on-demand right monitor
 **panel** (opened from the toolbar's compact status glance — see below).
@@ -319,8 +325,9 @@ from their audiologist. Lives in the main window's Audiogram section.
   `acclimatizationStartDate`; effective strength rises 60 % → 100 % linearly
   over 21 days (re-applied on `NSCalendarDayChanged`; ≤ ~0.7 dB per day —
   inaudible as a transition). Ongoing audiogram edits never restamp. A
-  labeled chip (Audiogram screen + Profile Detail) shows "day N of 21 —
-  correction at X %" with "Skip to full strength" (clears the stamp).
+  labeled chip (Audiogram screen + Profile Detail) shows "Gradual adjustment:
+  day N of 21 — X % strength." with "Skip to full strength" (clears the
+  stamp).
   Legacy profiles (no stamp) ramp at 1.0 — nothing changes until their next
   first-application.
 - Hard ceiling: no single band boosted more than **+20 dB** regardless of loss
@@ -329,8 +336,12 @@ from their audiologist. Lives in the main window's Audiogram section.
 - One band emitted per audiogram point (8 bands per ear). Cubic-spline-derived
   intermediate bands are not implemented — the algorithm signature can absorb that
   later without API churn.
-- User adjusts `compensationFactor` via the "Compensation Strength" slider in both
-  the popover (quick) and the main window (in context with the EQ curve preview).
+- User adjusts `compensationFactor` via the **Adjustment strength** slider
+  (Profile Detail → Advanced tuning). The popover's copy of the slider was
+  removed in the status-rows overhaul — it shows a read-only Hearing
+  adjustment row instead. Previews caption the value with
+  `AdjustmentStrengthLabel` ("Adjustment strength N% · currently M%" while
+  the acclimatization ramp makes the two differ).
 
 **Adjustment style — Steady vs Adaptive (phase 4):** a segmented selector on
 the Audiogram screen (below the chart, shown only when correction exists)
@@ -1042,39 +1053,54 @@ The menu is reinstalled on `applicationDidBecomeActive` because SwiftUI override
 
 ### 8.2 Main Popover (380pt wide)
 
-The 5-second surface. Dismisses on click-outside. No charts or canvases.
+The 5-second surface: a status dashboard and remote for *today's listening
+session*, not a compressed copy of the app. Dismisses on click-outside. No
+charts, canvases, or configuration.
 
 ```
 ┌──────────────────────────────────────────┐
-│  ≋ SherlockEQ      [device label]   [↗]  │  ← arrow opens main window
-├──────────────────────────────────────────┤
+│  SherlockEQ            [device label]    │
+│  ● Processing Afternoon – AirPods        │  ← status: profile / Reference /
+├──────────────────────────────────────────┤    pass-through
 │  [ NoticeBanner (when active) ]          │
-├──────────────────────────────────────────┤
-│  Session  ████████░░░░  67%  ~1h 20m     │  ← dose bar
-│  Level   L ▓▓▓▓▓░░░░░  R ▓▓▓▓░░░░░       │  ← stereo level strip
-│  Gain    ─────●─────── −2.3 dB    ↺      │  ← master gain
-│  Balance ──────●────── Center     ↺      │  ← balance (active profile)
+│  Output level  L ▓▓▓▓▓░░  R ▓▓▓▓░░       │  ← waiting state when no audio
+│  Session  ████████░░░░  67%  ~1h 20m     │  ← dose bar + exposure status
+│  Gain    ─────●─────── −2.3 dB    ↺      │
+│  Balance ──────●────── Center     ↺      │
 ├──────────────────────────────────────────┤
 │  Profile  [ Afternoon – AirPods    ▾ ]   │
-│  Compensation  ○────────●────────○       │  ← one slider that matters most
-│  Tinnitus Notch  ●—— ON   4,200 Hz       │
-│  [        🔴 Reference Mode         ]    │  ← prominent
+│  [        🔴 Reference Mode         ]    │
+│  ▸ Processing details                    │  ← collapsed status rows: Hearing
+├──────────────────────────────────────────┤    adjustment / comfort / notch
+│  Open Main Window                        │
+│  Health & Safety                         │
+│  Quit SherlockEQ                         │
 └──────────────────────────────────────────┘
 ```
+
+Controls the popover deliberately does **not** have: the adjustment-strength
+slider and the tinnitus-notch toggle became the read-only "Processing details"
+status rows — specialist configuration lives in the main window, and a
+glanceable surface shouldn't offer knobs whose effect it can't show. The
+level/dose rows tick at 1 Hz off a throttled tracker subscription.
 
 On first appearance the popover calls `audioState.startAll()` so users don't have
 to dig into Debug to bring the tap up.
 
-The arrow button hands off to `AppDelegate.showMainWindow`, which owns the NSWindow
-and sequences the `.accessory → .regular` policy flip + activation deterministically.
+Open Main Window (and the Health & Safety row, after setting the sheet flag)
+hands off to `AppDelegate.showMainWindow`, which owns the NSWindow and
+sequences the `.accessory → .regular` policy flip + activation
+deterministically.
 
 ---
 
-### 8.3 Main Window (default 1480 × 880pt, minimum 1126 × 716pt, resizable)
+### 8.3 Main Window (default 1480 × 880pt, minimum 1126 × 716pt — width minimum 1387pt while the monitor panel is open — resizable)
 
-`NavigationSplitView` with a left sidebar (min 220 / ideal 240 / max 300pt), detail
-content in the middle (min 760 / ideal 820pt), and a persistent right monitor
-sidebar (220pt) toggleable from the toolbar.
+`NavigationSplitView` with a left sidebar (fixed 240pt), detail content in the
+middle (min 760 / ideal 820pt), and a persistent right monitor sidebar (260pt)
+toggleable from the toolbar. The window minimum width follows the panel:
+1126pt closed, 1387pt open, so opening the panel never crushes the detail
+column below its slider-friendly width.
 
 **Sidebar groups** (`SidebarView`):
 

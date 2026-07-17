@@ -52,7 +52,7 @@ final class SystemVolumeController: ObservableObject {
     private var defaultDeviceListener: AudioObjectPropertyListenerBlock?
 
     // 'vmvc' — the virtual main (master) volume, the menu-bar slider's value.
-    private static let mainVolumeSelector = kAudioHardwareServiceDeviceProperty_VirtualMainVolume
+    nonisolated private static let mainVolumeSelector = kAudioHardwareServiceDeviceProperty_VirtualMainVolume
 
     func start() { queue.async { self._start() } }
     func stop()  { queue.async { self._stop() } }
@@ -255,7 +255,7 @@ final class SystemVolumeController: ObservableObject {
         }
     }
 
-    private static func defaultOutputDevice() -> AudioObjectID {
+    nonisolated private static func defaultOutputDevice() -> AudioObjectID {
         var device = AudioObjectID(kAudioObjectUnknown)
         var size = UInt32(MemoryLayout<AudioObjectID>.size)
         var addr = defaultDeviceAddress()
@@ -264,21 +264,21 @@ final class SystemVolumeController: ObservableObject {
         return status == noErr ? device : AudioObjectID(kAudioObjectUnknown)
     }
 
-    private static func defaultDeviceAddress() -> AudioObjectPropertyAddress {
+    nonisolated private static func defaultDeviceAddress() -> AudioObjectPropertyAddress {
         AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultOutputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain)
     }
 
-    private static func volumeAddress() -> AudioObjectPropertyAddress {
+    nonisolated private static func volumeAddress() -> AudioObjectPropertyAddress {
         AudioObjectPropertyAddress(
             mSelector: mainVolumeSelector,
             mScope: kAudioDevicePropertyScopeOutput,
             mElement: kAudioObjectPropertyElementMain)
     }
 
-    private static func muteAddress() -> AudioObjectPropertyAddress {
+    nonisolated private static func muteAddress() -> AudioObjectPropertyAddress {
         AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyMute,
             mScope: kAudioDevicePropertyScopeOutput,

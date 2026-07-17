@@ -218,7 +218,7 @@ struct MonitorSidebar: View {
                 Image(systemName: doseZoneSymbol)
                     .foregroundStyle(doseColor)
                     .font(.caption.weight(.semibold))
-                Text(String(format: "%.0f %%", audioState.sessionDosePercent * 100))
+                Text(String(format: "%.0f %%", audioState.sessionDoseFraction * 100))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(doseColor)
             }
@@ -227,7 +227,7 @@ struct MonitorSidebar: View {
                     Capsule().fill(Color.secondary.opacity(0.15))
                     Capsule()
                         .fill(doseColor)
-                        .frame(width: max(2, geo.size.width * min(1, audioState.sessionDosePercent)))
+                        .frame(width: max(2, geo.size.width * min(1, audioState.sessionDoseFraction)))
                 }
             }
             .frame(height: 5)
@@ -256,7 +256,7 @@ struct MonitorSidebar: View {
     }
 
     private var doseAccessibilityValue: String {
-        let percent = Int(audioState.sessionDosePercent * 100)
+        let percent = Int(audioState.sessionDoseFraction * 100)
         let zone: String = {
             switch audioState.safeListening.doseSeverity {
             case .safe:  return "safe"

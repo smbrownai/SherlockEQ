@@ -29,7 +29,7 @@ macOS doesn't ship a per-ear parametric EQ. SherlockEQ is one. It taps system au
 
 - **Locate** — a continuous-phase sine sweep, fine-tunable to 1 Hz, that lets you find a tinnitus pitch and set a per-ear notch.
 - **Interpret** — drag audiogram thresholds on a log-frequency chart; SherlockEQ converts them into a biquad EQ that compensates only where you have loss.
-- **Refine** — four EQ modes from a one-knob shelf to a fully parametric canvas, with a live spectrum, a NIOSH equal-energy dose tracker, and AutoEQ-compatible headphone profiles.
+- **Refine** — two EQ surfaces, a 12-band graphic grid and a fully parametric canvas, with a live spectrum, a NIOSH equal-energy dose tracker, and AutoEQ-compatible headphone profiles.
 
 A menu-bar popover surfaces live levels, today's dose, master gain, balance, and the notch toggle without opening the main window.
 

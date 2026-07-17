@@ -26,6 +26,12 @@ final class ProfileStore: ObservableObject {
     var undoManager: UndoManager?
 
     private let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "ProfileStore")
+
+    /// Where the factory-presets version gate and the directory override
+    /// live. Injectable because ProfileStoreTests runs hosted in the app, so
+    /// `.standard` IS the production domain — a leaked test key once pointed
+    /// the real app at a reboot-purged temp folder (audit TD-02).
+    private let defaults: UserDefaults
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
@@ -49,8 +55,9 @@ final class ProfileStore: ObservableObject {
     private var pendingFlush: DispatchWorkItem?
     private let writeDebounce: TimeInterval = 0.3
 
-    init(directory: URL? = nil) {
-        self.directory = directory ?? Self.bootDirectory()
+    init(directory: URL? = nil, defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        self.directory = directory ?? Self.bootDirectory(defaults: defaults)
         self.encoder = {
             let e = JSONEncoder()
             e.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -439,8 +446,8 @@ final class ProfileStore: ObservableObject {
     }
 
     private var storedFactoryVersion: Int {
-        get { UserDefaults.standard.integer(forKey: Self.factoryPresetsVersionKey) }
-        set { UserDefaults.standard.set(newValue, forKey: Self.factoryPresetsVersionKey) }
+        get { defaults.integer(forKey: Self.factoryPresetsVersionKey) }
+        set { defaults.set(newValue, forKey: Self.factoryPresetsVersionKey) }
     }
 
     private var factoryIDs: Set<UUID> { Set(HearingProfile.factoryProfiles.map(\.id)) }
@@ -624,8 +631,8 @@ final class ProfileStore: ObservableObject {
     /// (set via `relocate(to:moveExisting:)`) so a user who points the store
     /// at iCloud Drive / Dropbox / an external disk keeps that across
     /// launches. Falls back to the default Application Support path.
-    static func bootDirectory() -> URL {
-        if let path = UserDefaults.standard.string(forKey: directoryOverrideKey),
+    static func bootDirectory(defaults: UserDefaults = .standard) -> URL {
+        if let path = defaults.string(forKey: directoryOverrideKey),
            !path.isEmpty {
             // Reject an override that points inside the per-user temporary
             // directory. A user never relocates profiles there; the only way
@@ -637,7 +644,7 @@ final class ProfileStore: ObservableObject {
             // in the default folder. Self-heal by clearing the stale key.
             let tempRoot = URL(fileURLWithPath: NSTemporaryDirectory()).standardizedFileURL.path
             if URL(fileURLWithPath: path).standardizedFileURL.path.hasPrefix(tempRoot) {
-                UserDefaults.standard.removeObject(forKey: directoryOverrideKey)
+                defaults.removeObject(forKey: directoryOverrideKey)
                 return defaultDirectory()
             }
             return URL(fileURLWithPath: path)
@@ -732,9 +739,9 @@ final class ProfileStore: ObservableObject {
 
             directory = newDirectory
             if newDirectory.standardizedFileURL == Self.defaultDirectory().standardizedFileURL {
-                UserDefaults.standard.removeObject(forKey: Self.directoryOverrideKey)
+                defaults.removeObject(forKey: Self.directoryOverrideKey)
             } else {
-                UserDefaults.standard.set(newDirectory.path, forKey: Self.directoryOverrideKey)
+                defaults.set(newDirectory.path, forKey: Self.directoryOverrideKey)
             }
             loadAll()
         }

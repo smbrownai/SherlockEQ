@@ -69,13 +69,13 @@ anything, and persistent hearing concerns belong with a professional.
 
 ## Acclimatization
 
-The first time an audiogram is applied to a profile, the correction starts at
+The first time an audiogram is applied to a profile, the adjustment starts at
 **60 % strength and rises to 100 % over 21 days** — the same gradual easing
 hearing-care professionals use, because an unaccustomed ear finds a full
 prescription harsh at first. A chip shows which day you're on and the strength
 currently applied; **Skip to full strength** ends the ramp any time. The
-Compensation slider sets your long-term target — the ramp scales it, never
-overrides it.
+Adjustment strength slider sets your long-term target — the ramp scales it,
+never overrides it.
 
 ## Adjustment style: Steady vs Adaptive
 
@@ -110,7 +110,7 @@ quiet passages need more help than loud ones.
 
 ## Why an audiogram does not become an EQ curve directly
 
-This is the most important point on this page. **Hearing compensation is not
+This is the most important point on this page. **A hearing adjustment is not
 "add the inverse of the audiogram."** Several reasons:
 
 - **dB HL is not dB of EQ gain.** Thresholds are referenced to normal hearing, not to your playback's digital level, so they don't translate one-to-one into boost.
@@ -156,7 +156,7 @@ result with real-ear measurement.[^4][^3]
 
 SherlockEQ derives its suggested shape from **NAL-R** (National Acoustic
 Laboratories, Revised; Byrne & Dillon 1986), the linear predecessor of NAL-NL2,
-scaled down by the Compensation Strength control. It is a conservative starting
+scaled down by the Adjustment strength control. It is a conservative starting
 point for tuning by ear — not a verified clinical fitting.
 
 ## References
