@@ -106,7 +106,7 @@ final class HealthSafetyUITests: XCTestCase {
             "Audiograms and hearing adjustments",
             "Tinnitus tools and test tones",
             "Listening-level estimates and calibration",
-            "When to consult a hearing professional",
+            "What SherlockEQ can't assess",
             "Privacy and local processing",
         ]
         for heading in required {
@@ -115,16 +115,20 @@ final class HealthSafetyUITests: XCTestCase {
         }
     }
 
-    /// A "Learn more" link is present and operable (it dismisses the sheet and
-    /// opens the Help window).
+    /// A Help link is present and operable (it dismisses the sheet and opens
+    /// the Help window). Per-section "Learn more" links were removed — all
+    /// Help links now live in the footer "Learn more in Help" list, whose
+    /// controls carry "Open Help: <topic>" VoiceOver labels. Matching the old
+    /// "learn more" text would hit the footer's *header* (a static text whose
+    /// click is a no-op). Query across element types, not `app.buttons`:
+    /// `.buttonStyle(.link)` controls don't surface as buttons (verified —
+    /// a buttons-only query found nothing at runtime).
     func testLearnMoreLinkOperates() {
         openSheet()
-        // Section links carry descriptive VoiceOver labels ("Learn more about
-        // … in Help"); match on the "Learn more" prefix across buttons + links.
-        let predicate = NSPredicate(format: "label CONTAINS[c] 'learn more'")
-        let learnMore = app.descendants(matching: .any).matching(predicate).firstMatch
-        XCTAssertTrue(learnMore.waitForExistence(timeout: 3), "No Learn more link")
-        learnMore.click()
+        let predicate = NSPredicate(format: "label BEGINSWITH[c] 'open help'")
+        let helpLink = app.descendants(matching: .any).matching(predicate).firstMatch
+        XCTAssertTrue(helpLink.waitForExistence(timeout: 3), "No footer Help link")
+        helpLink.click()
         XCTAssertFalse(sheetTitle.waitForExistence(timeout: 3),
                        "Sheet should dismiss when opening a Help article")
     }
