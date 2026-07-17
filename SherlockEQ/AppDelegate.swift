@@ -138,6 +138,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func bootstrap() {
+        // One-time hygiene: the Graphic EQ's "Tone guide" toggle was removed
+        // (the region strip is always on now), orphaning its preference on
+        // machines that ever flipped it. Idempotent and cheap (audit DC-03).
+        UserDefaults.standard.removeObject(forKey: "sherlockeq.graphic.toneGuide")
         profileStore.loadAll()
         profileStore.reconcileFactoryPresets()
         audioState.adoptDefaultProfileIfNeeded(from: profileStore)
