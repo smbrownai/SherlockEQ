@@ -38,21 +38,43 @@ final class NoticeCenter: ObservableObject {
     /// gets called more than once per session.
     private var warnedAboutDeniedNotificationsAtStartup = false
 
+    /// The id of the store-error banner this binding last showed, so the
+    /// recovered (nil) transition clears exactly that banner and nothing
+    /// else — a tap-permission or engine error on screen must not be yanked
+    /// down because an unrelated profile save later succeeded.
+    private var storeErrorNoticeID: UUID?
+
     /// Bind to a profile store so persistence errors automatically
     /// surface in the banner. Idempotent — calling twice rebinds; the
     /// previous subscription is cancelled. `ProfileStore.lastError`
     /// is set by the `tracking` wrapper around every throwing op
-    /// (save / delete / import / export / relocate / loadAll), so
-    /// every persistence failure shows up here without each call
-    /// site needing to plumb the error itself.
+    /// (save / delete / import / export / relocate / loadAll) and by the
+    /// deferred write path, so every persistence failure shows up here
+    /// without each call site needing to plumb the error itself.
+    ///
+    /// Both transitions matter: the store publishes `nil` when a later
+    /// operation SUCCEEDS, and the banner must follow — errors have no
+    /// auto-dismiss, so before this a single failed save left a stale
+    /// "Save failed" banner up forever even after saves recovered
+    /// (audit CX-04; a `compactMap { $0 }` here dropped the nil).
     func bind(to profileStore: ProfileStore) {
         profileLastErrorSubscription = profileStore.$lastError
-            .compactMap { $0 }
             .sink { [weak self] message in
                 Task { @MainActor in
-                    self?.showNotice(
-                        TransientNotice(severity: .error, message: message)
-                    )
+                    guard let self else { return }
+                    if let message {
+                        let notice = TransientNotice(severity: .error, message: message)
+                        self.storeErrorNoticeID = notice.id
+                        self.showNotice(notice)
+                    } else if let id = self.storeErrorNoticeID {
+                        self.storeErrorNoticeID = nil
+                        // Clear only if OUR banner is still the visible one —
+                        // the user may have dismissed it, or a different
+                        // source may have replaced it since.
+                        if self.userVisibleNotice?.id == id {
+                            self.dismissNotice()
+                        }
+                    }
                 }
             }
     }
