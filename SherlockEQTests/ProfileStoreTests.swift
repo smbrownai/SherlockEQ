@@ -29,8 +29,22 @@ struct ProfileStoreTests {
         try? FileManager.default.removeItem(at: url)
     }
 
-    private static func makeStore(at url: URL) -> ProfileStore {
-        ProfileStore(directory: url)
+    /// A throwaway defaults suite, one per test. These tests run hosted in
+    /// the app (TEST_HOST), so `UserDefaults.standard` IS the production
+    /// `com.shawnbrown.SherlockEQ` domain — a leaked key once pointed the
+    /// real app at a reboot-purged temp dir (see `bootDirectory()`'s
+    /// self-heal). Injecting a scratch suite makes that pollution
+    /// structurally impossible (audit TD-02). `cleanup()` deletes the plist
+    /// the suite may have materialized.
+    private struct ScratchDefaults {
+        let suite = "SherlockEQTests.\(UUID().uuidString)"
+        let defaults: UserDefaults
+        init() { defaults = UserDefaults(suiteName: suite)! }
+        func cleanup() { defaults.removePersistentDomain(forName: suite) }
+    }
+
+    private static func makeStore(at url: URL, defaults: UserDefaults? = nil) -> ProfileStore {
+        ProfileStore(directory: url, defaults: defaults ?? ScratchDefaults().defaults)
     }
 
     // MARK: - Save / load round-trip
@@ -109,17 +123,19 @@ struct ProfileStoreTests {
 
     // MARK: - Factory presets
 
-    /// The version-gate key lives in shared UserDefaults; reset it per test so
-    /// each starts "pre-migration" and the gated reconcile actually runs.
+    /// The version gate is read from the store's injected defaults; seed it
+    /// per test so each starts "pre-migration" and the gated reconcile
+    /// actually runs.
     private static let factoryVersionKey = "sherlockeq.factoryPresetsVersion"
 
     @Test func reconcileInstallsFourFactoryPresetsInOrder() {
         let dir = Self.makeTempDir()
         defer { Self.cleanup(dir) }
-        UserDefaults.standard.set(0, forKey: Self.factoryVersionKey)
-        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
+        let scratch = ScratchDefaults()
+        defer { scratch.cleanup() }
+        scratch.defaults.set(0, forKey: Self.factoryVersionKey)
 
-        let store = Self.makeStore(at: dir)
+        let store = Self.makeStore(at: dir, defaults: scratch.defaults)
         store.reconcileFactoryPresets()
         #expect(store.profiles.map(\.name) == ["Voice Clarity", "Music Balanced", "Gentle Listening", "Reduce Boom"])
         #expect(store.profiles.allSatisfy { $0.isBuiltIn })
@@ -134,10 +150,11 @@ struct ProfileStoreTests {
         // (The v1 delete-on-sight rule once wiped a user's edited Default.)
         let dir = Self.makeTempDir()
         defer { Self.cleanup(dir) }
-        UserDefaults.standard.set(0, forKey: Self.factoryVersionKey)
-        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
+        let scratch = ScratchDefaults()
+        defer { scratch.cleanup() }
+        scratch.defaults.set(0, forKey: Self.factoryVersionKey)
 
-        let store = Self.makeStore(at: dir)
+        let store = Self.makeStore(at: dir, defaults: scratch.defaults)
         try store.save(.makeDefault(name: "Default", isBuiltIn: true)) // legacy random-id built-in
         store.reconcileFactoryPresets()
         let demoted = try #require(store.profiles.first { $0.name == "Default" })
@@ -149,20 +166,21 @@ struct ProfileStoreTests {
 
     /// Seed the store as a v1 install: the four v1 factory presets on disk
     /// and the version gate at 1.
-    private static func seedV1(_ store: ProfileStore) throws {
+    private static func seedV1(_ store: ProfileStore, defaults: UserDefaults) throws {
         for v1 in ProfileStore.FrozenFactoryV1.profiles {
             try store.save(v1)
         }
-        UserDefaults.standard.set(1, forKey: factoryVersionKey)
+        defaults.set(1, forKey: factoryVersionKey)
     }
 
     @Test func upgradeReplacesPristineV1PresetsAndRetiresPresenceBoost() throws {
         let dir = Self.makeTempDir()
         defer { Self.cleanup(dir) }
-        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
+        let scratch = ScratchDefaults()
+        defer { scratch.cleanup() }
 
-        let store = Self.makeStore(at: dir)
-        try Self.seedV1(store)
+        let store = Self.makeStore(at: dir, defaults: scratch.defaults)
+        try Self.seedV1(store, defaults: scratch.defaults)
         store.reconcileFactoryPresets()
 
         // Pristine v1 presets upgraded in place to the 12-band v2 voicings.
@@ -178,10 +196,11 @@ struct ProfileStoreTests {
     @Test func upgradeLeavesEditedV1PresetAlone() throws {
         let dir = Self.makeTempDir()
         defer { Self.cleanup(dir) }
-        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
+        let scratch = ScratchDefaults()
+        defer { scratch.cleanup() }
 
-        let store = Self.makeStore(at: dir)
-        try Self.seedV1(store)
+        let store = Self.makeStore(at: dir, defaults: scratch.defaults)
+        try Self.seedV1(store, defaults: scratch.defaults)
         // User edited Music Balanced's 1 kHz band in v1.
         var edited = try #require(store.profiles.first { $0.id == HearingProfile.Factory.musicBalanced.id })
         EQBandLookup.mutateBothEars(of: &edited) { bands in
@@ -203,10 +222,11 @@ struct ProfileStoreTests {
     @Test func upgradeDemotesEditedPresenceBoost() throws {
         let dir = Self.makeTempDir()
         defer { Self.cleanup(dir) }
-        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
+        let scratch = ScratchDefaults()
+        defer { scratch.cleanup() }
 
-        let store = Self.makeStore(at: dir)
-        try Self.seedV1(store)
+        let store = Self.makeStore(at: dir, defaults: scratch.defaults)
+        try Self.seedV1(store, defaults: scratch.defaults)
         var editedPB = try #require(store.profiles.first { $0.id == ProfileStore.FrozenFactoryV1.presenceBoostID })
         EQBandLookup.mutateBothEars(of: &editedPB) { bands in
             EQBandLookup.setGain(-4, at: 8000, bandwidth: 1.0, filterType: .parametric, in: &bands)
@@ -227,10 +247,11 @@ struct ProfileStoreTests {
     @Test func reconcileDoesNotReAddDeletedPresetAtSameVersion() throws {
         let dir = Self.makeTempDir()
         defer { Self.cleanup(dir) }
-        UserDefaults.standard.set(0, forKey: Self.factoryVersionKey)
-        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
+        let scratch = ScratchDefaults()
+        defer { scratch.cleanup() }
+        scratch.defaults.set(0, forKey: Self.factoryVersionKey)
 
-        let store = Self.makeStore(at: dir)
+        let store = Self.makeStore(at: dir, defaults: scratch.defaults)
         store.reconcileFactoryPresets()                       // installs 4, bumps version
         let gentle = try #require(store.profiles.first { $0.name == "Gentle Listening" })
         try store.delete(gentle)
@@ -242,10 +263,11 @@ struct ProfileStoreTests {
     @Test func restoreFactoryPresetsRecreatesDeleted() throws {
         let dir = Self.makeTempDir()
         defer { Self.cleanup(dir) }
-        UserDefaults.standard.set(0, forKey: Self.factoryVersionKey)
-        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
+        let scratch = ScratchDefaults()
+        defer { scratch.cleanup() }
+        scratch.defaults.set(0, forKey: Self.factoryVersionKey)
 
-        let store = Self.makeStore(at: dir)
+        let store = Self.makeStore(at: dir, defaults: scratch.defaults)
         store.reconcileFactoryPresets()
         let gentle = try #require(store.profiles.first { $0.name == "Gentle Listening" })
         try store.delete(gentle)
@@ -257,10 +279,11 @@ struct ProfileStoreTests {
     @Test func resetProfileToFactoryRestoresValues() throws {
         let dir = Self.makeTempDir()
         defer { Self.cleanup(dir) }
-        UserDefaults.standard.set(0, forKey: Self.factoryVersionKey)
-        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
+        let scratch = ScratchDefaults()
+        defer { scratch.cleanup() }
+        scratch.defaults.set(0, forKey: Self.factoryVersionKey)
 
-        let store = Self.makeStore(at: dir)
+        let store = Self.makeStore(at: dir, defaults: scratch.defaults)
         store.reconcileFactoryPresets()
         var vc = try #require(store.profiles.first { $0.name == "Voice Clarity" })
         let id = vc.id
@@ -285,10 +308,11 @@ struct ProfileStoreTests {
     @Test func differsFromFactoryDetectsAudiogramAndCompensationEdits() throws {
         let dir = Self.makeTempDir()
         defer { Self.cleanup(dir) }
-        UserDefaults.standard.set(0, forKey: Self.factoryVersionKey)
-        defer { UserDefaults.standard.removeObject(forKey: Self.factoryVersionKey) }
+        let scratch = ScratchDefaults()
+        defer { scratch.cleanup() }
+        scratch.defaults.set(0, forKey: Self.factoryVersionKey)
 
-        let store = Self.makeStore(at: dir)
+        let store = Self.makeStore(at: dir, defaults: scratch.defaults)
         store.reconcileFactoryPresets()
         var vc = try #require(store.profiles.first { $0.name == "Voice Clarity" })
         let id = vc.id
@@ -486,11 +510,10 @@ struct ProfileStoreTests {
 
     // MARK: - Relocate two-phase commit
 
-    /// `relocate(to:)` persists the new path into the shared UserDefaults
-    /// override key. Because tests run hosted in the app bundle, that key is
-    /// the real `com.shawnbrown.SherlockEQ` domain — leaving it set points the
-    /// production app at a temp dir that gets purged on reboot, silently
-    /// "losing" every profile. Always clear it after a relocate test.
+    /// `relocate(to:)` persists the new path into the store's injected
+    /// defaults under this key. With ScratchDefaults the production domain
+    /// can no longer be touched; the constant stays so the tests can assert
+    /// the persistence actually happened.
     private static let directoryOverrideKey = "sherlockeq.profilesDirectory"
 
     @Test func relocateMovesFilesIntoNewDir() throws {
@@ -498,13 +521,18 @@ struct ProfileStoreTests {
         defer { Self.cleanup(oldDir) }
         let newDir = Self.makeTempDir()
         defer { Self.cleanup(newDir) }
-        defer { UserDefaults.standard.removeObject(forKey: Self.directoryOverrideKey) }
+        let scratch = ScratchDefaults()
+        defer { scratch.cleanup() }
 
-        let store = Self.makeStore(at: oldDir)
+        let store = Self.makeStore(at: oldDir, defaults: scratch.defaults)
         try store.save(HearingProfile.makeDefault(name: "A"))
         try store.save(HearingProfile.makeDefault(name: "B"))
 
         try store.relocate(to: newDir, moveExisting: true)
+
+        // The new location persisted — into the scratch suite, not the
+        // production domain.
+        #expect(scratch.defaults.string(forKey: Self.directoryOverrideKey) == newDir.path)
 
         // After relocate: new dir has the two profiles, old dir is
         // empty (phase 2 deleted originals successfully).
@@ -522,9 +550,10 @@ struct ProfileStoreTests {
         defer { Self.cleanup(oldDir) }
         let newDir = Self.makeTempDir()
         defer { Self.cleanup(newDir) }
-        defer { UserDefaults.standard.removeObject(forKey: Self.directoryOverrideKey) }
+        let scratch = ScratchDefaults()
+        defer { scratch.cleanup() }
 
-        let store = Self.makeStore(at: oldDir)
+        let store = Self.makeStore(at: oldDir, defaults: scratch.defaults)
         try store.save(HearingProfile.makeDefault(name: "Stays in old"))
 
         try store.relocate(to: newDir, moveExisting: false)
