@@ -4,6 +4,7 @@ import AVFoundation
 import Combine
 import CoreAudio
 import OSLog
+import os
 import ServiceManagement
 import SwiftUI
 
@@ -164,6 +165,11 @@ final class AudioState: ObservableObject {
     /// sides see the same answer.
     @Published var sessionDosePercent: Double = 0
     @Published var remainingMinutes: Double?
+
+    /// Latest dBA staged by the render thread's level pass, drained by
+    /// `doseDrainTimer`. See the wiring comment at `onLevelUpdate` (RT-01).
+    private let doseLevelSlot = OSAllocatedUnfairLock<Float?>(initialState: nil)
+    private var doseDrainTimer: Timer?
 
     /// Banner state — see `NoticeCenter`. Views access it via
     /// `audioState.noticeCenter.userVisibleNotice`.
@@ -714,10 +720,23 @@ final class AudioState: ObservableObject {
             Task { @MainActor in self?.refreshAutoEQMismatch() }
         }
 
-        // Spectrum analyzer → dose tracker.
-        spectrum.onLevelUpdate = { [weak tracker] dba in
-            Task { @MainActor in tracker?.update(levelDBA: Double(dba)) }
+        // Spectrum analyzer → dose tracker, via a staging slot.
+        // `onLevelUpdate` fires on the AUDIO RENDER THREAD (~20 Hz from the
+        // cheap level pass); the old closure heap-allocated a Task there on
+        // every fire (audit RT-01). Mirror StereoMonitor's pattern instead:
+        // the render side only stores the latest dBA under an unfair lock —
+        // no allocation — and a 10 Hz main timer drains it into the tracker.
+        // The tracker's NIOSH integration is wall-clock self-timed ("~10 Hz
+        // is plenty" per its docs), so the cadence change doesn't skew dose.
+        spectrum.onLevelUpdate = { [doseLevelSlot] dba in
+            doseLevelSlot.withLock { $0 = dba }
         }
+        let drain = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+            // Scheduled on RunLoop.main → fires on the main thread.
+            MainActor.assumeIsolated { self?.drainDoseLevelSlot() }
+        }
+        RunLoop.main.add(drain, forMode: .common)
+        doseDrainTimer = drain
 
         // Re-broadcast child object changes so SwiftUI views observing AudioState
         // refresh when any child's @Published state changes.
@@ -1060,6 +1079,19 @@ final class AudioState: ObservableObject {
     /// regardless of whether the value changed, which would otherwise
     /// re-render the popover even when nothing observable moved.
     /// Skipping the no-op write keeps SwiftUI quiet on unchanged data.
+    /// Consume the staged level, if any. Take-and-clear so a stalled feed
+    /// (audio stopped → ingest stops firing) doesn't re-integrate the same
+    /// sample forever — matching the old behavior where the callback simply
+    /// stopped arriving.
+    private func drainDoseLevelSlot() {
+        let staged = doseLevelSlot.withLock { slot -> Float? in
+            defer { slot = nil }
+            return slot
+        }
+        guard let dba = staged else { return }
+        safeListening.update(levelDBA: Double(dba))
+    }
+
     private func mirrorTrackerState() {
         let newDose = safeListening.sessionDose
         if sessionDosePercent != newDose { sessionDosePercent = newDose }

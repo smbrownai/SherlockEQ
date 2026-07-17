@@ -192,10 +192,18 @@ final class SineToneGenerator: ObservableObject {
             // Synthesize into the first ENABLED channel, then copy/zero the
             // rest per the mask (per-ear presentation for the Listening
             // Check; both enabled = the Tone Finder's original behavior).
-            let enabled: [Bool] = buffers.indices.map { ch in
-                ch == 0 ? s.leftEnabled : (ch == 1 ? s.rightEnabled : false)
+            // Scalars, not a per-callback [Bool] — this closure runs on the
+            // audio render thread, where a heap allocation can stall on the
+            // malloc lock and drop out (audit RT-02). Only channels 0/1 can
+            // ever be enabled.
+            let leftOn = s.leftEnabled
+            let rightOn = s.rightEnabled
+            func channelEnabled(_ ch: Int) -> Bool {
+                ch == 0 ? leftOn : (ch == 1 ? rightOn : false)
             }
-            guard let scratchCh = enabled.firstIndex(of: true),
+            let scratchIdx: Int? = leftOn && buffers.indices.contains(0) ? 0
+                : (rightOn && buffers.indices.contains(1) ? 1 : nil)
+            guard let scratchCh = scratchIdx,
                   let scratchPtr = buffers[scratchCh].mData?.assumingMemoryBound(to: Float.self)
             else {
                 toneState.writeBack(smoothedFrequency: freq, phase: phase, pulsePosition: pulsePos)
@@ -225,7 +233,7 @@ final class SineToneGenerator: ObservableObject {
             }
             for ch in buffers.indices where ch != scratchCh {
                 guard let ptr = buffers[ch].mData?.assumingMemoryBound(to: Float.self) else { continue }
-                if enabled[ch] {
+                if channelEnabled(ch) {
                     memcpy(ptr, scratchPtr, frames * MemoryLayout<Float>.size)
                 } else {
                     memset(ptr, 0, frames * MemoryLayout<Float>.size)

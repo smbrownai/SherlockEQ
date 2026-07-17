@@ -38,6 +38,11 @@ final class StereoMonitor: ObservableObject {
     private struct Staging {
         var leftPeakLinear: Float
         var rightPeakLinear: Float
+        /// Channel count waiting to be logged (nil = nothing pending).
+        /// `ingest` runs on the render thread, where os_log formats and
+        /// crosses into logd — not allocation/latency safe (audit RT-04) —
+        /// so it stages the value here and the display tick emits it.
+        var pendingChannelCountLog: Int? = nil
     }
 
     init() {
@@ -160,7 +165,11 @@ final class StereoMonitor: ObservableObject {
             return true
         }
         if changed {
-            Self.monitorLog.info("StereoMonitor tap channel count = \(chCount)")
+            // Stage rather than log: see Staging.pendingChannelCountLog.
+            // The message lands on the next display tick — i.e. while a
+            // meter is on screen, which is exactly when someone is looking
+            // at an L≈R mystery this diagnostic exists for.
+            stagingLock.withLock { $0.pendingChannelCountLog = chCount }
         }
 
         let left = channels[0]
@@ -210,13 +219,18 @@ final class StereoMonitor: ObservableObject {
     /// `@Published` set happen on the main thread because the Timer
     /// fires on the runloop it was scheduled on (main).
     private func tick() {
-        let (lPeak, rPeak): (Float, Float) = stagingLock.withLock { staging in
-            let copy = (staging.leftPeakLinear, staging.rightPeakLinear)
+        let (lPeak, rPeak, pendingLog): (Float, Float, Int?) = stagingLock.withLock { staging in
+            let copy = (staging.leftPeakLinear, staging.rightPeakLinear, staging.pendingChannelCountLog)
             // Reset peaks inside the lock so the next audio tick can
             // observe a fresh max.
             staging.leftPeakLinear = 0
             staging.rightPeakLinear = 0
+            staging.pendingChannelCountLog = nil
             return copy
+        }
+        // Deferred from ingest (render thread) — emit outside the lock.
+        if let chCount = pendingLog {
+            Self.monitorLog.info("StereoMonitor tap channel count = \(chCount)")
         }
 
         // Per-tick RMS for `AnalogVUMeter`'s ballistics. The audio tap
