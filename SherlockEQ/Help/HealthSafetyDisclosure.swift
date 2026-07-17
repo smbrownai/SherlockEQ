@@ -2,10 +2,10 @@ import Foundation
 
 /// Single source of truth for SherlockEQ's health & safety disclosure.
 ///
-/// Every screen that needs disclosure — the persistent sidebar item, the
-/// compact "not medical care" chips, and the consolidated sheet — reads its
-/// copy from here, so the wording can't drift into slightly-different copies
-/// across views. The sheet renders `sections`; contextual chips use `chip*`.
+/// Every surface that needs disclosure — the persistent sidebar item and the
+/// consolidated sheet — reads its copy from here, so the wording can't drift
+/// into slightly-different copies across views. The sheet renders `sections`
+/// and the `learnMoreTopics` footer.
 ///
 /// **Wording note (for legal / audiology review):** the statements here
 /// preserve the substance of the disclosures they replace and use
@@ -22,13 +22,6 @@ enum HealthSafetyDisclosure {
 
     /// One calm sentence that frames the whole sheet.
     static let summary = "SherlockEQ is a consumer audio tool for everyday listening — not medical care. Here's what that means, how to use it safely, and where its limits are."
-
-    // MARK: - Compact chip (repeated-card replacement)
-
-    /// Lead-in shown on the compact disclosure chip. The action label
-    /// (`chipAction`) opens the sheet.
-    static let chipLead = "Consumer audio tools — not medical care."
-    static let chipAction = "Health & Safety…"
 
     // MARK: - Sections
 

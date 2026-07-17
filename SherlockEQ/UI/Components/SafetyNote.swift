@@ -1,40 +1,9 @@
 import SwiftUI
 
-/// Compact, consistent replacement for the repeated "not a medical device"
-/// cards. Reads "Consumer audio tools — not medical care. Health & Safety…"
-/// and the whole chip opens the consolidated `HealthSafetySheet`. Copy comes
-/// from `HealthSafetyDisclosure` so every instance stays identical.
-struct HealthSafetyChip: View {
-    @EnvironmentObject private var audioState: AudioState
-
-    var body: some View {
-        Button {
-            audioState.showHealthSafety = true
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "heart.text.square")
-                    .foregroundStyle(.secondary)
-                Text(HealthSafetyDisclosure.chipLead)
-                    .foregroundStyle(.secondary)
-                Text(HealthSafetyDisclosure.chipAction)
-                    .foregroundStyle(.tint)
-                    .fontWeight(.medium)
-                Spacer(minLength: 0)
-            }
-            .font(.callout)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.06)))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help("Open Health & Safety — what SherlockEQ is and isn't, and when to seek professional help.")
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(HealthSafetyDisclosure.chipLead) Open Health & Safety.")
-        .accessibilityAddTraits(.isButton)
-    }
-}
+// HealthSafetyChip used to live here — the per-screen "not medical care"
+// strip. Every mount was removed once the persistent sidebar Health & Safety
+// item landed (PR #129), leaving the struct unreachable; deleted in the
+// audit's dead-code pass (DC-02).
 
 /// A just-in-time safety notice: one or two sentences of timing-relevant
 /// caution plus a "Learn more" link into the Health & Safety sheet. For

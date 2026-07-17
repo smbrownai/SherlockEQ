@@ -12,9 +12,7 @@ struct HealthSafetyDisclosureTests {
         let parts = HealthSafetyDisclosure.sections.flatMap { section in
             [section.title] + section.paragraphs
         }
-        return (parts + [HealthSafetyDisclosure.summary,
-                         HealthSafetyDisclosure.chipLead,
-                         HealthSafetyDisclosure.chipAction]).joined(separator: "\n").lowercased()
+        return (parts + [HealthSafetyDisclosure.summary]).joined(separator: "\n").lowercased()
     }
 
     @Test func hasAllRequestedSections() {
@@ -83,10 +81,5 @@ struct HealthSafetyDisclosureTests {
             #expect(!entry.topic.slug.isEmpty)
             #expect(!entry.label.isEmpty)
         }
-    }
-
-    @Test func chipCopyIsNonEmpty() {
-        #expect(!HealthSafetyDisclosure.chipLead.isEmpty)
-        #expect(HealthSafetyDisclosure.chipAction.contains("Health & Safety"))
     }
 }
