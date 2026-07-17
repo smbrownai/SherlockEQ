@@ -7,7 +7,7 @@ import SwiftUI
 /// type the iOS companion maps an `HKAudiogramSample` into — so every target
 /// receives the identical measured thresholds and has its NAL-R correction
 /// layer recomputed via `HearingProfile.applyingAudiogram`. Each target keeps
-/// its own EQ, tinnitus notch, and compensation strength; only the thresholds
+/// its own EQ, tinnitus notch, and adjustment strength; only the thresholds
 /// and the derived `correctionBands` change. The source profile is excluded
 /// (it already has this audiogram).
 struct ApplyAudiogramSheet: View {
@@ -44,7 +44,7 @@ struct ApplyAudiogramSheet: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Apply Audiogram to Other Profiles")
                 .font(.headline)
-            Text("Copies \(source.name)'s hearing thresholds onto the profiles you choose and recomputes their hearing adjustment. Their EQ, tinnitus notch, and compensation strength are left as they are.")
+            Text("Copies \(source.name)'s hearing thresholds onto the profiles you choose and recomputes their hearing adjustment. Their manual EQ, tinnitus notch, and adjustment strength are left as they are.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

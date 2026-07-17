@@ -22,8 +22,10 @@ struct AdaptivePreviewView: View {
     /// The ear's user/preset EQ bands — in Adaptive mode these still run in
     /// the static cascade, so the heard result includes them.
     let userBands: [EQBand]
-    /// Effective strength (target × acclimatization ramp).
+    /// Effective strength (target × acclimatization ramp) — drives the curves.
     let strength: Double
+    /// The user's strength dial, for the header label only.
+    let targetStrength: Double
     let earLabel: String
     let earColor: Color
 
@@ -65,7 +67,7 @@ struct AdaptivePreviewView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
-            Text(String(format: "Adjustment strength %.0f%%", strength * 100))
+            Text(AdjustmentStrengthLabel.text(target: targetStrength, effective: strength))
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
         }

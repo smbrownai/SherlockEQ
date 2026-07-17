@@ -549,8 +549,11 @@ struct ProfileDetailView: View {
 
         DisclosureGroup(isExpanded: $showAdvancedTuning) {
             VStack(alignment: .leading, spacing: 12) {
+                // The TARGET strength dial. The acclimatization chip right
+                // below shows the currently-applied value while the gradual
+                // ramp runs — target here, "now" there (audit CX-06).
                 sliderRow(
-                    "Compensation",
+                    "Adjustment strength",
                     scope: .profile,
                     value: profile.compensationFactor,
                     range: 0.25...1.0,

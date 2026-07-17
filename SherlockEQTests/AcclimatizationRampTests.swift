@@ -149,4 +149,67 @@ struct AcclimatizationRampTests {
         #expect(decoded.compensationFactor == 0.5)   // target untouched
         #expect(decoded.acclimatizationStartDate == nil)   // legacy: no ramp
     }
+
+    // MARK: - Clear + strength labelling (audit CX-06/07)
+
+    /// Clearing returns the whole hearing-adjustment layer to its
+    /// never-entered state — including the strength dial. The reset is
+    /// deliberate: re-entry force-resets the target to 1.0 anyway (first-
+    /// audiogram semantics), so clearing makes that explicit at "Clear" time
+    /// instead of silently discarding a lowered strength on the next entry.
+    @Test func clearAudiogramResetsTheFullAdjustmentLayer() {
+        var p = HearingProfile.makeDefault(name: "Cleared")
+        var loss = AudiogramPoint.flat
+        loss[4].thresholddBHL = 40   // 3 kHz dip → real derived correction
+        p.applyMeasuredAudiogram(left: loss, right: loss, source: .listeningCheck)
+        p.compensationFactor = 0.4   // user lowered the target afterwards
+        #expect(p.hasEnteredAudiogram)
+        #expect(!p.leftEar.correctionBands.isEmpty)
+        #expect(p.acclimatizationStartDate != nil)
+
+        p.clearAudiogram()
+
+        #expect(!p.hasEnteredAudiogram)
+        #expect(p.leftEar.thresholds == AudiogramPoint.flat)
+        #expect(p.rightEar.thresholds == AudiogramPoint.flat)
+        #expect(p.leftEar.correctionBands.isEmpty)
+        #expect(p.rightEar.correctionBands.isEmpty)
+        #expect(p.audiogramSource == .manual)
+        #expect(p.acclimatizationStartDate == nil)
+        #expect(p.compensationFactor == 1.0)
+    }
+
+    /// Clearing must not touch anything outside the adjustment layer.
+    @Test func clearAudiogramLeavesManualEQAndNotchAlone() {
+        var p = HearingProfile.makeDefault(name: "Kept")
+        var loss = AudiogramPoint.flat
+        loss[4].thresholddBHL = 40
+        p.applyMeasuredAudiogram(left: loss, right: loss, source: .manual)
+        let manual = EQBand(frequencyHz: 250, gaindB: -3, bandwidth: 1.0,
+                            filterType: .parametric, enabled: true)
+        p.leftEar.bands.append(manual)
+        p.leftNotch.enabled = true
+        p.leftNotch.frequencyHz = 6000
+
+        p.clearAudiogram()
+
+        #expect(p.leftEar.bands.contains { $0.frequencyHz == 250 && $0.gaindB == -3 })
+        #expect(p.leftNotch.enabled)
+        #expect(p.leftNotch.frequencyHz == 6000)
+    }
+
+    /// One wording rule for the strength readout: single figure once the
+    /// ramp completes, target + current while they differ (audit CX-06 —
+    /// two screens showed different numbers under the same word).
+    @Test func strengthLabelCollapsesWhenTargetEqualsEffective() {
+        #expect(AdjustmentStrengthLabel.text(target: 1.0, effective: 1.0)
+                == "Adjustment strength 100%")
+        #expect(AdjustmentStrengthLabel.text(target: 1.0, effective: 0.61)
+                == "Adjustment strength 100% · currently 61%")
+        #expect(AdjustmentStrengthLabel.text(target: 0.8, effective: 0.48)
+                == "Adjustment strength 80% · currently 48%")
+        // Rounding to the same whole percent reads as one figure.
+        #expect(AdjustmentStrengthLabel.text(target: 1.0, effective: 0.999)
+                == "Adjustment strength 100%")
+    }
 }

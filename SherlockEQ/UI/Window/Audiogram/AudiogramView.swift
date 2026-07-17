@@ -16,6 +16,7 @@ struct AudiogramView: View {
     @State private var tab: EarTab = .left
     @State private var showingApplySheet = false
     @State private var showingListeningCheck = false
+    @State private var confirmingClearAudiogram = false
     /// Numeric threshold table starts collapsed on a fresh profile (the chart
     /// and Listening Check lead); expands once an audiogram has been entered.
     @State private var numericExpanded = false
@@ -74,6 +75,23 @@ struct AudiogramView: View {
                 .environmentObject(audioState)
                 .environmentObject(profileStore)
         }
+        // Destructive and previously un-confirmed: clearing also resets the
+        // adjustment-strength dial (see HearingProfile.clearAudiogram), so
+        // the dialog says exactly what goes and what stays.
+        .confirmationDialog(
+            "Clear this audiogram?",
+            isPresented: $confirmingClearAudiogram,
+            titleVisibility: .visible
+        ) {
+            Button("Clear Audiogram", role: .destructive) {
+                if let live = audioState.activeProfile(in: profileStore) {
+                    clearAudiogram(live)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Removes the thresholds and the hearing adjustment derived from them, and resets adjustment strength to 100%. Manual EQ, the tinnitus notch, and headphone correction are kept. Undo restores everything.")
+        }
     }
 
     // MARK: - Sections
@@ -112,7 +130,7 @@ struct AudiogramView: View {
                 Button("Apply to Other Profiles…", systemImage: "person.2") { showingApplySheet = true }
                 if profile.hasEnteredAudiogram {
                     Divider()
-                    Button("Clear Audiogram…", systemImage: "trash", role: .destructive) { clearAudiogram(profile) }
+                    Button("Clear Audiogram…", systemImage: "trash", role: .destructive) { confirmingClearAudiogram = true }
                 }
             } label: {
                 Label("Manage Audiogram", systemImage: "ear")
@@ -166,14 +184,11 @@ struct AudiogramView: View {
     /// derived correction, no provenance/ramp). Leaves EQ, notch, and device
     /// links alone — only the hearing-adjustment layer is cleared.
     private func clearAudiogram(_ profile: HearingProfile) {
-        var updated = profile
-        updated.leftEar.thresholds = AudiogramPoint.flat
-        updated.rightEar.thresholds = AudiogramPoint.flat
-        updated.leftEar.correctionBands = []
-        updated.rightEar.correctionBands = []
-        updated.audiogramDate = nil
-        updated.audiogramSource = .manual
-        updated.acclimatizationStartDate = nil
+        // Live copy (CX-05), then the model's own reset — the mutation lives
+        // on HearingProfile so its semantics (incl. the strength reset) are
+        // unit-tested rather than view-only.
+        var updated = profileStore.profiles.first { $0.id == profile.id } ?? profile
+        updated.clearAudiogram()
         try? profileStore.save(updated, actionName: "Clear audiogram for \(profile.name)")
         numericExpanded = false
     }
@@ -307,6 +322,7 @@ struct AudiogramView: View {
                     correctionBands: tab == .left ? profile.leftEar.correctionBands : profile.rightEar.correctionBands,
                     userBands: tab == .left ? profile.leftEar.bands : profile.rightEar.bands,
                     strength: profile.effectiveCorrectionStrength(),
+                    targetStrength: profile.compensationFactor,
                     earLabel: tab == .left ? "left ear" : "right ear",
                     earColor: earColor
                 )
@@ -318,7 +334,8 @@ struct AudiogramView: View {
                 EQPreviewView(
                     leftBands: profile.effectiveCorrectionBands().left + profile.leftEar.bands,
                     rightBands: profile.effectiveCorrectionBands().right + profile.rightEar.bands,
-                    compensationFactor: profile.effectiveCorrectionStrength()
+                    targetStrength: profile.compensationFactor,
+                    effectiveStrength: profile.effectiveCorrectionStrength()
                 )
             }
         }
