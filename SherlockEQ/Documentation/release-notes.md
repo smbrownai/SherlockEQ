@@ -20,6 +20,14 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.9.2
+
+An important fix: SherlockEQ 0.9.0 and 0.9.1 could quit unexpectedly after roughly ten minutes of continuous playback. If you're running either of those versions, please update. Nothing else changes — no settings move, and your profiles carry over untouched.
+
+**Fixed**
+
+- **SherlockEQ no longer quits unexpectedly during long listening sessions.** The part of the app that measures your listening level — the one feeding the level meters and exposure tracking — was accumulating a small amount of internal overhead on every measurement instead of replacing it. Some twenty times a second, that added up: after about ten minutes of continuous audio it grew large enough to crash the app. Your saved profiles, EQ settings, and listening history were unaffected, and audio returned to normal as soon as SherlockEQ reopened, but the interruption was disruptive and it is fixed here. The measurement path now stores that state in a form that cannot accumulate, and a new automated test keeps it that way.
+
 ## 0.9.1
 
 A maintenance release. The one fix you might notice resolves a confusing "ghost" state on the Audiogram screen for hearing profiles carried over from an earlier version; the rest are reliability and build-tooling improvements under the hood. Nothing changes in how your EQ, presets, hearing adjustments, or listening-dose tracking sound or behave.
