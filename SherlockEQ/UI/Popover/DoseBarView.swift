@@ -8,9 +8,9 @@ import SwiftUI
 /// comes from `AudioState.exposureStatus`, the same read the Safe Listening
 /// screen uses, and the qualifier names which of the three we're in:
 ///
-///     Exposure [Today]   —     Waiting for audio
-///     Exposure [Today]   ≈3%   Not calibrated
-///     Exposure [Today]   24%   ~3h 12m
+///     Exposure   —     Waiting for audio
+///     Exposure   ≈3%   Not calibrated
+///     Exposure   24%   ~3h 12m
 ///
 /// Green is reserved for a calibrated, actively-tracked estimate. Amber/red
 /// still show whenever crossed — those are safety signals that matter
@@ -65,14 +65,11 @@ struct DoseBarView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 4) {
-                Text("Exposure")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                ScopeBadge(scope: .session)
-            }
-            .frame(width: 108, alignment: .leading)
-            .layoutPriority(1)
+            Text("Exposure")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 108, alignment: .leading)
+                .layoutPriority(1)
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
