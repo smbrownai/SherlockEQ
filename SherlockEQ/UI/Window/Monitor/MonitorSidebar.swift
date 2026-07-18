@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// Right-hand monitoring panel — a slide-in trailing column opened on demand
 /// from the toolbar's `MonitorToggleButton` (it used to be a persistent
@@ -206,6 +207,24 @@ struct MonitorSidebar: View {
     // MARK: - Dose mini-bar
 
     @ViewBuilder private var doseSection: some View {
+        MonitorDoseCard(tracker: audioState.safeListening)
+    }
+}
+
+/// The dose mini-bar as its own observation scope: it reads the tracker
+/// directly on a 1 Hz throttled tick (the PopoverLiveStatusRows pattern)
+/// instead of riding a mirrored @Published on AudioState — that mirror
+/// re-rendered every @EnvironmentObject view tree once a second during
+/// playback (perf review S1).
+private struct MonitorDoseCard: View {
+    let tracker: SafeListeningTracker
+
+    /// Bumped by the throttled subscription; `body` reads it so each tick
+    /// invalidates this card — and only this card.
+    @State private var tick = 0
+
+    var body: some View {
+        let _ = tick   // tick dependency — see property comment
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 // Scope badge (Today): cumulative exposure for today (resets
@@ -218,7 +237,7 @@ struct MonitorSidebar: View {
                 Image(systemName: doseZoneSymbol)
                     .foregroundStyle(doseColor)
                     .font(.caption.weight(.semibold))
-                Text(String(format: "%.0f %%", audioState.sessionDoseFraction * 100))
+                Text(String(format: "%.0f %%", tracker.sessionDose * 100))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(doseColor)
             }
@@ -227,7 +246,7 @@ struct MonitorSidebar: View {
                     Capsule().fill(Color.secondary.opacity(0.15))
                     Capsule()
                         .fill(doseColor)
-                        .frame(width: max(2, geo.size.width * min(1, audioState.sessionDoseFraction)))
+                        .frame(width: max(2, geo.size.width * min(1, tracker.sessionDose)))
                 }
             }
             .frame(height: 5)
@@ -235,10 +254,14 @@ struct MonitorSidebar: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Today's exposure")
         .accessibilityValue(doseAccessibilityValue)
+        .onReceive(tracker.objectWillChange
+            .throttle(for: .seconds(1), scheduler: DispatchQueue.main, latest: true)) { _ in
+            tick &+= 1
+        }
     }
 
     private var doseColor: Color {
-        switch audioState.safeListening.doseSeverity {
+        switch tracker.doseSeverity {
         case .safe:  return .green
         case .amber: return .orange
         case .red:   return .red
@@ -248,7 +271,7 @@ struct MonitorSidebar: View {
     /// Non-color redundant encoding paired with `doseColor` so the
     /// severity reads for colorblind users without relying on tint.
     private var doseZoneSymbol: String {
-        switch audioState.safeListening.doseSeverity {
+        switch tracker.doseSeverity {
         case .safe:  return "checkmark.shield.fill"
         case .amber: return "exclamationmark.triangle.fill"
         case .red:   return "exclamationmark.octagon.fill"
@@ -256,9 +279,9 @@ struct MonitorSidebar: View {
     }
 
     private var doseAccessibilityValue: String {
-        let percent = Int(audioState.sessionDoseFraction * 100)
+        let percent = Int(tracker.sessionDose * 100)
         let zone: String = {
-            switch audioState.safeListening.doseSeverity {
+            switch tracker.doseSeverity {
             case .safe:  return "safe"
             case .amber: return "approaching limit"
             case .red:   return "at or past limit"

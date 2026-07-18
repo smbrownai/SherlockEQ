@@ -58,6 +58,12 @@ struct ProfileDetailView: View {
 
     private var isActive: Bool { audioState.activeProfileID == profileID }
 
+    /// AutoEQ library entries, enumerated ONCE off the main thread per
+    /// folder (and per appearance) instead of inside every body pass — a
+    /// real AutoEQ checkout is thousands of files, and this view re-renders
+    /// while audio plays (perf review M1).
+    @State private var autoEQLibraryEntries: [AutoEQLibrary.Entry] = []
+
     var body: some View {
         if let profile = profile {
             ScrollView {
@@ -101,6 +107,14 @@ struct ProfileDetailView: View {
             }
             .navigationTitle(profile.name)
             .onAppear { refreshDeviceList() }
+            // Re-enumerates on appearance and whenever the library folder
+            // changes; `.task(id:)` cancels/restarts on its own.
+            .task(id: audioState.autoEQPreferences.libraryFolder) {
+                let folder = audioState.autoEQPreferences.libraryFolder
+                autoEQLibraryEntries = await Task.detached {
+                    AutoEQLibrary.entries(in: folder)
+                }.value
+            }
         } else {
             ContentUnavailableView(
                 "No profile selected",
@@ -494,7 +508,7 @@ struct ProfileDetailView: View {
     }
 
     @ViewBuilder private func autoEQImportControl(for profile: HearingProfile, label: String) -> some View {
-        let entries = AutoEQLibrary.entries(in: audioState.autoEQPreferences.libraryFolder)
+        let entries = autoEQLibraryEntries
         if entries.isEmpty {
             Button(label) { importAutoEQ(into: profile) }
                 .buttonStyle(.bordered)

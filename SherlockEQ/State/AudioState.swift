@@ -146,25 +146,16 @@ final class AudioState: ObservableObject {
     /// by `MainWindowView` which owns the `.sheet`. Not persisted.
     @Published var showHealthSafety = false
 
-    /// Throttled mirrors of `safeListening.sessionDose` / `.remainingMinutes`
-    /// for views that re-render on every `AudioState` tick. Populated at 1 Hz
-    /// from `mirrorTrackerState()` — see the throttle wiring in init.
-    ///
-    /// Dual-surface warning: any new safe-listening UI logic (e.g. "just
-    /// crossed 80%") has to be wired into *both* paths if it needs to be
-    /// visible everywhere:
-    ///   - The popover and `MonitorSidebar` read these throttled mirrors.
-    ///   - Reading `audioState.safeListening.…` from a view body does NOT
-    ///     observe the tracker — SwiftUI never subscribes to a nested
-    ///     ObservableObject reached through a property, so such reads refresh
-    ///     only when AudioState itself publishes. Surfaces that need the
-    ///     tracker's own cadence hold their own subscription: see
-    ///     `LiveLevelBody` / `DoseCardBody` (SafeListeningView) and
-    ///     `PopoverLiveStatusRows` (MainPopoverView).
-    /// Threshold/severity helpers belong on `SafeListeningTracker` so both
-    /// sides see the same answer.
-    @Published var sessionDoseFraction: Double = 0
-    @Published var remainingMinutes: Double?
+    // NOTE (dose observation): AudioState deliberately carries NO mirrored
+    // dose properties. The old @Published mirrors re-rendered every
+    // @EnvironmentObject view tree at 1 Hz during playback (perf review
+    // S1). Reading `audioState.safeListening.…` from a view body does NOT
+    // observe the tracker — SwiftUI never subscribes to a nested
+    // ObservableObject reached through a property — so every dose surface
+    // holds its own throttled subscription: LiveLevelBody / DoseCardBody
+    // (SafeListeningView), PopoverLiveStatusRows (MainPopoverView), and
+    // MonitorDoseCard (MonitorSidebar). Threshold/severity helpers belong
+    // on `SafeListeningTracker` so all surfaces see the same answer.
 
     /// Latest dBA staged by the render thread's level pass, drained by
     /// `doseDrainTimer`. See the wiring comment at `onLevelUpdate` (RT-01).
@@ -867,18 +858,14 @@ final class AudioState: ObservableObject {
         // and other Texts to re-rasterize and visibly twitch from
         // sub-pixel positioning differences. `latest: true` keeps the
         // most recent value so we never lose a tick to the throttle.
-        // This mirror is NOT how live surfaces update: a view reading
-        // `safeListening.…` through AudioState is not observing the tracker
-        // (SwiftUI doesn't subscribe to nested ObservableObjects), and the
-        // equality guards in `mirrorTrackerState` mean this pipeline goes
-        // quiet once the dose pins at the 1.0 cap. Surfaces that need the
-        // tracker's cadence subscribe to it themselves: LiveLevelBody /
-        // DoseCardBody (SafeListeningView) and PopoverLiveStatusRows
-        // (MainPopoverView).
+        // The 1 Hz tracker tick drives only the notification-denial check
+        // now — the old dose mirroring is gone (see the dose-observation
+        // NOTE near the top of the class); live surfaces subscribe to the
+        // tracker themselves.
         trackerObserver = tracker.objectWillChange
             .throttle(for: .seconds(1), scheduler: DispatchQueue.main, latest: true)
             .sink { [weak self] _ in
-                Task { @MainActor in self?.mirrorTrackerState() }
+                Task { @MainActor in self?.onTrackerTick() }
             }
 
         installSleepWakeObservers()
@@ -1071,14 +1058,10 @@ final class AudioState: ObservableObject {
         }
     }
 
-    /// Mirror the tracker's published values onto the legacy AudioState
-    /// properties the popover already binds to (sessionDoseFraction etc).
-    ///
-    /// Each assignment is guarded by an equality check — Swift's
-    /// `@Published` fires `objectWillChange` on every assignment
-    /// regardless of whether the value changed, which would otherwise
-    /// re-render the popover even when nothing observable moved.
-    /// Skipping the no-op write keeps SwiftUI quiet on unchanged data.
+    /// 1 Hz tracker tick — carries only cross-cutting checks that belong on
+    /// AudioState (currently the notification-denial warning at amber dose).
+    /// Dose VALUES are no longer mirrored here; see the dose-observation
+    /// NOTE near the top of the class.
     /// Consume the staged level, if any. Take-and-clear so a stalled feed
     /// (audio stopped → ingest stops firing) doesn't re-integrate the same
     /// sample forever — matching the old behavior where the callback simply
@@ -1092,11 +1075,7 @@ final class AudioState: ObservableObject {
         safeListening.update(levelDBA: Double(dba))
     }
 
-    private func mirrorTrackerState() {
-        let newDose = safeListening.sessionDose
-        if sessionDoseFraction != newDose { sessionDoseFraction = newDose }
-        let newRemaining = safeListening.remainingMinutes
-        if remainingMinutes != newRemaining { remainingMinutes = newRemaining }
+    private func onTrackerTick() {
         checkNotificationsDeniedAtAmberDose()
     }
 
