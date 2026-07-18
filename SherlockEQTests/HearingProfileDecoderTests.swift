@@ -144,6 +144,81 @@ struct HearingProfileDecoderTests {
         #expect(!profile.separateNotch)
     }
 
+    // MARK: - Audiogram provenance reconcile (pre-0.9.0 "ghost" audiograms)
+
+    /// A profile-shape JSON whose left ear carries real (non-flat) thresholds
+    /// and whose `audiogramDate` field is absent — the exact shape an
+    /// audiogram entered before 0.9.0 decodes into.
+    private static func legacyAudiogramJSON(
+        leftThresholdsDBHL: [Int],
+        includeDate: Bool
+    ) -> Data {
+        let pts = zip(AudiogramPoint.standardFrequencies, leftThresholdsDBHL)
+            .map { "{ \"frequencyHz\": \($0), \"thresholddBHL\": \($1) }" }
+            .joined(separator: ", ")
+        let dateField = includeDate ? ", \"audiogramDate\": \"2025-03-04T00:00:00Z\"" : ""
+        let json = """
+        {
+          "id": "33333333-3333-3333-3333-333333333333",
+          "name": "Ghost",
+          "symbol": "person.fill",
+          "leftEar": { "thresholds": [\(pts)], "bands": [] },
+          "rightEar": { "thresholds": [], "bands": [] },
+          "leftNotch": { "enabled": false, "frequencyHz": 6000, "depthdB": -6, "qWidth": "medium" },
+          "rightNotch": { "enabled": false, "frequencyHz": 6000, "depthdB": -6, "qWidth": "medium" },
+          "globalTrimDB": 0,
+          "safeListeningCeilingDB": 85,
+          "compensationFactor": 0.5,
+          "createdAt": "2025-01-01T00:00:00Z",
+          "modifiedAt": "2025-06-15T00:00:00Z"\(dateField)
+        }
+        """
+        return json.data(using: .utf8)!
+    }
+
+    @Test func legacyNonFlatThresholdsWithoutDateGetStampedFromModified() throws {
+        // The ghost state: real thresholds, no audiogramDate. The reconcile
+        // must stamp a date (from modifiedAt) so the profile stops reading
+        // "not entered" while showing values and driving a correction.
+        let json = Self.legacyAudiogramJSON(
+            leftThresholdsDBHL: [10, 10, 15, 15, 30, 35, 45, 50],
+            includeDate: false
+        )
+        let profile = try Self.decoder.decode(HearingProfile.self, from: json)
+
+        let expectedDate = try #require(ISO8601DateFormatter().date(from: "2025-06-15T00:00:00Z"))
+        #expect(profile.audiogramDate == expectedDate)   // == modifiedAt
+        #expect(profile.hasEnteredAudiogram)
+        #expect(profile.hasAudiogramData)
+        // The correction the user has been hearing is preserved, not dropped.
+        #expect(!profile.leftEar.correctionBands.isEmpty)
+    }
+
+    @Test func flatThresholdsWithoutDateStayUnstamped() throws {
+        // A truly-empty profile (flat 0 dB HL, no date) must NOT be stamped —
+        // that's genuinely "not entered", and factory presets ship this way.
+        let json = Self.legacyAudiogramJSON(
+            leftThresholdsDBHL: [0, 0, 0, 0, 0, 0, 0, 0],
+            includeDate: false
+        )
+        let profile = try Self.decoder.decode(HearingProfile.self, from: json)
+        #expect(profile.audiogramDate == nil)
+        #expect(!profile.hasEnteredAudiogram)
+        #expect(!profile.hasAudiogramData)
+    }
+
+    @Test func existingAudiogramDateIsLeftUntouched() throws {
+        // A profile that already has a date (entered in 0.9.0+) must keep its
+        // real date — the reconcile only fills a missing one.
+        let json = Self.legacyAudiogramJSON(
+            leftThresholdsDBHL: [10, 10, 15, 15, 30, 35, 45, 50],
+            includeDate: true
+        )
+        let profile = try Self.decoder.decode(HearingProfile.self, from: json)
+        let stored = try #require(ISO8601DateFormatter().date(from: "2025-03-04T00:00:00Z"))
+        #expect(profile.audiogramDate == stored)          // NOT modifiedAt
+    }
+
     // MARK: - Modern JSON round-trip
 
     @Test func modernProfileRoundTripsThroughEncoder() throws {

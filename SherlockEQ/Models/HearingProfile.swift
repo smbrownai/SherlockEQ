@@ -177,6 +177,32 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         // at 1.0. Idempotent for profiles already stored at full strength.
         Self.normalizeCorrectionToFullStrength(&self.leftEar)
         Self.normalizeCorrectionToFullStrength(&self.rightEar)
+        // Reconcile audiogram provenance for pre-0.9.0 profiles. The
+        // `audiogramDate` field was added in 0.9.0, so an audiogram entered
+        // before then decodes with real (non-flat) thresholds but a nil date.
+        // That left the profile in a contradictory "ghost" state: the chart
+        // and numeric steppers show the values and they drive a real
+        // correction, yet every date-gated label reads "not entered" and the
+        // Clear action (gated on provenance) hides. Restore the invariant
+        // "non-flat thresholds ⇒ a date exists" by stamping one, using
+        // `modifiedAt` as the best-known "as of" (the source already defaulted
+        // to `.manual`, the correct generic origin — we can't recover whether
+        // it was typed, imported, or a check). This changes NO audio: the
+        // correction comes from `correctionBands` × strength × the
+        // acclimatization ramp, none of which read `audiogramDate`. It only
+        // makes the screen tell the truth about an adjustment already applied,
+        // so the user can then Clear it deliberately.
+        if self.audiogramDate == nil,
+           Self.hasNonFlatThresholds(self.leftEar) || Self.hasNonFlatThresholds(self.rightEar) {
+            self.audiogramDate = self.modifiedAt
+        }
+    }
+
+    /// A threshold set counts as real (not the flat-0 default) once any point
+    /// departs from 0 dB HL by at least half a dB — the granularity floor of
+    /// the steppers, so float noise can't read as data.
+    private static func hasNonFlatThresholds(_ ear: EarProfile) -> Bool {
+        ear.thresholds.contains { abs($0.thresholddBHL) >= 0.5 }
     }
 
     /// Populate `ear.correctionBands` from its thresholds when the layer is
@@ -210,6 +236,19 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     /// any audiogram is entered, hand-typed 0 dB HL rows are legitimately
     /// measured-normal, which is why this is provenance-based, not value-based.
     var hasEnteredAudiogram: Bool { audiogramDate != nil }
+
+    /// Whether this profile actually carries a hearing adjustment worth
+    /// clearing — real thresholds on either ear, or a derived correction.
+    /// Distinct from `hasEnteredAudiogram` (provenance): the "Clear Audiogram"
+    /// action must key off "is there anything to remove", not "do we have a
+    /// date for it", so a value the user can hear is never left with no way to
+    /// clear it. (The decode-time provenance reconcile above normally stamps a
+    /// date for legacy data, but gating Clear on this stays correct even for
+    /// the shouldn't-happen case of a correction with flat thresholds.)
+    var hasAudiogramData: Bool {
+        Self.hasNonFlatThresholds(leftEar) || Self.hasNonFlatThresholds(rightEar)
+            || !leftEar.correctionBands.isEmpty || !rightEar.correctionBands.isEmpty
+    }
 
     /// The applied strength right now: the user's target
     /// (`compensationFactor`) × the acclimatization ramp.

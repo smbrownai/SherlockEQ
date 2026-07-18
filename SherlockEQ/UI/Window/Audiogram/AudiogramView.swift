@@ -128,7 +128,11 @@ struct AudiogramView: View {
                 Button("Export Audiogram…", systemImage: "square.and.arrow.up") { exportAudiogram(profile) }
                 Divider()
                 Button("Apply to Other Profiles…", systemImage: "person.2") { showingApplySheet = true }
-                if profile.hasEnteredAudiogram {
+                // Gate on "is there anything to clear", not provenance: a
+                // pre-0.9.0 audiogram can carry real thresholds + an audible
+                // correction, and that's exactly the state a user needs to be
+                // able to clear from here.
+                if profile.hasAudiogramData {
                     Divider()
                     Button("Clear Audiogram…", systemImage: "trash", role: .destructive) { confirmingClearAudiogram = true }
                 }
