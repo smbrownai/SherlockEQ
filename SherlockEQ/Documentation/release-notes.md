@@ -20,6 +20,19 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.9.1
+
+A maintenance release. The one fix you might notice resolves a confusing "ghost" state on the Audiogram screen for hearing profiles carried over from an earlier version; the rest are reliability and build-tooling improvements under the hood. Nothing changes in how your EQ, presets, hearing adjustments, or listening-dose tracking sound or behave.
+
+**Fixed**
+
+- **"Ghost" audiograms carried over from earlier versions now read correctly.** If you'd entered an audiogram in an older version, the Audiogram screen could contradict itself: it showed your threshold values and applied a real hearing adjustment, yet also said no thresholds had been entered — and the *Clear Audiogram* option was hidden exactly when you'd want it. SherlockEQ now reconciles these on load: the screen states the adjustment honestly (with the date it was carried over from), the per-frequency readouts match, and *Clear Audiogram* is always available whenever there's an adjustment to remove. The sound you were already hearing is preserved — this only changes what the screen tells you, not the audio.
+
+**Under the hood**
+
+- **Reliability and diagnostics.** Fixed a small memory-management issue in the listening-dose tracker (no effect on dose tracking itself), and the audiogram-to-EQ derivation now records a diagnostic if its band-overlap solver ever fails to converge, where before it was silent.
+- **Safer code signing.** Hardened the build's code-signing step so the app's auto-update components are always signed the way Apple and the Sparkle updater expect. This is a packaging change — it doesn't affect the app you run.
+
 ## 0.9.0
 
 This is the largest SherlockEQ release so far, and it moves the app substantially closer to a 1.0. Rather than one headline feature, it's a broad step forward: a new way for your hearing adjustment to adapt to how loud you're listening, a simpler and more honest equalizer, an optional in-app listening check, and a top-to-bottom pass on wording, safety, privacy, and reliability. What follows is a summary by area, not an exhaustive list of every change.
