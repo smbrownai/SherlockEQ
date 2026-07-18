@@ -168,15 +168,33 @@ final class SpectrumAnalyzer: ObservableObject {
     }
     private let audioScratch = AudioThreadScratch()
 
+    /// The level callback, boxed in a CONCRETE struct.
+    ///
+    /// A bare closure must NOT be the generic `State` of the lock. Storing a
+    /// function value in a generic container forces it to the maximally
+    /// abstract calling convention, so every access reabstracts it — and
+    /// because `withLock` yields `inout`, the reabstracted copy is written
+    /// straight back. The stored closure therefore gained one thunk layer per
+    /// access. At the 20 Hz level-emit rate that reached ~6,600 nested layers
+    /// in ~11 minutes and overflowed the audio thread's 544 KB stack:
+    /// EXC_BAD_ACCESS, "excessive recursion", three times in 0.9.1.
+    ///
+    /// Boxing in a fixed-layout struct makes the closure a stored property of
+    /// a concrete type, so no reabstraction happens and the value can't grow.
+    /// Verified: depth is constant across 5,000 calls (was +2 frames each).
+    private struct LevelHandler: Sendable {
+        let call: @Sendable (Float) -> Void
+    }
+    private let levelCallback = OSAllocatedUnfairLock<LevelHandler?>(initialState: nil)
+
     /// Callback for downstream consumers (SafeListeningTracker). Fires at
     /// ~20 Hz from the audio thread's cheap level pass. Lock-backed: the
     /// main actor installs it, the audio thread calls it — `@Sendable` and
     /// the lock make that handoff checked instead of assumed.
     nonisolated var onLevelUpdate: (@Sendable (_ dBA: Float) -> Void)? {
-        get { levelCallback.withLock { $0 } }
-        set { levelCallback.withLock { $0 = newValue } }
+        get { levelCallback.withLock { $0 }?.call }
+        set { levelCallback.withLock { $0 = newValue.map(LevelHandler.init(call:)) } }
     }
-    private let levelCallback = OSAllocatedUnfairLock<(@Sendable (Float) -> Void)?>(initialState: nil)
 
     init() {
         // `vDSP.DiscreteFourierTransform` replaced the deprecated `vDSP.DFT`.
@@ -318,7 +336,10 @@ final class SpectrumAnalyzer: ObservableObject {
         let rms = sqrt(max(meanSquared, 1e-20))
         let dbfs = 20 * log10(rms)
         let dba = dbfs + calibrationOffsetDBA
-        onLevelUpdate?(dba)
+        // Read the box once into a local, then call — never go through the
+        // `onLevelUpdate` computed property on this path. See `LevelHandler`.
+        let handler = levelCallback.withLock { $0 }
+        handler?.call(dba)
     }
 
     /// Add one observer. Pair with `unsubscribe()` on teardown. While the
