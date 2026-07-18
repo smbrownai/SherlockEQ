@@ -353,9 +353,17 @@ final class SafeListeningTracker: ObservableObject {
     }
 
     private func startRolloverTimer() {
-        let timer = Timer(timeInterval: 60, repeats: true) { _ in
-            // The Task takes its own weak capture — routing the timer
-            // closure's `weak self` var through it is a Swift 6 error.
+        // `[weak self]` on the Timer closure itself, not only the inner
+        // Task: RunLoop.main retains the timer, the timer retains this
+        // closure, and without the weak capture the closure would retain the
+        // tracker — an unbreakable cycle that keeps the tracker alive for the
+        // process and makes `deinit` (which invalidates this timer)
+        // unreachable. The activity monitors use exactly this shape; it
+        // compiles cleanly under Swift 6 (the old comment here was wrong).
+        let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
+            // Inner `[weak self]` too — the Task must take its own capture
+            // rather than reference the outer closure's weak `self` var
+            // (that's the Swift-6 "captured var in concurrent code" error).
             Task { @MainActor [weak self] in self?.checkDayRollover() }
         }
         // .common so it still fires during UI tracking/menu interaction.
