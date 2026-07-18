@@ -21,6 +21,117 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 0.9.0</title>
+      <pubDate>Sat, 18 Jul 2026 01:46:49 +0000</pubDate>
+      <sparkle:version>00900</sparkle:version>
+      <sparkle:shortVersionString>0.9.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<h2>SherlockEQ 0.9.0</h2>
+
+<p>
+  This is the largest SherlockEQ release so far, and it moves the app
+  substantially closer to a 1.0. Rather than one headline feature, it's a broad
+  step forward: a new way for your hearing adjustment to adapt to how loud
+  you're listening, a simpler and more honest equalizer, an optional in-app
+  listening check, and a top-to-bottom pass on wording, safety, privacy, and
+  reliability. What follows is a summary by area, not an exhaustive list of
+  every change.
+</p>
+
+<h3>Hearing adjustment that adapts</h3>
+
+<p>
+  Your audiogram-derived adjustment can now follow the sound. An optional
+  Adaptive mode gives a little more help in quiet passages and eases off as
+  things get loud, instead of applying a single fixed curve. New adjustments
+  also ease in gradually over the first few weeks rather than arriving at full
+  strength on day one, so an unaccustomed ear has time to settle. As always,
+  this is a comfort adjustment you fine-tune by ear — a starting point, not a
+  clinical fitting.
+</p>
+
+<h3>A simpler equalizer</h3>
+
+<p>
+  The old set of overlapping EQ modes is now two clear surfaces: a Graphic
+  equalizer on a hearing-oriented set of bands for quick shaping, and a full
+  Parametric canvas when you want fine control. Presets are organized around
+  what you're trying to achieve rather than by music genre, and the more
+  specialized mixing-oriented displays have been retired to keep the screen
+  focused. Nothing you set up before is lost — your profiles carry across, and
+  any bands that don't fit the graphic grid stay editable.
+</p>
+
+<h3>An in-app listening check</h3>
+
+<p>
+  A new, optional guided check estimates your hearing thresholds ear by ear
+  using quiet test tones, then offers to turn the result into a starting
+  hearing adjustment. It's framed throughout as an at-home estimate to tune by
+  ear — not a hearing test, and not a diagnosis.
+</p>
+
+<h3>Clearer wording, and honest limits</h3>
+
+<p>
+  A wide pass on language across the app. Audiogram-derived processing is
+  described as a "hearing adjustment," not a clinical "correction," and
+  medical-sounding claims are gone. Health &amp; safety information is
+  consolidated into one place you can always reach. Level and exposure readouts
+  now say plainly when a value is an estimate — or simply unknown — instead of
+  ever implying "safe," and the listening-dose estimate accounts for your system
+  volume. The app also warns you when settings work against each other, such as
+  a tinnitus notch fighting your hearing adjustment, or a headphone correction
+  left on for the wrong output device.
+</p>
+
+<h3>A more consistent interface</h3>
+
+<p>
+  The menu-bar popover is now a glanceable status-and-remote surface rather than
+  a cramped copy of the whole app. Profile management, the Tinnitus tools,
+  Adaptive Comfort, Safe Listening, and Settings were each reorganized to lead
+  with what you're trying to do. Every adjustable value now shows its scope —
+  whole-app, per-profile, per-ear, or today — and a broad accessibility pass
+  improved VoiceOver, keyboard control, and Dynamic Type support.
+</p>
+
+<h3>Reliability, privacy, and performance</h3>
+
+<p>
+  Many improvements under the hood: safer handling of your profiles on disk,
+  more resilient audio capture and recovery around sleep, wake, and device
+  changes, and tightened audio-thread work for glitch-free playback. On privacy,
+  exported profiles no longer carry machine-identifying details, listening-dose
+  values stay out of system logs, and the in-app privacy notes now describe
+  exactly what does and doesn't leave your Mac — nothing you play is ever
+  recorded or sent anywhere.
+</p>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not diagnose,
+  treat, measure, or monitor any hearing condition, tinnitus, or disability.
+  For concerns about your hearing, consult a doctor, audiologist, or licensed
+  healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.8.1">0.8.1 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v0.9.0/SherlockEQ-0.9.0.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="erkDLv5JY878XG2pNc3s9YlwbrvRVF7Hu7b+aOG8pK0TwgPF6Mgs5qZkEGyZFgkTPvPFqmVOMOYsjac4sK4/BA==" length="11024256" />
+    </item>
+
+    <item>
       <title>SherlockEQ 0.8.1</title>
       <pubDate>Sun, 12 Jul 2026 13:51:12 +0000</pubDate>
       <sparkle:version>00801</sparkle:version>
