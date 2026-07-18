@@ -261,11 +261,14 @@ final class CLICommandHandler {
             // No single-file bundle format exists in the app; the CLI is the
             // only producer, so write a JSON array of every profile. (Import
             // still takes a single-profile file, matching the app's format.)
+            // Same sanitizer as single-profile export: device UIDs/names and
+            // the AutoEQ source path (which can embed the username) stay on
+            // this machine — an exported file is presumed shareable.
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
             do {
-                let data = try encoder.encode(profileStore.profiles)
+                let data = try encoder.encode(profileStore.profiles.map { ProfileStore.sanitizedForSharing($0) })
                 try data.write(to: url, options: .atomic)
                 return Self.ok(["exported": ["count": profileStore.profiles.count, "path": url.path]])
             } catch {

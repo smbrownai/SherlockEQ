@@ -397,7 +397,7 @@ final class SafeListeningTracker: ObservableObject {
         didCrossAmberToday = defaults.bool(forKey: DefaultsKey.crossedAmber)
         didCrossRedToday = defaults.bool(forKey: DefaultsKey.crossedRed)
         if sessionDose > 0 {
-            log.info("Restored today's dose: \(self.sessionDose, format: .fixed(precision: 2))")
+            log.info("Restored today's dose: \(self.sessionDose, format: .fixed(precision: 2), privacy: .private)")
         }
     }
 

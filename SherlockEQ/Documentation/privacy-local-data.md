@@ -24,9 +24,10 @@ related:
 
 SherlockEQ keeps your data **on your Mac**. There is **no telemetry, no account,
 and no cloud sync.** It does not record your audio and never sends your settings
-anywhere. The one time it reaches the internet is an **optional, on-demand
-download** of public headphone-correction curves — and only when you ask for one
-(see **The one network feature** below).
+anywhere. It reaches the internet for exactly two things, neither of which
+carries your data: an **optional, on-demand download** of public
+headphone-correction curves when you ask for one, and — on standard installs —
+a periodic **update check** (see **Network connections** below).
 
 ## What SherlockEQ does not collect
 
@@ -36,7 +37,7 @@ download** of public headphone-correction curves — and only when you ask for o
 - **No audio recording.** SherlockEQ processes the system audio stream in real time to play it back; it does not capture or store it.
 - **Your settings never leave your Mac.** The network feature below only *downloads* public correction files; it never uploads anything about you or your configuration.
 
-## The one network feature
+## Network connections
 
 The [Headphone Correction / AutoEQ](help:headphone-correction-autoeq) browser can
 fetch correction curves from the public **AutoEQ** catalog. When (and only when)
@@ -50,7 +51,16 @@ you open that browser or pick a headphone:
 - Downloaded curves are cached locally so the app doesn't refetch them. You can
   also import a correction file by hand and never touch the network at all.
 
-If you never open the AutoEQ browser, SherlockEQ makes no network connections.
+**Update checks.** If you installed SherlockEQ from the downloaded disk image,
+the app periodically asks `snxt.ai` whether a newer version exists (via the
+open-source Sparkle framework). That request is an anonymous fetch of a public
+file — it carries your app version so the answer can be computed, and no
+system profile, identifier, or settings. Homebrew installs update through
+`brew` instead and never make this check; running from Xcode makes none
+either. You can also check manually from the app menu at any time.
+
+Beyond those two — the AutoEQ browser you invoke and the update check on
+standard installs — SherlockEQ makes no network connections.
 
 ## What it stores, and where
 
