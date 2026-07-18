@@ -153,8 +153,18 @@ HELPERS="$APP/Contents/Helpers"
 mkdir -p "$HELPERS"
 cp "$CLI_BIN" "$HELPERS/sherlockeq"
 codesign --force --options runtime --timestamp --sign "$DEVELOPER_ID" "$HELPERS/sherlockeq"
-# Re-seal the bundle (deep, same identity) so CodeResources covers the helper.
-codesign --force --deep --options runtime --timestamp --sign "$DEVELOPER_ID" "$APP"
+# Re-seal the OUTER bundle only, so CodeResources covers the just-added helper.
+# NOT --deep: the nested Sparkle.framework (and its XPC services / Autoupdate)
+# were already correctly signed by Xcode at build time, and Apple (TN2206) and
+# Sparkle both warn that `--deep` for signing re-seals that nested code with
+# the wrong identity and strips its entitlements. The preserve-metadata flag
+# carries forward whatever entitlements Xcode baked into the app (none today,
+# but this stops a future entitlement from being silently dropped on this
+# re-sign). The helper was signed individually just above; the outer
+# seal references it. Verification below stays `--deep` — deep is right for
+# *checking* all nested code, only wrong for *signing* it.
+codesign --force --options runtime --timestamp \
+  --preserve-metadata=entitlements --sign "$DEVELOPER_ID" "$APP"
 
 echo "==> verifying app signature + hardened runtime"
 codesign --verify --deep --strict --verbose=2 "$APP"
