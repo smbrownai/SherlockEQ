@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// Converts an audiogram (per-frequency hearing thresholds in dB HL) into the
 /// per-ear `EQBand` chain.
@@ -32,6 +33,12 @@ import Foundation
 /// and deferred: with only 8 data points it adds inter-band ripple risk for
 /// little benefit, and can be layered on later without changing this signature.
 enum AudiogramConversion {
+
+    /// Diagnostics for the derivation. `nonisolated` so it's callable from the
+    /// nonisolated decode/derivation paths this enum runs in.
+    nonisolated private static let log = Logger(
+        subsystem: "com.shawnbrown.SherlockEQ", category: "Audiogram"
+    )
 
     /// Maximum boost (or cut) any single band can carry, regardless of measured
     /// loss — guards against runaway gain from unusual audiograms or typos.
@@ -168,6 +175,19 @@ enum AudiogramConversion {
             if maxDelta < 0.005 { break }
         }
         let ranAway = g.contains { !$0.isFinite || abs($0) > 2 * perBandCeilingDB }
+        if ranAway {
+            // The overlap solve diverged, so we return the RAW NAL-R targets —
+            // safe against NaN/garbage, but their un-decoupled gains can
+            // over-boost by several dB where the closely-spaced high bands
+            // (3/4/6/8 kHz) overlap, and each is only per-band clamped, not
+            // composite clamped. Silent until now (review: highest-stakes math,
+            // no observability). The gain magnitude is audiogram-derived, so
+            // it's `.private`; the fact of the fallback is `.public`.
+            let maxMag = g.filter(\.isFinite).map(abs).max() ?? .infinity
+            log.warning("""
+                Audiogram overlap-fit did not converge                 (max |gain| \(maxMag, format: .fixed(precision: 1), privacy: .private) dB);                 using raw NAL-R targets, which may over-boost where bands overlap.
+                """)
+        }
         return ranAway ? target : g
     }
 }
