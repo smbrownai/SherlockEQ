@@ -117,14 +117,18 @@ struct MainPopoverView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// Hearing adjustment / Adaptive Comfort / Tinnitus notch / Safe
-    /// Listening — always visible, never a chevron-to-expand. These are
-    /// status-and-link rows, not controls: each one reports what's
-    /// configured and hands off to the main window to change it, so there's
-    /// nothing here that risks a surprise edit if a user just glances past
-    /// it while it's collapsed — the old failure mode a DisclosureGroup
-    /// invited. See `HearingAdjustmentRow`'s doc comment for why the popover
-    /// reports instead of edits.
+    /// Hearing adjustment / Adaptive Comfort / Tinnitus notch — always
+    /// visible, never a chevron-to-expand. These are status-and-link rows,
+    /// not controls: each one reports what's configured and hands off to the
+    /// main window to change it, so there's nothing here that risks a
+    /// surprise edit if a user just glances past it while it's collapsed —
+    /// the old failure mode a DisclosureGroup invited. See
+    /// `HearingAdjustmentRow`'s doc comment for why the popover reports
+    /// instead of edits.
+    ///
+    /// Safe Listening deliberately has no row here: it's the same subject as
+    /// the live Exposure readout above (both were rendering "Not calibrated"),
+    /// so that row carries the state and doubles as the link.
     @ViewBuilder private var processingDetails: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Processing details")
@@ -133,7 +137,6 @@ struct MainPopoverView: View {
             HearingAdjustmentRow()
             ListeningComfortRow()
             TinnitusNotchRow()
-            SafeListeningRow()
         }
     }
 
@@ -328,6 +331,8 @@ struct MainPopoverView: View {
 /// at 1 Hz.
 private struct PopoverLiveStatusRows: View {
     @EnvironmentObject private var audioState: AudioState
+    @EnvironmentObject private var profileStore: ProfileStore
+    @Environment(\.dismiss) private var dismiss
     let tracker: SafeListeningTracker
 
     /// Bumped by the throttled subscription; `body` reads it so each tick
@@ -356,12 +361,22 @@ private struct PopoverLiveStatusRows: View {
                                                levelDBA: tracker.currentLevelDBA,
                                                hasCalibration: audioState.hasUserCalibration),
                 severity: tracker.doseSeverity,
-                remainingMinutes: tracker.remainingMinutes
+                remainingMinutes: tracker.remainingMinutes,
+                // This row is also the way into Safe Listening — the separate
+                // status row for it duplicated this row's calibration state.
+                onOpen: openSafeListening,
+                limitDB: audioState.activeProfile(in: profileStore)?.safeListeningCeilingDB
             )
         }
         .onReceive(tracker.objectWillChange
             .throttle(for: .seconds(1), scheduler: DispatchQueue.main, latest: true)) { _ in
             tick &+= 1
         }
+    }
+
+    private func openSafeListening() {
+        audioState.pendingMainSection = .safeListening
+        dismiss()
+        AppDelegate.shared?.showMainWindow()
     }
 }
