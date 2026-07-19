@@ -78,6 +78,7 @@ struct GraphicEQView: View {
                 // references the curve ABOVE and the sliders BELOW.
                 correctionLayerNote(profile)
                 earAsymmetryNote(left: leftCorrection, right: rightCorrection)
+                toneTrimRow(profile)
                 otherFiltersRow(profile)
                 slidersRow(profile)
                 largeBoostNote(profile)
@@ -286,6 +287,57 @@ struct GraphicEQView: View {
     /// honest; this row makes sure the *controls* story is honest too:
     /// convert them onto the sliders, or edit them where they live. See
     /// phase3-make-correction-land.md §1.4.
+    /// Read-only report of the three-band tone trim (`ToneTrim`) — the layout
+    /// the `simple-eq` command, the Shortcuts intents, and the Analog Control
+    /// Unit write.
+    ///
+    /// These bands used to land in the "Other filters" row, which framed the
+    /// user's own deliberate setting as a stray to be converted away. The
+    /// Graphic surface owns the slots now (`EQMode.ownedSlots`), so this
+    /// states what's applied and where it came from — neutral, not a warning,
+    /// and no action, because the tools that set it are where it's changed.
+    ///
+    /// Only the two shelves are listed: the tone layout's mid band *is* the
+    /// 1 kHz slider (same stored band), so printing it here would repeat a
+    /// number already on screen.
+    @ViewBuilder private func toneTrimRow(_ profile: HearingProfile) -> some View {
+        // Left ear is representative: the CLI and intents write both ears in
+        // lockstep (`mutateBothEars`), as does the Analog unit.
+        let values = ToneTrim.offGridValues(in: profile.leftEar.bands)
+        if !values.isEmpty {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "dial.medium")
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Tone trim: \(values.map { "\($0.slot.label) \(formatTrim($0.gainDB))" }.joined(separator: " · "))")
+                        .font(.callout.weight(.medium))
+                    Text("A broad shelf set from the command line, Shortcuts, or the Analog unit. It's in the curve above and stacks with the sliders below.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.secondary.opacity(0.08))
+            )
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// `+3` / `−2.5` — signed, with the minus sign the rest of the app uses
+    /// and no trailing `.0` on whole numbers.
+    private func formatTrim(_ dB: Double) -> String {
+        let rounded = (dB * 10).rounded() / 10
+        let magnitude = abs(rounded)
+        let number = magnitude == magnitude.rounded()
+            ? String(Int(magnitude))
+            : String(format: "%.1f", magnitude)
+        return "\(rounded < 0 ? "−" : "+")\(number) dB"
+    }
+
     @ViewBuilder private func otherFiltersRow(_ profile: HearingProfile) -> some View {
         let leftHidden = audiblyContributing(EQMode.advanced.hiddenBands(in: profile.leftEar.bands))
         let rightHidden = audiblyContributing(EQMode.advanced.hiddenBands(in: profile.rightEar.bands))
