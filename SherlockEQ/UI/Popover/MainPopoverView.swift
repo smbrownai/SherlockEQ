@@ -51,8 +51,7 @@ struct MainPopoverView: View {
             Divider()
             processingDetails
             Divider()
-            openWindowRow
-            quitRow
+            footerActions
         }
         .padding(14)
         .frame(width: 380)
@@ -129,51 +128,53 @@ struct MainPopoverView: View {
     /// Safe Listening deliberately has no row here: it's the same subject as
     /// the live Exposure readout above (both were rendering "Not calibrated"),
     /// so that row carries the state and doubles as the link.
+    /// No section heading: the three rows are self-describing ("Hearing
+    /// adjustment", "Adaptive Comfort", "Tinnitus notch") and the divider
+    /// above already separates them, so a "Processing details" label was
+    /// naming a group that names itself.
     @ViewBuilder private var processingDetails: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Processing details")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
             HearingAdjustmentRow()
             ListeningComfortRow()
             TinnitusNotchRow()
         }
     }
 
-    /// Explicit, labeled way into the main window. The header used to carry
-    /// only a small arrow-icon button, which wasn't discoverable — this spells
-    /// the action out right above Quit.
-    @ViewBuilder private var openWindowRow: some View {
-        footerRow("Open Main Window", systemImage: "macwindow",
-                  help: "Open the main SherlockEQ window",
-                  action: openMainWindow)
-    }
-
-    /// Quit the whole app from the popover. A menu-bar app has no window
-    /// chrome to quit from when it's running headless (the main window may
-    /// never have been opened), and the Dock icon is hidden in accessory
-    /// mode — so without this the only exit is the AppKit menu's ⌘Q, which
-    /// isn't discoverable from the popover. `NSApp.terminate` runs the normal
+    /// Both footer actions on one line: "Open Main Window" leading, "Quit"
+    /// trailing. They were stacked as two full-width rows, which gave two
+    /// infrequent actions as much vertical weight as the live readouts above.
+    /// Pushing Quit to the trailing edge also separates it from the benign
+    /// action — they're no longer adjacent targets in the same column.
+    ///
+    /// Quit matters here because a menu-bar app running headless has no
+    /// window chrome to quit from and hides its Dock icon in accessory mode,
+    /// so without this the only exit is the AppKit menu's ⌘Q, which isn't
+    /// discoverable from the popover. `NSApp.terminate` runs the normal
     /// termination path (same as the App menu's Quit item).
-    @ViewBuilder private var quitRow: some View {
-        footerRow("Quit SherlockEQ", systemImage: "power",
-                  help: "Quit SherlockEQ (⌘Q)") {
-            NSApp.terminate(nil)
+    @ViewBuilder private var footerActions: some View {
+        HStack(spacing: 8) {
+            footerButton("Open Main Window", systemImage: "macwindow",
+                         help: "Open the main SherlockEQ window",
+                         action: openMainWindow)
+            Spacer(minLength: 8)
+            footerButton("Quit", systemImage: "power",
+                         help: "Quit SherlockEQ (⌘Q)") {
+                NSApp.terminate(nil)
+            }
         }
     }
 
-    /// Shared style for the two bottom action rows: a fixed-width icon gutter
-    /// so the icons and labels line up between rows, left-justified, both in
-    /// the primary text color (no accent / secondary tinting).
-    @ViewBuilder private func footerRow(_ title: String, systemImage: String,
-                                        help: String,
-                                        action: @escaping () -> Void) -> some View {
+    /// Shared style for the two footer actions: icon + label, primary text
+    /// colour (no accent / secondary tinting), hit area bounded to the
+    /// button's own content now that the two sit side by side — a
+    /// full-width `contentShape` would make them overlap.
+    @ViewBuilder private func footerButton(_ title: String, systemImage: String,
+                                           help: String,
+                                           action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Image(systemName: systemImage)
-                    .frame(width: 18, alignment: .leading)
                 Text(title)
-                Spacer()
             }
             .font(.callout)
             .foregroundStyle(.primary)
