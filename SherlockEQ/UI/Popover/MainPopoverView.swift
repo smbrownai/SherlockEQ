@@ -344,6 +344,12 @@ private struct PopoverLiveStatusRows: View {
                 calibrationOffsetDBA: audioState.effectiveCalibrationOffsetDBA,
                 isReceivingAudio: tracker.currentLevelDBA >= ExposureStatus.audioFloorDBA
             )
+            // Read-only EQ curve, between the live level and the accumulated
+            // exposure — "here's the signal, here's what we're doing to it,
+            // here's what it's cost you today."
+            if audioState.preferences.showPopoverEQCurve {
+                PopoverEQCurve()
+            }
             DoseBarView(
                 percent: tracker.sessionDose,
                 status: ExposureStatus.resolve(sessionDose: tracker.sessionDose,

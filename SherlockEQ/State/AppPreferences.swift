@@ -124,6 +124,21 @@ final class AppPreferences: ObservableObject {
         }
     }
 
+    /// Whether the menu-bar popover shows a small read-only EQ response
+    /// curve. On by default — it answers "what is my EQ actually doing right
+    /// now" at a glance, which is the popover's job. Opt out for a shorter
+    /// popover, or to keep the FFT pipeline idle while it's open (the curve
+    /// is the only thing there that subscribes to the spectrum analyzers).
+    /// Read-only wherever it appears: editing stays on the Equalizer screen.
+    @Published var showPopoverEQCurve: Bool = AppPreferences.loadBool(
+        key: AppPreferences.showPopoverEQCurveKey,
+        default: true
+    ) {
+        didSet {
+            UserDefaults.standard.set(showPopoverEQCurve, forKey: Self.showPopoverEQCurveKey)
+        }
+    }
+
     /// Set once the first-launch onboarding wizard has been completed (or
     /// skipped). Gates whether `AppDelegate.bootstrap()` shows the wizard
     /// instead of immediately firing the system-audio + notification
@@ -148,6 +163,7 @@ final class AppPreferences: ObservableObject {
     private static let globalReferenceShortcutKey = "sherlockeq.globalReferenceShortcut"
     private static let showDebugInSidebarKey = "sherlockeq.showDebugInSidebar"
     private static let showProfileMetadataKey = "sherlockeq.showProfileMetadata"
+    private static let showPopoverEQCurveKey = "sherlockeq.showPopoverEQCurve"
     private static let hasCompletedOnboardingKey = "sherlockeq.hasCompletedOnboarding"
 
     private static func loadBool(key: String, default defaultValue: Bool) -> Bool {

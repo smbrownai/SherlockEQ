@@ -50,8 +50,6 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		977681252FD473BF00F6CE2F /* SherlockEQTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = SherlockEQTests;
 			sourceTree = "<group>";
 		};
@@ -134,7 +132,6 @@
 			children = (
 				3374FDFA338A76D0BE52E90B /* HealthSafetyUITests.swift */,
 			);
-			name = SherlockEQUITests;
 			path = SherlockEQUITests;
 			sourceTree = "<group>";
 		};
