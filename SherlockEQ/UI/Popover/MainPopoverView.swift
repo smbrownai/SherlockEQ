@@ -3,23 +3,19 @@ import AppKit
 import Combine
 
 /// The menu-bar popover — a status dashboard and remote for *today's
-/// listening session*, not a compressed copy of the app. It answers, in
-/// order: is SherlockEQ running and what is it processing, how loud is it,
-/// how much exposure has accumulated, and the handful of controls worth
-/// reaching without opening a window (gain, balance, profile, Reference
-/// Mode). Configuring *how* SherlockEQ works stays in the main window.
+/// listening session*, not a compressed copy of the app. Top to bottom: is
+/// SherlockEQ running and what is it processing (header); who's active and
+/// the one-tap bypass (Profile, Reference Mode); how loud is it and how much
+/// exposure has accumulated, plus the two controls worth a quick nudge
+/// (Output level, Exposure, Gain, Balance); and finally what's configured,
+/// always visible and always a link, never a switch (Processing details).
+/// Configuring *how* SherlockEQ works stays in the main window.
 struct MainPopoverView: View {
     @EnvironmentObject private var audioState: AudioState
     @EnvironmentObject private var profileStore: ProfileStore
     /// Closes the `.window`-style `MenuBarExtra` popover. Used when handing
     /// off to the main window so the popover doesn't linger behind it.
     @Environment(\.dismiss) private var dismiss
-
-    /// Collapsed by default: the processing rows are occasional state, and the
-    /// popover's job is to be fast for the everyday controls. @AppStorage (not
-    /// @State) because the popover is rebuilt on every open, which would
-    /// otherwise re-collapse it every time.
-    @AppStorage("sherlockeq.popover.processingDetails") private var showProcessingDetails = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -36,20 +32,26 @@ struct MainPopoverView: View {
                 }
             }
             Divider()
+            // "Who, and is it actually running" — the profile you're on and
+            // the one-tap bypass — before any readout, because they're the
+            // controls worth reaching without opening a window at all.
+            ProfilePickerRow()
+            ReferenceButton()
+            // Headphone-correction device mismatch (spec §7) — tied to the
+            // profile/device pairing just above it, so it surfaces right
+            // where that context is already on screen.
+            AutoEQMismatchRow(compact: true)
+            Divider()
+            // Live readouts: what's actually happening right now, and the
+            // two controls worth a quick nudge (gain, balance). No scope
+            // badges — the popover's job is a glance, not a legend.
             PopoverLiveStatusRows(tracker: audioState.safeListening)
             masterGainRow
             balanceRow
             Divider()
-            ProfilePickerRow()
-            ReferenceButton()
-            // Headphone-correction device mismatch (spec §7) — a warning, so
-            // it stays outside the collapsed section where it could be missed.
-            AutoEQMismatchRow(compact: true)
             processingDetails
             Divider()
-            openWindowRow
-            healthSafetyRow
-            quitRow
+            footerActions
         }
         .padding(14)
         .frame(width: 380)
@@ -114,76 +116,65 @@ struct MainPopoverView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// Hearing adjustment / Adaptive Comfort / Tinnitus notch — occasional
-    /// state, collapsed by default so it doesn't compete with the everyday
-    /// controls above it (gain, balance, profile, Reference Mode). Expansion
-    /// persists, so users who do want them see them every time.
+    /// Hearing adjustment / Adaptive Comfort / Tinnitus notch — always
+    /// visible, never a chevron-to-expand. These are status-and-link rows,
+    /// not controls: each one reports what's configured and hands off to the
+    /// main window to change it, so there's nothing here that risks a
+    /// surprise edit if a user just glances past it while it's collapsed —
+    /// the old failure mode a DisclosureGroup invited. See
+    /// `HearingAdjustmentRow`'s doc comment for why the popover reports
+    /// instead of edits.
+    ///
+    /// Safe Listening deliberately has no row here: it's the same subject as
+    /// the live Exposure readout above (both were rendering "Not calibrated"),
+    /// so that row carries the state and doubles as the link.
+    /// No section heading: the three rows are self-describing ("Hearing
+    /// adjustment", "Adaptive Comfort", "Tinnitus notch") and the divider
+    /// above already separates them, so a "Processing details" label was
+    /// naming a group that names itself.
     @ViewBuilder private var processingDetails: some View {
-        DisclosureGroup(isExpanded: $showProcessingDetails) {
-            VStack(alignment: .leading, spacing: 10) {
-                HearingAdjustmentRow()
-                ListeningComfortRow()
-                TinnitusNotchRow()
-            }
-            .padding(.top, 8)
-        } label: {
-            Text("Processing details")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            HearingAdjustmentRow()
+            ListeningComfortRow()
+            TinnitusNotchRow()
         }
     }
 
-    /// The popover may be the only surface some users ever open, so the
-    /// centralized disclosure needs a way in from here. A link, not the
-    /// disclosure itself — the popover starts no test tones and exposes no
-    /// action with immediate risk, so there's nothing here needing an
-    /// in-context warning.
-    @ViewBuilder private var healthSafetyRow: some View {
-        footerRow("Health & Safety", systemImage: "heart.text.square",
-                  help: "Read the Health & Safety information") {
-            // The sheet is hosted by the main window, so it has to be open for
-            // the flag to present anything. Set the intent first, then show the
-            // window — it renders with the flag already true.
-            audioState.showHealthSafety = true
-            dismiss()
-            AppDelegate.shared?.showMainWindow()
-        }
-    }
-
-    /// Explicit, labeled way into the main window. The header used to carry
-    /// only a small arrow-icon button, which wasn't discoverable — this spells
-    /// the action out right above Quit.
-    @ViewBuilder private var openWindowRow: some View {
-        footerRow("Open Main Window", systemImage: "macwindow",
-                  help: "Open the main SherlockEQ window",
-                  action: openMainWindow)
-    }
-
-    /// Quit the whole app from the popover. A menu-bar app has no window
-    /// chrome to quit from when it's running headless (the main window may
-    /// never have been opened), and the Dock icon is hidden in accessory
-    /// mode — so without this the only exit is the AppKit menu's ⌘Q, which
-    /// isn't discoverable from the popover. `NSApp.terminate` runs the normal
+    /// Both footer actions on one line: "Open Main Window" leading, "Quit"
+    /// trailing. They were stacked as two full-width rows, which gave two
+    /// infrequent actions as much vertical weight as the live readouts above.
+    /// Pushing Quit to the trailing edge also separates it from the benign
+    /// action — they're no longer adjacent targets in the same column.
+    ///
+    /// Quit matters here because a menu-bar app running headless has no
+    /// window chrome to quit from and hides its Dock icon in accessory mode,
+    /// so without this the only exit is the AppKit menu's ⌘Q, which isn't
+    /// discoverable from the popover. `NSApp.terminate` runs the normal
     /// termination path (same as the App menu's Quit item).
-    @ViewBuilder private var quitRow: some View {
-        footerRow("Quit SherlockEQ", systemImage: "power",
-                  help: "Quit SherlockEQ (⌘Q)") {
-            NSApp.terminate(nil)
+    @ViewBuilder private var footerActions: some View {
+        HStack(spacing: 8) {
+            footerButton("Open Main Window", systemImage: "macwindow",
+                         help: "Open the main SherlockEQ window",
+                         action: openMainWindow)
+            Spacer(minLength: 8)
+            footerButton("Quit", systemImage: "power",
+                         help: "Quit SherlockEQ (⌘Q)") {
+                NSApp.terminate(nil)
+            }
         }
     }
 
-    /// Shared style for the two bottom action rows: a fixed-width icon gutter
-    /// so the icons and labels line up between rows, left-justified, both in
-    /// the primary text color (no accent / secondary tinting).
-    @ViewBuilder private func footerRow(_ title: String, systemImage: String,
-                                        help: String,
-                                        action: @escaping () -> Void) -> some View {
+    /// Shared style for the two footer actions: icon + label, primary text
+    /// colour (no accent / secondary tinting), hit area bounded to the
+    /// button's own content now that the two sit side by side — a
+    /// full-width `contentShape` would make them overlap.
+    @ViewBuilder private func footerButton(_ title: String, systemImage: String,
+                                           help: String,
+                                           action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Image(systemName: systemImage)
-                    .frame(width: 18, alignment: .leading)
                 Text(title)
-                Spacer()
             }
             .font(.callout)
             .foregroundStyle(.primary)
@@ -196,21 +187,17 @@ struct MainPopoverView: View {
     // MARK: - Master gain + balance
 
     /// Same visual rhythm as `PopoverLevelStrip`: a 108 pt gutter label on
-    /// the left (wide enough for the label plus its scope badge) so every row
-    /// aligns, then the slider, the numeric readout, and a tiny reset button.
-    /// Master gain spans -60…+12 dB; reset returns to 0 dB.
+    /// the left so every row aligns, then the slider, the numeric readout,
+    /// and a tiny reset button. Master gain spans -60…+12 dB; reset returns
+    /// to 0 dB. No scope badge — the popover is a glance surface, and scope
+    /// disambiguation (app vs. profile vs. today) belongs on the main
+    /// window, where there's room to explain it rather than abbreviate it.
     @ViewBuilder private var masterGainRow: some View {
         HStack(spacing: 8) {
-            // Scope badges here for the same reason as the main window: the
-            // popover mixes an app-wide value and a per-profile one in
-            // adjacent rows, and nothing else distinguishes them.
-            HStack(spacing: 4) {
-                Text("Gain")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                ScopeBadge(scope: .app)
-            }
-            .frame(width: 108, alignment: .leading)
+            Text("Gain")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 108, alignment: .leading)
             Slider(
                 value: Binding(
                     get: { audioState.engineParameters.masterGainDB },
@@ -244,13 +231,10 @@ struct MainPopoverView: View {
     @ViewBuilder private var balanceRow: some View {
         if let profile = audioState.activeProfile(in: profileStore) {
             HStack(spacing: 8) {
-                HStack(spacing: 4) {
-                    Text("Balance")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                    ScopeBadge(scope: .profile)
-                }
-                .frame(width: 108, alignment: .leading)
+                Text("Balance")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 108, alignment: .leading)
                 Slider(
                     value: Binding(
                         get: { profile.balance },
@@ -348,6 +332,8 @@ struct MainPopoverView: View {
 /// at 1 Hz.
 private struct PopoverLiveStatusRows: View {
     @EnvironmentObject private var audioState: AudioState
+    @EnvironmentObject private var profileStore: ProfileStore
+    @Environment(\.dismiss) private var dismiss
     let tracker: SafeListeningTracker
 
     /// Bumped by the throttled subscription; `body` reads it so each tick
@@ -364,18 +350,34 @@ private struct PopoverLiveStatusRows: View {
                 calibrationOffsetDBA: audioState.effectiveCalibrationOffsetDBA,
                 isReceivingAudio: tracker.currentLevelDBA >= ExposureStatus.audioFloorDBA
             )
+            // Read-only EQ curve, between the live level and the accumulated
+            // exposure — "here's the signal, here's what we're doing to it,
+            // here's what it's cost you today."
+            if audioState.preferences.showPopoverEQCurve {
+                PopoverEQCurve()
+            }
             DoseBarView(
                 percent: tracker.sessionDose,
                 status: ExposureStatus.resolve(sessionDose: tracker.sessionDose,
                                                levelDBA: tracker.currentLevelDBA,
                                                hasCalibration: audioState.hasUserCalibration),
                 severity: tracker.doseSeverity,
-                remainingMinutes: tracker.remainingMinutes
+                remainingMinutes: tracker.remainingMinutes,
+                // This row is also the way into Safe Listening — the separate
+                // status row for it duplicated this row's calibration state.
+                onOpen: openSafeListening,
+                limitDB: audioState.activeProfile(in: profileStore)?.safeListeningCeilingDB
             )
         }
         .onReceive(tracker.objectWillChange
             .throttle(for: .seconds(1), scheduler: DispatchQueue.main, latest: true)) { _ in
             tick &+= 1
         }
+    }
+
+    private func openSafeListening() {
+        audioState.pendingMainSection = .safeListening
+        dismiss()
+        AppDelegate.shared?.showMainWindow()
     }
 }

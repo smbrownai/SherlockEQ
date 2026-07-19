@@ -104,6 +104,11 @@ struct SettingsView: View {
         Divider()
         colorRow(label: "Right ear", binding: $preferences.rightEarColor, defaultColor: AppPreferences.defaultRightEarColor)
         caption("Colors for the left/right curves, audiogram thresholds, and EQ sliders.")
+        Divider()
+        Toggle("Show the EQ curve in the menu-bar popover", isOn: $preferences.showPopoverEQCurve)
+            .toggleStyle(.switch)
+            .controlSize(.small)
+        caption("A small read-only view of what your EQ is doing right now. Turn it off for a shorter popover — editing always happens on the Equalizer screen.")
     }
 
     private func colorRow(label: String, binding: Binding<Color>, defaultColor: Color) -> some View {

@@ -8,9 +8,14 @@ import SwiftUI
 /// comes from `AudioState.exposureStatus`, the same read the Safe Listening
 /// screen uses, and the qualifier names which of the three we're in:
 ///
-///     Exposure [Today]   —     Waiting for audio
-///     Exposure [Today]   ≈3%   Not calibrated
-///     Exposure [Today]   24%   ~3h 12m
+///     Exposure   —     Waiting for audio   ›
+///     Exposure   ≈3%   Not calibrated      ›
+///     Exposure   24%   ~3h 12m             ›
+///
+/// With `onOpen` set the row is also the popover's way into the Safe
+/// Listening screen. It previously had a separate "Safe Listening" status
+/// row below it, which restated this row's calibration state word for word
+/// — both rendered "Not calibrated" — so the two collapsed into this one.
 ///
 /// Green is reserved for a calibrated, actively-tracked estimate. Amber/red
 /// still show whenever crossed — those are safety signals that matter
@@ -64,15 +69,40 @@ struct DoseBarView: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 4) {
-                Text("Exposure")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                ScopeBadge(scope: .session)
+        if let onOpen {
+            Button(action: onOpen) {
+                row.contentShape(Rectangle())
             }
-            .frame(width: 108, alignment: .leading)
-            .layoutPriority(1)
+            .buttonStyle(.plain)
+            // The limit lives here rather than in the row: the percentage is
+            // already normalised to it (100 % *is* the limit), so spelling it
+            // out inline would be saying the same thing twice — but it's worth
+            // having on hover, and it names where a tap goes.
+            .help(limitDB.map {
+                "Today's exposure against your \(Int($0.rounded())) dB limit. Opens Safe Listening."
+            } ?? "Opens Safe Listening.")
+            .accessibilityHint("Opens the Safe Listening screen in the main window.")
+        } else {
+            row
+        }
+    }
+
+    /// Optional navigation. When set, the whole row becomes a link to the
+    /// Safe Listening screen and grows a chevron — the popover used to carry
+    /// a separate "Safe Listening" status row, which duplicated this row's
+    /// calibration state verbatim ("Not calibrated" in both). One live row
+    /// that also navigates says it once.
+    var onOpen: (() -> Void)? = nil
+    /// The active profile's listening limit, for the hover text only.
+    var limitDB: Double? = nil
+
+    private var row: some View {
+        HStack(spacing: 8) {
+            Text("Exposure")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 108, alignment: .leading)
+                .layoutPriority(1)
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
@@ -105,6 +135,12 @@ struct DoseBarView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .frame(minWidth: 76, alignment: .trailing)
+
+            if onOpen != nil {
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
         }
         // Roll the row into one VO element so it reads as a single statement
         // rather than four fragments. Safety-critical surface.
