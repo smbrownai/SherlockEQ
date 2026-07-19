@@ -81,26 +81,14 @@ struct AppControlService {
 
     static let gainRange: ClosedRange<Double> = -60...12
     static let balanceRange: ClosedRange<Double> = -1...1
-    static let simpleEQRange: ClosedRange<Double> = -24...24
 
-    /// Three-band tone layout (bass shelf / mid bell / treble shelf) —
-    /// the legacy "Simple EQ" slots. The Simple *mode* was retired in the
-    /// phase-3 surface consolidation, but these remain valid band slots:
-    /// the Analog Control Unit's knobs write the same layout, and bands
-    /// written here surface on the Graphic EQ's "Other filters" row
-    /// (with one-click conversion onto the sliders). The command name
-    /// stays `simple-eq` for script compatibility.
-    struct SimpleSlot {
-        let key: String
-        let frequencyHz: Double
-        let filterType: EQFilterType
-    }
-    static let simpleSlots = [
-        SimpleSlot(key: "bass",   frequencyHz: 250,  filterType: .lowShelf),
-        SimpleSlot(key: "mid",    frequencyHz: 1000, filterType: .parametric),
-        SimpleSlot(key: "treble", frequencyHz: 5000, filterType: .highShelf),
-    ]
-    static let simpleBandwidth = 1.0
+    /// The three-band tone layout now lives in `ToneTrim` (Models), which is
+    /// also what `EQMode.advanced` reads to own these slots — one definition
+    /// rather than a copy here and an assumption there. The command name stays
+    /// `simple-eq` for script compatibility.
+    static var simpleSlots: [ToneTrim.Slot] { ToneTrim.slots }
+    static var simpleBandwidth: Double { ToneTrim.bandwidth }
+    static var simpleEQRange: ClosedRange<Double> { ToneTrim.range }
 
     // MARK: - Reference mode (bypass)
 

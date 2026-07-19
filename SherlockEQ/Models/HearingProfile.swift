@@ -555,12 +555,27 @@ enum EQMode: String, Codable, CaseIterable, Identifiable {
     }
 
     /// (frequency Hz, filter type) pairs the surface owns — bands at
-    /// these slots show on its sliders. Parametric returns nil because
-    /// it owns everything; the helper below uses that as a sentinel.
+    /// these slots are accounted for by the surface, so they don't count as
+    /// hidden. Parametric returns nil because it owns everything; the helper
+    /// below uses that as a sentinel.
+    ///
+    /// Graphic owns its twelve slider centers **plus the three-band tone
+    /// layout** (`ToneTrim`). The tone bands are written by the CLI, the
+    /// Shortcuts intents, and the Analog Control Unit; before they were owned
+    /// here, setting a bass trim made the Graphic screen raise an "Other
+    /// filters active" warning about the user's own deliberate setting, whose
+    /// only offers were to convert it onto the sliders (destroying the trim's
+    /// link to those tools) or to leave for Parametric. Owning them lets the
+    /// screen report the trim instead — see `GraphicEQView.toneTrimRow`.
+    ///
+    /// Note only two slots are actually added: the tone layout's mid band is
+    /// `(1000, .parametric)`, which is already a graphic center.
     fileprivate var ownedSlots: Set<EQSlot>? {
         switch self {
         case .advanced:
-            return Set(Self.graphicCenters.map { EQSlot(frequencyHz: $0, filterType: .parametric) })
+            let centers = Self.graphicCenters.map { EQSlot(frequencyHz: $0, filterType: .parametric) }
+            let tone = ToneTrim.slots.map { EQSlot(frequencyHz: $0.frequencyHz, filterType: $0.filterType) }
+            return Set(centers + tone)
         case .expert:
             return nil
         }
