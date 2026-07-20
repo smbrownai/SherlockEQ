@@ -393,27 +393,42 @@ struct ProfileDetailView: View {
         }
     }
 
+    /// The loaded headphone correction, plus the switch that bypasses it.
+    ///
+    /// Every status signal in this row tracks the switch. It previously did
+    /// not: a green checkmark and a hardcoded "On" label sat next to a switch
+    /// that could be off, so a bypassed correction still read as active. The
+    /// label was the worst of it — a static word next to a control whose whole
+    /// job is to express that same state reads as a claim contradicting the
+    /// switch beside it.
     @ViewBuilder
     private func appliedAutoEQRow(_ profile: HearingProfile) -> some View {
         if let name = profile.autoEQName, let bands = profile.autoEQBands {
+            let active = audioState.eqChain.autoEQEnabled
             HStack(spacing: 10) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                Image(systemName: active ? "checkmark.circle.fill" : "speaker.slash.circle.fill")
+                    .foregroundStyle(active ? Color.green : Color.secondary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name).font(.callout.weight(.medium))
+                        .foregroundStyle(active ? .primary : .secondary)
                     let preamp = profile.autoEQPreampDB ?? 0
                     Text("\(bands.count) bands · preamp \(String(format: "%+.1f", preamp)) dB")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Toggle("On", isOn: Binding(
+                // No visible label: the switch *is* the state. VoiceOver still
+                // needs the noun, since the headphone name beside it isn't
+                // read as this control's label (audit UX-03).
+                Toggle("", isOn: Binding(
                     get: { audioState.eqChain.autoEQEnabled },
                     set: { audioState.eqChain.autoEQEnabled = $0 }
                 ))
+                .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)
-                .help("Bypass the AutoEQ stage without losing the loaded correction")
+                .accessibilityLabel("Headphone correction")
+                .help("Bypass the AutoEQ stage without losing the loaded correction. Applies to every profile.")
                 Button(role: .destructive) { clearAutoEQ(on: profile) } label: {
                     Image(systemName: "xmark.circle")
                 }
@@ -456,9 +471,15 @@ struct ProfileDetailView: View {
         }
     }
 
+    /// Shown under the row when the stage is bypassed. Says the two things the
+    /// switch itself can't: that the correction is still loaded (so turning it
+    /// back on costs nothing), and that the switch is app-wide despite sitting
+    /// inside one profile's card — the scope is the genuinely surprising part.
+    /// "(toggle is off)" is gone: the switch is right there and now reads off.
     @ViewBuilder
     private var autoEQDisabledHint: some View {
-        Label("AutoEQ stage is currently bypassed (toggle is off).", systemImage: "speaker.slash")
+        Label("Bypassed for every profile. The correction stays loaded.",
+              systemImage: "speaker.slash")
             .font(.caption)
             .foregroundStyle(.secondary)
     }
