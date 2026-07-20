@@ -79,22 +79,22 @@ enum ToneMacro: String, CaseIterable, Identifiable {
         switch (self, direction) {
         case (.bass, .down):   return "Less"
         case (.bass, .up):     return "More"
-        case (.mid, .down):    return "Softer"
-        case (.mid, .up):      return "Clearer"
+        case (.mid, .down):    return "Recess"
+        case (.mid, .up):      return "Forward"
         case (.treble, .down): return "Softer"
         case (.treble, .up):   return "Brighter"
         }
     }
 
-    /// The full phrase, for VoiceOver and the undo action name — a button
-    /// announcing only "Softer" twice in a row would be ambiguous (audit
-    /// UX-03).
+    /// The full phrase, for VoiceOver and the undo action name. The buttons
+    /// show only the direction, so a bare "Recess" or "More" carries no
+    /// indication of *what* it moves — VoiceOver needs the noun (audit UX-03).
     func actionName(_ direction: Direction) -> String {
         switch (self, direction) {
         case (.bass, .down):   return "Less bass"
         case (.bass, .up):     return "More bass"
-        case (.mid, .down):    return "Softer mids"
-        case (.mid, .up):      return "Clearer mids"
+        case (.mid, .down):    return "Recess mids"
+        case (.mid, .up):      return "Forward mids"
         case (.treble, .down): return "Softer treble"
         case (.treble, .up):   return "Brighter treble"
         }

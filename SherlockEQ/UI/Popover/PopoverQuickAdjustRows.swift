@@ -70,8 +70,8 @@ struct PopoverQuickAdjustRows: View {
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
-        // The visible title is only half the phrase ("Softer") and appears on
-        // two different rows — VO needs the whole thing (audit UX-03).
+        // The visible title is only the direction ("Recess"); the noun lives
+        // in the row label beside it, which VO won't pair up (audit UX-03).
         .accessibilityLabel(macro.actionName(direction))
     }
 
