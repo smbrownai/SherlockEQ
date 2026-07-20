@@ -550,7 +550,7 @@ enum EQMode: String, Codable, CaseIterable, Identifiable {
     /// `ownedSlots` both read it, so the surface and the hidden-bands
     /// accounting can't drift apart.
     static let graphicCenters: [Double] = [
-        31.5, 63, 125, 250, 500, 1000, 2000, 3000, 4000, 6000, 8000, 16000
+        31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000
     ]
 
     var id: String { rawValue }

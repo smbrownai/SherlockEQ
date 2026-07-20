@@ -61,12 +61,12 @@ enum PresetCurve: String, CaseIterable, Identifiable {
     /// (31.5 / 63 / 125 / 250 / 500 / 1k / 2k / 3k / 4k / 6k / 8k / 16k Hz).
     var gains: [Double] {
         switch self {
-        case .flat:            return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        case .clearerVoices:   return [-4, -3, -2, -1, 0, 1, 2, 2.5, 3, 2, 1, -1]
-        case .musicBalance:    return [1.5, 2, 1, -0.5, -0.5, 0, 1, 1.5, 1.5, 1, 0.5, 0]
-        case .gentleListening: return [0, 0, 0.5, 0.5, 0, 0, -0.5, -1, -2, -3, -3.5, -4.5]
-        case .reduceBoom:      return [-3, -2.5, -2, -1.5, -0.5, 0, 0.5, 0.5, 0, 0, 0, 0]
-        case .reduceHarshness: return [0, 0, 0, 0, 0, -0.5, -1.5, -2.5, -2.5, -1.5, -1, -0.5]
+        case .flat:            return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        case .clearerVoices:   return [-4, -3, -2, -1, 0, 0.9, 2.9, 5.4, 2, -1]
+        case .musicBalance:    return [1.5, 2, 1, -0.5, -0.5, -0.1, 1.6, 2.9, 1, 0]
+        case .gentleListening: return [0, 0, 0.5, 0.5, 0, 0, -0.8, -3.9, -5.2, -4.4]
+        case .reduceBoom:      return [-3, -2.5, -2, -1.5, -0.5, 0, 0.7, 0.3, 0, 0]
+        case .reduceHarshness: return [0, 0, 0, 0, 0, -0.4, -2.4, -4.7, -1.7, -0.5]
         }
     }
 

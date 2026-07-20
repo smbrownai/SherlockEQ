@@ -29,9 +29,9 @@ struct EQModeSlotTests {
 
     // MARK: - Canonical grid
 
-    @Test func graphicGridIsTheTwelveBandAudiometricSet() {
+    @Test func graphicGridIsTheTenBandISOOctaveSet() {
         #expect(EQMode.graphicCenters == [
-            31.5, 63, 125, 250, 500, 1000, 2000, 3000, 4000, 6000, 8000, 16000
+            31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000
         ])
     }
 
@@ -42,11 +42,13 @@ struct EQModeSlotTests {
         #expect(EQMode.advanced.hiddenBands(in: bands).isEmpty)
     }
 
-    @Test func threeAndSixKilohertzAreEditableInGraphic() {
-        // The point of the grid change: a Parametric-authored 3k/6k band
-        // surfaces on the graphic sliders instead of hiding.
+    /// 3k and 6k left the grid, so a Parametric-authored band at either is
+    /// now genuinely off-grid and must say so. Existing profiles don't hit
+    /// this — `migrateRetiredGraphicBandsIfNeeded` folds theirs into the
+    /// surviving sliders — but a band authored in Parametric still can.
+    @Test func threeAndSixKilohertzAreOffGridInGraphic() {
         let bands = [band(hz: 3000), band(hz: 6000)]
-        #expect(EQMode.advanced.hiddenBands(in: bands).isEmpty)
+        #expect(EQMode.advanced.hiddenBands(in: bands).map(\.frequencyHz) == [3000, 6000])
     }
 
     @Test func offGridBandStaysHiddenInGraphic() {

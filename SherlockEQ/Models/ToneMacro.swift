@@ -48,12 +48,15 @@ enum ToneMacro: String, CaseIterable, Identifiable {
         // through 500 Hz so a bass nudge never muddies vocal fundamentals.
         case .bass:
             return [31.5: 1.0, 63: 1.0, 125: 0.9, 250: 0.6, 500: 0.2]
-        // A broad hump over the presence region, symmetric about 1 kHz.
+        // A broad hump over the presence region, symmetric about 1 kHz —
+        // 250 and 4000 are each two octaves out, and carry equal weight.
         case .mid:
-            return [250: 0.3, 500: 0.8, 1000: 1.0, 2000: 0.8, 3000: 0.3]
+            return [250: 0.3, 500: 0.8, 1000: 1.0, 2000: 0.8, 4000: 0.3]
         // Mirror of bass: flat across the top, tapering down toward 2 kHz.
+        // One shoulder rather than bass's two, because the grid is an octave
+        // apart up here — 0.4 splits the old 3 kHz/2 kHz pair it replaces.
         case .treble:
-            return [2000: 0.2, 3000: 0.6, 4000: 0.9, 6000: 1.0, 8000: 1.0, 16000: 1.0]
+            return [2000: 0.4, 4000: 0.9, 8000: 1.0, 16000: 1.0]
         }
     }
 

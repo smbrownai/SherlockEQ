@@ -72,7 +72,7 @@ struct ToneMacroTests {
         #expect(gain(1000, bands) == 1.0)
         // Symmetric shoulders.
         #expect(gain(500, bands) == gain(2000, bands))
-        #expect(gain(250, bands) == gain(3000, bands))
+        #expect(gain(250, bands) == gain(4000, bands))
         // Doesn't leak into the extremes.
         #expect(gain(31.5, bands) == 0)
         #expect(gain(16000, bands) == 0)
@@ -84,7 +84,8 @@ struct ToneMacroTests {
         #expect(gain(4000, bands) > 0)
         #expect(gain(8000, bands) == 1.0)
         #expect(gain(16000, bands) == 1.0)
-        #expect(gain(2000, bands) > 0 && gain(2000, bands) < gain(3000, bands))
+        // One shoulder now, at 2k — 3k left the grid.
+        #expect(gain(2000, bands) > 0 && gain(2000, bands) < gain(4000, bands))
         #expect(gain(250, bands) == 0)
     }
 

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Fits arbitrary off-grid filters onto the Graphic surface's 12 one-octave
+/// Fits arbitrary off-grid filters onto the Graphic surface's 10 one-octave
 /// bells (phase3-make-correction-land.md §1.4) — the math behind the "Other
 /// filters" row's **Convert to Graphic EQ** action.
 ///
@@ -30,7 +30,7 @@ enum GraphicConversion {
     private static let iterations = 24
     private static let damping = 0.5
 
-    /// Gains for the 12 `EQMode.graphicCenters` bells whose composite
+    /// Gains for the `EQMode.graphicCenters` bells whose composite
     /// response approximates `bands`' composite. Disabled bands contribute
     /// nothing and should be filtered by the caller. Returns all zeros for
     /// an empty input.

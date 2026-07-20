@@ -368,8 +368,74 @@ final class ProfileStore: ObservableObject {
     /// v2 (phase3-make-correction-land.md §3): presets re-voiced on the
     /// 12-band grid via the shared `PresetCurve` table; Presence Boost
     /// retired and replaced by Reduce Boom.
-    private static let factoryPresetsVersion = 2
+    private static let factoryPresetsVersion = 3
     private static let factoryPresetsVersionKey = "sherlockeq.factoryPresetsVersion"
+
+    private static let retiredGraphicMigrationKey = "sherlockeq.retiredGraphicBandsMigrated"
+
+    /// Centers the Graphic surface no longer has sliders for, as of the 12 → 10
+    /// return to the ISO octave grid.
+    private static let retiredGraphicCenters: [Double] = [3000, 6000]
+
+    /// Fold any 3 kHz / 6 kHz manual bands into the surviving sliders.
+    ///
+    /// `reconcileFactoryPresets` handles presets the user never touched by
+    /// replacing them outright. Everything else — user profiles, and presets
+    /// with any edit at all — keeps whatever bands it had, which after this
+    /// change includes two the Graphic screen can't edit. Left alone they'd
+    /// surface in the "Other filters" row: an orange warning about bands the
+    /// app itself wrote, offering to convert away settings the user chose.
+    ///
+    /// So convert them here instead, with the same `GraphicConversion` fit that
+    /// backs that row's button. Its own documentation gives the property this
+    /// relies on: because cascade magnitudes add in dB, fitting the retired
+    /// bands *alone* and adding the result to the current slider gains is exact
+    /// up to the fit error. The profile keeps sounding like itself.
+    ///
+    /// Gated on its own key so it runs exactly once. Profiles with nothing at
+    /// 3 k or 6 k are not touched at all — no `modifiedAt` bump, nothing marked
+    /// edited.
+    func migrateRetiredGraphicBandsIfNeeded() {
+        guard !defaults.bool(forKey: Self.retiredGraphicMigrationKey) else { return }
+        defer { defaults.set(true, forKey: Self.retiredGraphicMigrationKey) }
+
+        var converted = 0
+        for profile in profiles {
+            var updated = profile
+            var touched = false
+            for keyPath in [\HearingProfile.leftEar, \HearingProfile.rightEar] {
+                if Self.foldRetiredBands(in: &updated[keyPath: keyPath].bands) { touched = true }
+            }
+            guard touched else { continue }
+            do {
+                try save(updated)
+                converted += 1
+            } catch {
+                log.error("Retired-band migration failed for \(profile.id.uuidString, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        log.info("Folded retired 3k/6k bands on \(converted, privacy: .public) profile(s)")
+    }
+
+    /// Returns true if anything was folded.
+    private static func foldRetiredBands(in bands: inout [EQBand]) -> Bool {
+        let retired = bands.filter { band in
+            band.filterType == .parametric
+                && retiredGraphicCenters.contains { abs(band.frequencyHz - $0) < 0.5 }
+        }
+        guard !retired.isEmpty else { return false }
+
+        // Their combined contribution, expressed on the surviving grid.
+        let contribution = GraphicConversion.fittedGains(for: retired.filter(\.enabled))
+
+        bands.removeAll { retiredBand in retired.contains { $0.id == retiredBand.id } }
+        for (center, delta) in zip(EQMode.graphicCenters, contribution) where delta != 0 {
+            let current = EQBandLookup.gain(at: center, filterType: .parametric, in: bands)
+            EQBandLookup.setGain(current + delta, at: center, bandwidth: 1.0,
+                                 filterType: .parametric, in: &bands)
+        }
+        return true
+    }
 
     private static let autoEQScopeMigrationKey = "sherlockeq.autoEQScopeMigrated"
     private static let legacyGlobalAutoEQKey = "sherlockeq.autoEQEnabled"
@@ -490,6 +556,75 @@ final class ProfileStore: ObservableObject {
         }
     }
 
+    /// The v2 factory definitions, frozen for the v2 → v3 migration's edit
+    /// detection — same role `FrozenFactoryV1` plays for v1 → v2, and needed
+    /// for the same reason: comparing a stored preset against the *current*
+    /// builders is circular once the grid changes underneath them.
+    ///
+    /// Without this, anyone whose presets were already pristine on v2 would
+    /// fail `isUneditedV1` (their gains are v2's, not v1's), be treated as
+    /// edited, and keep 12-band presets whose 3 kHz and 6 kHz bands the new
+    /// grid can't edit — surfacing as an "Other filters" warning about bands
+    /// the app itself wrote.
+    enum FrozenFactoryV2 {
+        /// v2 authoring grid — the 10 ISO octaves plus 3 k and 6 k. v3 drops
+        /// those two again, returning to v1's grid with v2's voicing resampled
+        /// onto it.
+        private static let centers: [Double] =
+            [31.5, 63, 125, 250, 500, 1000, 2000, 3000, 4000, 6000, 8000, 16000]
+
+        private static func bands(_ gains: [Double]) -> [EQBand] {
+            zip(centers, gains).map { freq, gain in
+                EQBand(frequencyHz: freq, gaindB: gain, bandwidth: 1.0,
+                       filterType: .parametric, enabled: true)
+            }
+        }
+
+        /// v2 curve tables, verbatim from `PresetCurve.gains` before the
+        /// resample. Duplicated rather than referenced on purpose: the point
+        /// of a frozen set is that it stops tracking the live definitions.
+        private static let curves: [(id: UUID, orderIndex: Int, name: String, symbol: String,
+                                     gains: [Double], trimDB: Double,
+                                     description: String, tags: [String])] = [
+            (HearingProfile.Factory.voiceClarity.id, 0, "Voice Clarity", "waveform.badge.mic",
+             [-4, -3, -2, -1, 0, 1, 2, 2.5, 3, 2, 1, -1], -2,
+             "Voices are hard to follow — lifts speech presence and consonant detail while trimming the low-frequency boom that masks them. Best for podcasts, calls, meetings, and audiobooks.",
+             ["Voice", "Speech", "Clarity"]),
+            (HearingProfile.Factory.musicBalanced.id, 1, "Music Balanced", "music.note",
+             [1.5, 2, 1, -0.5, -0.5, 0, 1, 1.5, 1.5, 1, 0.5, 0], -1,
+             "The everyday starting point — light warmth, less low-mid mud, and a gentle clarity lift. Audible against Reference Mode without imposing a strong flavor.",
+             ["Music", "Everyday", "Balanced"]),
+            (HearingProfile.Factory.gentleListening.id, 2, "Gentle Listening", "moon.stars",
+             [0, 0, 0.5, 0.5, 0, 0, -0.5, -1, -2, -3, -3.5, -4.5], 0,
+             "Audio feels sharp or tiring — progressively softens the highs for long, comfortable sessions, sharp headphones, and late-night listening.",
+             ["Comfort", "Soft", "Long Sessions"]),
+            (HearingProfile.Factory.reduceBoom.id, 3, "Reduce Boom", "speaker.minus",
+             [-3, -2.5, -2, -1.5, -0.5, 0, 0.5, 0.5, 0, 0, 0, 0], 0,
+             "Audio sounds boomy or muddy — tightens the low end so voices and detail come through. Good for boomy rooms, small speakers, and bass-heavy headphones.",
+             ["Clarity", "Low End", "Small Speakers"]),
+        ]
+
+        static let profiles: [HearingProfile] = curves.map { c in
+            let stamp = Date(timeIntervalSince1970: 1_600_000_000 + Double(c.orderIndex))
+            let b = bands(c.gains)
+            return HearingProfile(
+                id: c.id, name: c.name, symbol: c.symbol, linkedDeviceUID: nil,
+                leftEar: EarProfile(thresholds: AudiogramPoint.flat, bands: b),
+                rightEar: EarProfile(thresholds: AudiogramPoint.flat, bands: b),
+                leftNotch: .disabled, rightNotch: .disabled,
+                globalTrimDB: c.trimDB, safeListeningCeilingDB: 85.0,
+                compensationFactor: 0.5, eqMode: .advanced, isBuiltIn: true,
+                presetDescription: c.description, presetTags: c.tags,
+                createdAt: stamp, modifiedAt: stamp
+            )
+        }
+
+        static func isUneditedV2(_ stored: HearingProfile) -> Bool {
+            guard let v2 = profiles.first(where: { $0.id == stored.id }) else { return false }
+            return ProfileStore.profile(stored, matchesCanonical: v2)
+        }
+    }
+
     private var storedFactoryVersion: Int {
         get { defaults.integer(forKey: Self.factoryPresetsVersionKey) }
         set { defaults.set(newValue, forKey: Self.factoryPresetsVersionKey) }
@@ -530,8 +665,12 @@ final class ProfileStore: ObservableObject {
             }
             for preset in HearingProfile.factoryProfiles {
                 if let stored = profiles.first(where: { $0.id == preset.id }) {
-                    if FrozenFactoryV1.isUneditedV1(stored) {
-                        try save(preset)   // pristine v1 → upgrade to v2
+                    // Pristine on ANY previously-shipped grid → adopt the
+                    // current one. v2 has to be checked as well as v1: after
+                    // the 12→10 band change, a preset left on v2's grid keeps
+                    // 3 k/6 k bands the Graphic screen can no longer edit.
+                    if FrozenFactoryV1.isUneditedV1(stored) || FrozenFactoryV2.isUneditedV2(stored) {
+                        try save(preset)
                     }
                     // edited → leave alone
                 } else {
