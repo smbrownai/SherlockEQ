@@ -20,6 +20,33 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.9.3
+
+This release makes the menu-bar popover somewhere you can actually change how things sound, moves both frequency layouts onto their standard sets, and fixes a few places where the app described its own settings inaccurately. Your profiles carry over — where a setting had to move, it was converted so the sound stays the same.
+
+**Quick tone adjustments without opening a window**
+
+- **Bass, Mids, and Treble buttons in the menu-bar popover.** Each press nudges a broad group of equalizer bands — less bass, brighter treble, mids forward or recessed — so you can adjust for a room, a pair of headphones, or a noisy café without leaving what you're doing. The equalizer curve now sits directly above them, so you can see the change as you make it.
+- **The adjustments are relative, not a second set of controls.** There's no separate "Bass: +2 dB" in the popover, because for a full equalizer curve there's no single honest number to show. A press moves the real sliders on the Equalizer screen, and that screen remains the one place your settings live. To undo an adjustment, press the opposite button — it returns things exactly where they were.
+- **The popover was reorganized around what it's for.** Output level and exposure sit together, then the controls worth a quick change, then a plain summary of what's being applied with links to the screens that manage it. If you'd rather keep the popover short, a setting hides the curve and the tone buttons together.
+
+**Standard frequency layouts**
+
+- **The graphic equalizer is now ten bands.** It uses the standard octave series — 31.5 Hz through 16 kHz — instead of the previous twelve, which added two extra bands between the octaves. Ten is what hardware equalizers and other audio software use, so settings and advice transfer more readily, and each slider covers a range wide enough to hear as one adjustment.
+- **The audiogram gained 750 Hz and 1500 Hz.** These are standard clinical test frequencies, and they sit in the range speech occupies. With them, a hearing adjustment can follow a dip between the octave points rather than drawing a straight line across it. If you import an audiogram that measures either frequency, it now lands on its own row instead of being folded into a neighbour.
+
+**The app describes its own settings accurately**
+
+- **Headphone correction now belongs to the profile.** A profile already carried its own headphones, correction, and preamp — but the switch that turned the correction on or off was shared across every profile. Turning it off for one profile silently turned it off for all of them, with nothing on screen to suggest so. Each profile now keeps its own setting.
+- **The Equalizer no longer claims a correction is running when it isn't.** A note on that screen reported headphone correction as part of the result whenever a correction was loaded, even if the correction was switched off. It now reports what's actually being applied.
+- **Clearer wording where a control's state was ambiguous.** The headphone correction row showed a green checkmark and the word "On" beside a switch that could be off. The row now follows the switch, and when a correction isn't running, the app says which setting is responsible.
+
+**What happened to your settings**
+
+- **Equalizer settings were converted, not reset.** Any adjustment you had at 3 kHz or 6 kHz — the two bands the graphic equalizer no longer has sliders for — was folded into the surrounding bands so the result sounds the same. The built-in profiles were re-fitted onto the ten-band layout the same way. Slider positions will look different, particularly around 4 kHz, because fewer bands are now covering the same range; what you hear should not have changed.
+- **Existing audiograms were filled in, not zeroed.** The two new frequencies were estimated from the measurements on either side, which is what those readings already implied. Leaving them at zero would have described normal hearing between two losses and prescribed a dip to match. You can enter real values for either frequency at any time.
+- **A headphone correction you had switched off stays off.** Because that setting moved from the app to each profile, the old setting was carried across to every profile that has a correction loaded, rather than silently switching corrections back on.
+
 ## 0.9.2
 
 An important fix: SherlockEQ 0.9.0 and 0.9.1 could quit unexpectedly after roughly ten minutes of continuous playback. If you're running either of those versions, please update. Nothing else changes — no settings move, and your profiles carry over untouched.
