@@ -246,17 +246,21 @@ struct GraphicEQView: View {
     /// instead of leaving the user to wonder why the result differs from the
     /// bands. Informational only (no action) — editing lives on the Audiogram
     /// screen and Profile Detail respectively.
+    ///
+    /// **Loaded is not the same as applied.** Testing only "are there bands
+    /// stored on the profile" made this banner claim a correction was in the
+    /// Result while the chain was bypassing it. `CorrectionLayerStatus` owns
+    /// that question now — it mirrors `AudioState.applyBypassMask` and is
+    /// tested against its truth table, so this surface can't drift from the
+    /// engine again.
     @ViewBuilder private func correctionLayerNote(_ profile: HearingProfile) -> some View {
-        let hasAudiogram = !profile.leftEar.correctionBands.isEmpty
-            || !profile.rightEar.correctionBands.isEmpty
-        let hasHeadphone = !(profile.autoEQBands?.isEmpty ?? true)
-        if hasAudiogram || hasHeadphone {
-            let sources: [String] = {
-                var s: [String] = []
-                if hasAudiogram { s.append("Hearing adjustment") }
-                if hasHeadphone { s.append("headphone correction") }
-                return s
-            }()
+        let status = CorrectionLayerStatus(
+            profile: profile,
+            masterEnabled: audioState.eqChain.eqMasterEnabled,
+            autoEQEnabled: audioState.eqChain.autoEQEnabled
+        )
+        if status.any {
+            let sources = status.sourceNames
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: "checkmark.seal.fill")
                     .foregroundStyle(.tint)
