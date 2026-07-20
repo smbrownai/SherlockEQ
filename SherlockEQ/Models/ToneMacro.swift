@@ -67,25 +67,41 @@ enum ToneMacro: String, CaseIterable, Identifiable {
 
     // MARK: - Naming
 
+    // Every user-facing string below goes through `String(localized:)`.
+    //
+    // These are returned as `String` and rendered with `Text(_ String)`, which
+    // does NOT localize — a bare `return "Recess"` would be permanently
+    // English and, worse, invisible to Xcode's string extractor, so it would
+    // never even appear in the catalog to be noticed. Only literals written
+    // directly into `Text("…")` / `Label("…")` get picked up automatically.
+
     /// Row label. "Mids" plural — it's a region, not a band.
     var label: String {
         switch self {
-        case .bass:   return "Bass"
-        case .mid:    return "Mids"
-        case .treble: return "Treble"
+        case .bass:   return String(localized: "Bass", comment: "Tone region: low frequencies")
+        case .mid:    return String(localized: "Mids", comment: "Tone region: middle frequencies, around 500 Hz–2 kHz")
+        case .treble: return String(localized: "Treble", comment: "Tone region: high frequencies")
         }
     }
 
     /// Short button titles. The row label supplies the noun, so the buttons
     /// only carry the direction and stay narrow enough for a 380 pt popover.
+    /// Translators get the noun via the comment, since the button text alone
+    /// doesn't say what it acts on.
     func buttonTitle(_ direction: Direction) -> String {
         switch (self, direction) {
-        case (.bass, .down):   return "Less"
-        case (.bass, .up):     return "More"
-        case (.mid, .down):    return "Recess"
-        case (.mid, .up):      return "Forward"
-        case (.treble, .down): return "Softer"
-        case (.treble, .up):   return "Brighter"
+        case (.bass, .down):
+            return String(localized: "Less", comment: "Button: reduce bass. Paired with 'More' on the Bass row")
+        case (.bass, .up):
+            return String(localized: "More", comment: "Button: increase bass. Paired with 'Less' on the Bass row")
+        case (.mid, .down):
+            return String(localized: "Recess", comment: "Button: push mids back in the mix. Paired with 'Forward' on the Mids row")
+        case (.mid, .up):
+            return String(localized: "Forward", comment: "Button: bring mids forward in the mix. Paired with 'Recess' on the Mids row")
+        case (.treble, .down):
+            return String(localized: "Softer", comment: "Button: reduce treble. Paired with 'Brighter' on the Treble row")
+        case (.treble, .up):
+            return String(localized: "Brighter", comment: "Button: increase treble. Paired with 'Softer' on the Treble row")
         }
     }
 
@@ -94,12 +110,18 @@ enum ToneMacro: String, CaseIterable, Identifiable {
     /// indication of *what* it moves — VoiceOver needs the noun (audit UX-03).
     func actionName(_ direction: Direction) -> String {
         switch (self, direction) {
-        case (.bass, .down):   return "Less bass"
-        case (.bass, .up):     return "More bass"
-        case (.mid, .down):    return "Recess mids"
-        case (.mid, .up):      return "Forward mids"
-        case (.treble, .down): return "Softer treble"
-        case (.treble, .up):   return "Brighter treble"
+        case (.bass, .down):
+            return String(localized: "Less bass", comment: "Accessibility label and undo title for one bass-down nudge")
+        case (.bass, .up):
+            return String(localized: "More bass", comment: "Accessibility label and undo title for one bass-up nudge")
+        case (.mid, .down):
+            return String(localized: "Recess mids", comment: "Accessibility label and undo title for one mids-down nudge")
+        case (.mid, .up):
+            return String(localized: "Forward mids", comment: "Accessibility label and undo title for one mids-up nudge")
+        case (.treble, .down):
+            return String(localized: "Softer treble", comment: "Accessibility label and undo title for one treble-down nudge")
+        case (.treble, .up):
+            return String(localized: "Brighter treble", comment: "Accessibility label and undo title for one treble-up nudge")
         }
     }
 

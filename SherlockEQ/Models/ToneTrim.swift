@@ -39,10 +39,20 @@ enum ToneTrim {
     /// ±12 because it long predates them and scripts depend on it.
     static let range: ClosedRange<Double> = -24...24
 
+    /// `key` is the CLI/intents wire word and must stay stable, untranslated
+    /// English — a script writes `--bass`. `label` is display text, so it goes
+    /// through `String(localized:)`: it reaches the Graphic screen's tone-trim
+    /// line via `Text(_ String)`, which renders verbatim without localizing.
     static let slots: [Slot] = [
-        Slot(key: "bass",   label: "Bass",   frequencyHz: 250,  filterType: .lowShelf),
-        Slot(key: "mid",    label: "Mid",    frequencyHz: 1000, filterType: .parametric),
-        Slot(key: "treble", label: "Treble", frequencyHz: 5000, filterType: .highShelf),
+        Slot(key: "bass",
+             label: String(localized: "Bass", comment: "Tone-trim band: low shelf at 250 Hz"),
+             frequencyHz: 250,  filterType: .lowShelf),
+        Slot(key: "mid",
+             label: String(localized: "Mid", comment: "Tone-trim band: bell at 1 kHz"),
+             frequencyHz: 1000, filterType: .parametric),
+        Slot(key: "treble",
+             label: String(localized: "Treble", comment: "Tone-trim band: high shelf at 5 kHz"),
+             frequencyHz: 5000, filterType: .highShelf),
     ]
 
     /// The slots the Graphic sliders can't show — the two shelves. Mid is
