@@ -21,24 +21,11 @@ struct SidebarView: View {
                 }
             }
 
+            // Health & Safety used to live here as an untagged, sheet-opening
+            // Button. It's an ordinary selectable row in Comfort & Safety now
+            // — it's reference material about listening, not about the app,
+            // and it needs no interruption to read.
             Section("App") {
-                // Persistent Health & Safety access — reachable from every
-                // main screen, keyboard-operable, and understandable from its
-                // label alone (the icon is decorative). A sheet-opening
-                // Button, deliberately untagged so it never becomes the list
-                // selection: the disclosure presents over whatever screen is
-                // showing. Lives above Settings so the footer stays a single
-                // control (the active profile).
-                Button {
-                    audioState.showHealthSafety = true
-                } label: {
-                    Label("Health & Safety Info", systemImage: "heart.text.square")
-                }
-                .buttonStyle(.plain)
-                .help("What SherlockEQ is and isn't, safe use, and when to see a professional")
-                .accessibilityLabel("Health and Safety Info")
-                .accessibilityHint("Opens the health and safety information sheet")
-
                 ForEach(SidebarSection.appSections(showDebug: audioState.preferences.showDebugInSidebar)) { section in
                     Label(section.title, systemImage: section.symbol)
                         .tag(section)

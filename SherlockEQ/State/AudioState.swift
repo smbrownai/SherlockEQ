@@ -141,11 +141,6 @@ final class AudioState: ObservableObject {
     /// it back to nil. Not persisted — it's a one-shot navigation intent.
     @Published var pendingMainSection: SidebarSection?
 
-    /// Presents the consolidated Health & Safety disclosure sheet. Set from
-    /// the persistent sidebar item and every compact disclosure chip, observed
-    /// by `MainWindowView` which owns the `.sheet`. Not persisted.
-    @Published var showHealthSafety = false
-
     // NOTE (dose observation): AudioState deliberately carries NO mirrored
     // dose properties. The old @Published mirrors re-rendered every
     // @EnvironmentObject view tree at 1 Hz during playback (perf review

@@ -36,7 +36,11 @@ struct SafetyNote: View {
                     if let topic = learnMoreTopic {
                         HelpCenter.shared.open(topic: topic)
                     } else {
-                        audioState.showHealthSafety = true
+                        // Navigate to the Health & Safety page rather than
+                        // presenting it over the current screen. The note
+                        // itself stays the contextual warning; "Learn more"
+                        // is a trip to the reference, not an interruption.
+                        audioState.pendingMainSection = .healthSafety
                     }
                 } label: {
                     Text("Learn more")

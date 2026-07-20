@@ -10,6 +10,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
     case toneFinder
     case clarity
     case safeListening
+    case healthSafety
     case settings
     case debug
 
@@ -23,6 +24,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
         case .toneFinder:    return "Tinnitus Tools"
         case .clarity:       return "Adaptive Comfort"
         case .safeListening: return "Safe Listening"
+        case .healthSafety:  return "Health & Safety"
         case .settings:      return "Settings"
         case .debug:         return "Debug"
         }
@@ -36,6 +38,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
         case .toneFinder:    return "bandage"
         case .clarity:       return "waveform.badge.magnifyingglass"
         case .safeListening: return "shield.lefthalf.filled"
+        case .healthSafety:  return "heart.text.square"
         case .settings:      return "gearshape"
         case .debug:         return "wrench.and.screwdriver"
         }
@@ -51,8 +54,12 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
     /// **Comfort & Safety** — the level-following comfort tools, tinnitus
     /// tools, and listening-safety monitor, grouped so they read as
     /// "protect and ease listening" rather than "shape the signal."
+    ///
+    /// `.healthSafety` sits last: it's the reference material behind the three
+    /// tools above it, so it belongs with them rather than under App, which is
+    /// for things about the app rather than about listening.
     static var comfortSafetySections: [SidebarSection] {
-        [.clarity, .toneFinder, .safeListening]
+        [.clarity, .toneFinder, .safeListening, .healthSafety]
     }
 
     /// App-level sections — settings and diagnostics. Grouped under
