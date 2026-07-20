@@ -63,7 +63,7 @@ enum AudiogramConversion {
 
     /// Compute EQ bands from the audiogram thresholds.
     /// - Parameters:
-    ///   - audiogram: per-frequency dB HL values (typically 8 points).
+    ///   - audiogram: per-frequency dB HL values (the standard set, 10 points).
     ///   - compensationFactor: 0.25–1.0 user-controlled strength.
     /// - Returns: one parametric band per audiogram frequency (sorted), with
     ///   overlap-compensated gains; bands at negligible loss/gain are disabled.

@@ -41,7 +41,7 @@ extension AudiogramInterchange {
     /// snapping each frequency onto the app's standard audiometric set. Frequencies
     /// the test doesn't cover are left at 0 dB HL (normal); non-standard or off-grid
     /// frequencies map to the nearest standard slot. The result is UI-ready —
-    /// exactly the eight standard rows, one `AudiogramPoint` each — so it drops
+    /// exactly the standard rows, one `AudiogramPoint` each — so it drops
     /// straight into `EarProfile.thresholds`.
     func perEarThresholds() -> (left: [AudiogramPoint], right: [AudiogramPoint]) {
         func fold(_ pick: (AudiogramSensitivityPoint) -> Double?) -> [AudiogramPoint] {
