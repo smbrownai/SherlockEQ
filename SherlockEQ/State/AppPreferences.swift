@@ -124,12 +124,21 @@ final class AppPreferences: ObservableObject {
         }
     }
 
-    /// Whether the menu-bar popover shows a small read-only EQ response
-    /// curve. On by default — it answers "what is my EQ actually doing right
-    /// now" at a glance, which is the popover's job. Opt out for a shorter
-    /// popover, or to keep the FFT pipeline idle while it's open (the curve
-    /// is the only thing there that subscribes to the spectrum analyzers).
-    /// Read-only wherever it appears: editing stays on the Equalizer screen.
+    /// Whether the menu-bar popover shows its tone block: a small read-only EQ
+    /// response curve plus the Bass / Mids / Treble quick-adjustment rows. On
+    /// by default — together they answer "what is my EQ doing right now" and
+    /// "make it a bit warmer" at a glance, which is the popover's job. Opt out
+    /// for a shorter popover, or to keep the FFT pipeline idle while it's open
+    /// (the curve is the only thing there that subscribes to the spectrum
+    /// analyzers).
+    ///
+    /// One preference for both halves on purpose: the nudge buttons are
+    /// relative, so the curve is the only place their effect is legible.
+    /// Buttons without the curve would be a control with no readout.
+    ///
+    /// The stored key still says `showPopoverEQCurve` — renaming it would
+    /// silently reset the preference for everyone who had already turned it
+    /// off. Detailed editing stays on the Equalizer screen either way.
     @Published var showPopoverEQCurve: Bool = AppPreferences.loadBool(
         key: AppPreferences.showPopoverEQCurveKey,
         default: true
