@@ -20,6 +20,21 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.9.5
+
+A correctness fix to listening-exposure tracking. If you use the balance control, or listen to material that's much louder in one ear, please read the first item — exposure was being under-counted for you, and the safe-listening alerts may not have fired when they should have.
+
+**Fixed**
+
+- **Exposure tracking now measures both ears.** It measured only the left channel. For most listening that's harmless, because both ears carry roughly the same level — but with balance panned, or with strongly one-sided audio, the right ear could be driven hard while the tracker recorded almost nothing. In that state the daily exposure reading stayed near zero, the amber and red alerts didn't appear, and a long enough quiet stretch could clear exposure that had genuinely accumulated. SherlockEQ now takes the louder of the two ears, which is the conservative reading for a safety measure.
+- **About your existing history.** Days recorded before this update were measured the old way, so any day you listened with balance panned may read lower than it truly was. Those records can't be recalculated after the fact. Tracking is accurate from this version onward.
+
+**Under the hood**
+
+- **The website no longer loads any third-party code.** Its handful of icons were being fetched from an outside content network on every visit; they're now part of the page itself. Nothing about the app changes — this closes a route by which someone else's compromised code could have run on the page you download from.
+- **Exposure history now keeps its full magnitude.** A day's reading was previously stored capped at 100 %, so a day well past the limit was indistinguishable from a day that just reached it. The displays still read 0–100 % exactly as before; the underlying record now keeps the real figure, so a future version can show how far past the limit a day went.
+- Build reproducibility: the exact version of the update framework used for each release is now recorded in the source repository.
+
 ## 0.9.4
 
 An interface release. Nothing about the sound changes, and no settings move or reset — Settings and Health & Safety were both presented in ways that worked against their own content, and this fixes that.
