@@ -14,6 +14,58 @@ struct MainWindowView: View {
     /// so it opens on demand as an inspector via `MonitorToggleButton`.
     @AppStorage("sherlockeq.monitorSidebarVisible") private var monitorSidebarVisible: Bool = false
 
+    // MARK: - Window minimums
+
+    /// Fixed nav sidebar, the monitor inspector, and the divider between them.
+    private static let navSidebarWidth: CGFloat = 240
+    private static let monitorPanelWidth: CGFloat = 260
+    private static let panelDividerWidth: CGFloat = 1
+    /// Breathing room past the Graphic grid so it isn't flush to both edges at
+    /// the minimum. Historically 34 pt; kept deliberately.
+    private static let detailSlack: CGFloat = 34
+
+    /// The detail column can't go narrower than the Graphic EQ screen, which
+    /// is the widest and is fixed-width by design so it can't reflow.
+    ///
+    /// Derived from `GraphicEQView.contentWidth` rather than restated. The
+    /// arithmetic used to live here as a comment, and when the grid dropped
+    /// from twelve bands to ten it wasn't updated — leaving the window 132 pt
+    /// wider than anything in it required, with the stale comment still
+    /// confidently explaining the old number.
+    private static var detailMinWidth: CGFloat {
+        GraphicEQView.contentWidth + detailSlack
+    }
+
+    /// What the window needs with the monitor inspector closed — 994 pt on
+    /// today's ten-band grid. Not the window minimum; see below.
+    private static var widthWithPanelClosed: CGFloat {
+        navSidebarWidth + detailMinWidth
+    }
+
+    /// The window minimum, and also its ideal.
+    ///
+    /// Sized for the inspector being **open**, not closed. The panel is an
+    /// inspector inside the detail column, so it takes its width straight out
+    /// of the content: a minimum that only fitted the closed state would let
+    /// the user drag the window down to 994 and then clip the slider grid the
+    /// moment they opened the panel. Holding one width for both states costs
+    /// 261 pt of slack while the panel is closed — which the EQ canvas and the
+    /// profile screens use — and makes the panel a toggle that can never fail.
+    ///
+    /// Used as `idealWidth` too, so a first launch opens at exactly the size
+    /// the app actually wants rather than the old 1400, which was a guess with
+    /// no relationship to the content.
+    private static var windowWidth: CGFloat {
+        widthWithPanelClosed + panelDividerWidth + monitorPanelWidth
+    }
+
+    /// Height is a comfort choice rather than a constraint: the Graphic and
+    /// Audiogram screens both sit inside `ScrollView`s, so tall content scrolls
+    /// instead of clipping. 760 keeps the window inside a 1280×800 display once
+    /// the menu bar takes its ~25 pt; 800 is the roomier default.
+    private static let windowMinHeight: CGFloat = 760
+    private static let windowIdealHeight: CGFloat = 800
+
     var body: some View {
         // Lock the sidebar visible: the seven sections + active-profile
         // chip + Manage Profiles button are the app's primary navigation
@@ -104,23 +156,13 @@ struct MainWindowView: View {
                 }
             }
         }
-        // Minimum width is per-state, because the monitor panel is an
-        // inspector *inside* the detail column — opening it takes its width
-        // straight out of the content.
-        //
-        //   Graphic EQ content — the widest screen, and fixed-width so it
-        //   can't reflow: 12 × 62 pt columns + 11 × 4 pt gaps + 2 × 12 pt row
-        //   padding = 812, + 2 × 20 pt content padding = 852 pt.
-        //
-        //   closed: 240 (nav sidebar) + 886 detail  = 1126  → 34 pt slack
-        //   open:   240 + 886 + 1 (divider) + 260 (panel) = 1387
-        //
-        // Holding a single 1126 minimum with the panel open left the sliders
-        // ~227 pt short, so they and the panel both clipped. Scaling the
-        // minimum with the panel keeps the narrow window the inspector was
-        // introduced to allow, and widens only while the panel is out.
-        .frame(minWidth: monitorSidebarVisible ? 1387 : 1126,
-               idealWidth: 1400, minHeight: 716, idealHeight: 800)
+        // One width for both inspector states — see `windowWidth`. The
+        // previous per-state minimum let the window sit at the closed width
+        // and then clip when the panel opened.
+        .frame(minWidth: Self.windowWidth,
+               idealWidth: Self.windowWidth,
+               minHeight: Self.windowMinHeight,
+               idealHeight: Self.windowIdealHeight)
         // Consolidated Health & Safety disclosure — presented at the window
         // level so it's reachable identically from the sidebar item and every
         // screen's compact disclosure chip (all set `audioState.showHealthSafety`).
