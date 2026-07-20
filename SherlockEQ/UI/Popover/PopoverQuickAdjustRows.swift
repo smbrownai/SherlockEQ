@@ -9,11 +9,26 @@ import SwiftUI
 /// neutral, leaving the actual state visible where it really lives — the
 /// miniature curve just above, and the Equalizer screen.
 ///
+/// **There is no undo button because the opposite button is the undo.** Every
+/// pair is exactly symmetric: nudges are additive deltas, so More→Less returns
+/// to the starting gains bit for bit (`ToneMacroTests.oppositeNudgesCancel`
+/// pins this). A dedicated undo would have been a second control doing the
+/// same job as one already on screen, plus the snapshot-staleness machinery
+/// needed to keep it from clobbering edits made elsewhere in between.
+///
+/// The one asymmetry is at the rails: if a nudge was clamped at ±12, the
+/// reverse nudge subtracts the full weighted amount and lands lower than the
+/// start. That's why clamping is called out below rather than passed over.
+///
 /// See `ToneMacro` for the weighting vectors and why these aren't filters.
 struct PopoverQuickAdjustRows: View {
     @EnvironmentObject private var audioState: AudioState
     @EnvironmentObject private var profileStore: ProfileStore
-    @ObservedObject private var history = QuickAdjustHistory.shared
+
+    /// Result of the last nudge. Transient by design — it explains a press
+    /// that couldn't do what was asked, then gets out of the way on the next
+    /// one rather than becoming ambient text the user stops reading.
+    @State private var note: String?
 
     var body: some View {
         if let profile = audioState.activeProfile(in: profileStore) {
@@ -21,12 +36,16 @@ struct PopoverQuickAdjustRows: View {
                 ForEach(ToneMacro.allCases) { macro in
                     row(macro)
                 }
-                footer(profile)
+                if let note {
+                    Text(note)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 2)
+                }
             }
-            // A profile switch makes any snapshot meaningless — drop it as the
-            // profile changes rather than waiting for the staleness check, so
-            // the button never flickers into view against the wrong profile.
-            .onChange(of: profile.id) { _, _ in history.clear() }
+            // A note about one profile's limits is meaningless against another.
+            .onChange(of: profile.id) { _, _ in note = nil }
         }
     }
 
@@ -56,34 +75,9 @@ struct PopoverQuickAdjustRows: View {
         .accessibilityLabel(macro.actionName(direction))
     }
 
-    @ViewBuilder
-    private func footer(_ profile: HearingProfile) -> some View {
-        let undoable = history.usableSnapshot(for: profile)
-        if undoable != nil || history.note != nil {
-            HStack(spacing: 8) {
-                if let note = history.note {
-                    Text(note)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-                if let snapshot = undoable {
-                    Button { undo(snapshot) } label: {
-                        Label("Undo quick adjustment", systemImage: "arrow.uturn.backward")
-                            .font(.caption2)
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Undo \(snapshot.actionName)")
-                }
-            }
-            .padding(.top, 2)
-        }
-    }
+    // MARK: - Action
 
-    // MARK: - Actions
-
-    /// Apply one nudge to both ears and record a single undo step.
+    /// Apply one nudge to both ears.
     ///
     /// Both ears get the *same delta*, which is what makes this safe for
     /// asymmetric profiles: adding a constant to each ear preserves whatever
@@ -94,10 +88,6 @@ struct PopoverQuickAdjustRows: View {
         // would clobber concurrent edits from the main window (audit CX-05).
         guard let live = audioState.activeProfile(in: profileStore) else { return }
         var updated = profileStore.profiles.first { $0.id == live.id } ?? live
-
-        let centers = macro.centers
-        let previousLeft = ToneMacro.gains(at: centers, in: updated.leftEar.bands)
-        let previousRight = ToneMacro.gains(at: centers, in: updated.rightEar.bands)
 
         var worst = ToneMacro.Outcome(moved: 0, clamped: 0)
         EQBandLookup.mutateBothEars(of: &updated) { bands in
@@ -110,37 +100,17 @@ struct PopoverQuickAdjustRows: View {
         }
 
         guard !worst.isNoOp else {
-            // Nothing changed, so there's nothing to undo and no save to make.
-            // Leave any existing snapshot alone — it's still valid.
-            history.setNote("\(macro.label) is already at its limit.")
+            // Nothing moved, so there's nothing to save. Say so — a button
+            // that silently does nothing reads as broken.
+            note = "\(macro.label) is already at its limit."
             return
         }
+        note = worst.clamped > 0
+            ? "Some bands are at their limit, so the change was partial."
+            : nil
 
-        let snapshot = QuickAdjustHistory.Snapshot(
-            profileID: updated.id,
-            centers: centers,
-            previousLeft: previousLeft,
-            previousRight: previousRight,
-            expectedLeft: ToneMacro.gains(at: centers, in: updated.leftEar.bands),
-            expectedRight: ToneMacro.gains(at: centers, in: updated.rightEar.bands),
-            actionName: macro.actionName(direction)
-        )
-        history.record(snapshot, note: worst.clamped > 0
-                       ? "Some bands are at their limit, so the change was partial."
-                       : nil)
-
-        // One save per press → one undo entry, both here and in the main
-        // window's UndoManager (which ProfileStore registers against when the
-        // window is open).
+        // One save per press → one undo entry in the main window's
+        // UndoManager, which ProfileStore registers against when it's open.
         try? profileStore.save(updated, actionName: macro.actionName(direction))
-    }
-
-    private func undo(_ snapshot: QuickAdjustHistory.Snapshot) {
-        guard let live = audioState.activeProfile(in: profileStore) else { return }
-        var updated = profileStore.profiles.first { $0.id == live.id } ?? live
-        ToneMacro.restore(snapshot.previousLeft, at: snapshot.centers, in: &updated.leftEar.bands)
-        ToneMacro.restore(snapshot.previousRight, at: snapshot.centers, in: &updated.rightEar.bands)
-        history.clear()
-        try? profileStore.save(updated, actionName: "Undo \(snapshot.actionName)")
     }
 }

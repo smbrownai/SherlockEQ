@@ -86,7 +86,7 @@ enum ToneMacro: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The full phrase, for VoiceOver and the undo tooltip — a button
+    /// The full phrase, for VoiceOver and the undo action name — a button
     /// announcing only "Softer" twice in a row would be ambiguous (audit
     /// UX-03).
     func actionName(_ direction: Direction) -> String {
@@ -142,21 +142,6 @@ enum ToneMacro: String, CaseIterable, Identifiable {
                                  filterType: .parametric, in: &bands)
         }
         return outcome
-    }
-
-    /// Restore specific centers to previously captured gains — the undo path.
-    /// Writes only the centers the macro touched, so an undo can't disturb
-    /// bands the user adjusted elsewhere in the meantime.
-    static func restore(_ gains: [Double], at centers: [Double], in bands: inout [EQBand]) {
-        for (center, gain) in zip(centers, gains) {
-            EQBandLookup.setGain(gain, at: center, bandwidth: graphicBandwidth,
-                                 filterType: .parametric, in: &bands)
-        }
-    }
-
-    /// Current graphic gains at `centers`, for snapshotting.
-    static func gains(at centers: [Double], in bands: [EQBand]) -> [Double] {
-        centers.map { EQBandLookup.gain(at: $0, filterType: .parametric, in: bands) }
     }
 
     /// 1 octave — the Graphic surface's own Q. Macros must produce bands that

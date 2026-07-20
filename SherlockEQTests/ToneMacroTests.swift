@@ -107,14 +107,42 @@ struct ToneMacroTests {
         #expect(gain(31.5, bands) == 3.0)
     }
 
-    /// Up-then-down returns exactly to the start when no rail intervenes.
+    /// **This test is the undo button.**
+    ///
+    /// The popover ships no undo control because the opposite button already
+    /// is one. That's only true if every pair is exactly symmetric, so this
+    /// pins it for all three macros, over repeated presses, on a curve that
+    /// isn't flat. If this ever fails, the popover has silently lost its
+    /// ability to take back a nudge.
     @Test func oppositeNudgesCancel() {
-        var bands = flatGraphic(2)
-        ToneMacro.apply(.treble, direction: .up, to: &bands)
-        ToneMacro.apply(.treble, direction: .down, to: &bands)
-        for center in EQMode.graphicCenters {
-            #expect(abs(gain(center, bands) - 2) < 0.0001)
+        for macro in ToneMacro.allCases {
+            var bands = flatGraphic(2)
+            // An uneven starting curve — symmetry must not depend on flatness.
+            EQBandLookup.setGain(-5.5, at: 500, bandwidth: ToneMacro.graphicBandwidth,
+                                 filterType: .parametric, in: &bands)
+            let before = EQMode.graphicCenters.map { gain($0, bands) }
+
+            for _ in 0..<3 { ToneMacro.apply(macro, direction: .up, to: &bands) }
+            for _ in 0..<3 { ToneMacro.apply(macro, direction: .down, to: &bands) }
+
+            for (center, expected) in zip(EQMode.graphicCenters, before) {
+                #expect(abs(gain(center, bands) - expected) < 0.0001,
+                        "\(macro.rawValue) is not reversible at \(center) Hz")
+            }
         }
+    }
+
+    /// The one place the opposite button *isn't* a perfect undo: a nudge that
+    /// clamped at the rail lost information, so reversing it lands lower than
+    /// it started. Pinned deliberately — this is why a clamped nudge says so
+    /// in the UI instead of passing silently.
+    @Test func reversingAClampedNudgeDoesNotReturnToStart() {
+        var bands = flatGraphic(11.8)
+        ToneMacro.apply(.bass, direction: .up, to: &bands)     // 31.5 clamps 11.8 → 12
+        ToneMacro.apply(.bass, direction: .down, to: &bands)   // 12 − 1 = 11
+        #expect(gain(31.5, bands) == 11, "clamped movement is not recoverable by reversing")
+        // A band that never hit the rail still round-trips exactly.
+        #expect(abs(gain(500, bands) - 11.8) < 0.0001)
     }
 
     @Test func downNudgeLowersGains() {
@@ -149,31 +177,6 @@ struct ToneMacroTests {
         let outcome = ToneMacro.apply(.mid, direction: .up, to: &bands)
         #expect(outcome.clamped == 0)
         #expect(outcome.moved == ToneMacro.mid.centers.count)
-    }
-
-    // MARK: - Snapshot / restore (the undo path)
-
-    @Test func restoreReturnsTouchedBandsExactly() {
-        var bands = flatGraphic(3)
-        let centers = ToneMacro.bass.centers
-        let before = ToneMacro.gains(at: centers, in: bands)
-        ToneMacro.apply(.bass, direction: .up, to: &bands)
-        ToneMacro.restore(before, at: centers, in: &bands)
-        #expect(ToneMacro.gains(at: centers, in: bands) == before)
-    }
-
-    /// Undo must not reach outside the region it changed — a band the user
-    /// edited elsewhere in the meantime has to survive.
-    @Test func restoreLeavesUntouchedBandsAlone() {
-        var bands = flatGraphic()
-        let centers = ToneMacro.bass.centers
-        let before = ToneMacro.gains(at: centers, in: bands)
-        ToneMacro.apply(.bass, direction: .up, to: &bands)
-        // Meanwhile the user drags 8 kHz on the Graphic screen.
-        EQBandLookup.setGain(-6, at: 8000, bandwidth: ToneMacro.graphicBandwidth,
-                             filterType: .parametric, in: &bands)
-        ToneMacro.restore(before, at: centers, in: &bands)
-        #expect(gain(8000, bands) == -6, "undo must not clobber unrelated edits")
     }
 
     // MARK: - Naming
