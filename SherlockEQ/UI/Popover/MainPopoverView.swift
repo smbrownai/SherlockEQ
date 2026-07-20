@@ -43,11 +43,16 @@ struct MainPopoverView: View {
             AutoEQMismatchRow(compact: true)
             Divider()
             // Live readouts: what's actually happening right now, and the
-            // two controls worth a quick nudge (gain, balance). No scope
-            // badges — the popover's job is a glance, not a legend.
+            // controls worth a quick nudge. No scope badges — the popover's
+            // job is a glance, not a legend.
             PopoverLiveStatusRows(tracker: audioState.safeListening)
             masterGainRow
             balanceRow
+            // Stepped tone nudges that move the twelve graphic bands directly.
+            // Not filters, and not faders: the Equalizer stays the single
+            // source of truth, and the popover claims no authoritative
+            // "Bass: +2 dB" for a curve that can't have one. See `ToneMacro`.
+            PopoverQuickAdjustRows()
             Divider()
             processingDetails
             Divider()
