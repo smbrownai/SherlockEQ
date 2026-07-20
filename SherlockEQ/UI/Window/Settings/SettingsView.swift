@@ -1,10 +1,17 @@
 import SwiftUI
 
-/// App-wide settings. Everyday preferences (General, Appearance, Keyboard)
-/// stay open; professional DSP configuration (master gain + peak limiter)
-/// lives under a collapsed **Advanced Audio** group, and file locations under
-/// **Files & data**, so the page reads as preferences first, engineering
-/// second.
+/// App-wide settings, as a responsive two-column card grid.
+///
+/// Every category used to be a full-width `DisclosureGroup`, which had two
+/// problems: a settings row's control sat immediately after its label, so
+/// nothing lined up down the page, and descriptions ran the full width of the
+/// detail column with a lot of empty space to their right. Collapsing
+/// *everything* also made ordinary preferences feel hidden — an accordion
+/// suits specialised sections, not "Launch at login".
+///
+/// So: cards on a constrained measure, controls at the trailing edge, and
+/// disclosure kept only for the two specialised categories (Advanced Audio,
+/// Diagnostics) that genuinely benefit from being folded away.
 struct SettingsView: View {
     /// Cached count of the AutoEQ library folder — enumerated off-main per
     /// folder change instead of inside the body (perf review M1; a real
@@ -16,40 +23,42 @@ struct SettingsView: View {
     @State private var acknowledgmentsShown = false
     @State private var relocationAlert: RelocationPrompt?
 
-    @State private var showGeneral = true
-    @State private var showAppearance = true
-    @State private var showKeyboard = true
     @State private var showAdvancedAudio = false
-    @State private var showFiles = false
+
     @State private var showDiagnostics = false
-    @State private var showAbout = true
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                // No in-page "Settings" hero — the window title bar already
-                // names the screen; a second copy was pure duplication.
-                group("General", systemImage: "switch.2", isExpanded: $showGeneral) {
-                    generalContent
+            VStack(alignment: .leading, spacing: Self.cardSpacing) {
+                // `.adaptive` does the responsive work without measuring the
+                // window: two columns while the content width allows two
+                // `cardMinWidth` cells, one when it doesn't. Row-major order
+                // means each row is as tall as its taller card and no taller —
+                // Appearance is allowed to outgrow Keyboard rather than
+                // everything being padded to a common height.
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: Self.cardMinWidth),
+                                       spacing: Self.cardSpacing,
+                                       alignment: .top)],
+                    alignment: .leading,
+                    spacing: Self.cardSpacing
+                ) {
+                    card("General", systemImage: "switch.2") { generalContent }
+                    card("Appearance", systemImage: "paintpalette") { appearanceContent }
+                    card("Keyboard", systemImage: "keyboard") { keyboardContent }
+                    card("Data & Profiles", systemImage: "externaldrive") { filesContent }
+                    disclosureCard("Advanced Audio",
+                                   systemImage: "waveform.badge.exclamationmark",
+                                   isExpanded: $showAdvancedAudio) { advancedAudioContent }
+                    disclosureCard("Diagnostics",
+                                   systemImage: "stethoscope",
+                                   isExpanded: $showDiagnostics) { diagnosticsContent }
                 }
-                group("Appearance", systemImage: "paintpalette", isExpanded: $showAppearance) {
-                    appearanceContent
-                }
-                group("Keyboard", systemImage: "keyboard", isExpanded: $showKeyboard) {
-                    keyboardContent
-                }
-                group("Advanced Audio", systemImage: "waveform.badge.exclamationmark", isExpanded: $showAdvancedAudio) {
-                    advancedAudioContent
-                }
-                group("Data & Profiles", systemImage: "externaldrive", isExpanded: $showFiles) {
-                    filesContent
-                }
-                group("Diagnostics", systemImage: "stethoscope", isExpanded: $showDiagnostics) {
-                    diagnosticsContent
-                }
-                aboutSection
+                aboutCard
             }
-            .padding(28)
+            // Prose and controls want a measure, not the whole window.
+            .frame(maxWidth: Self.readableWidth, alignment: .leading)
+            .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle("Settings")
@@ -86,30 +95,28 @@ struct SettingsView: View {
     // MARK: - General
 
     @ViewBuilder private var generalContent: some View {
-        Toggle("Launch at login", isOn: $preferences.launchAtLoginEnabled)
-            .toggleStyle(.switch)
-            .controlSize(.small)
-        caption("Start SherlockEQ in the menu bar when you log in. Revoke it in System Settings → General → Login Items.")
+        toggleRow("Launch at login",
+                  isOn: $preferences.launchAtLoginEnabled,
+                  caption: "Start in the menu bar when you log in.",
+                  help: "Revoke it any time in System Settings → General → Login Items.")
         Divider()
-        Toggle("Hide from Dock when window is closed", isOn: $preferences.hideFromDockEnabled)
-            .toggleStyle(.switch)
-            .controlSize(.small)
-        caption("Keep running in the menu bar with no Dock icon after you close the window. Turn off if the menu bar fails to redraw on reopen.")
+        toggleRow("Hide Dock icon when window closes",
+                  isOn: $preferences.hideFromDockEnabled,
+                  caption: "Keep running in the menu bar only.",
+                  help: "Turn this off if the menu bar fails to redraw when you reopen the window.")
     }
 
     // MARK: - Appearance
 
     @ViewBuilder private var appearanceContent: some View {
         colorRow(label: "Left ear", binding: $preferences.leftEarColor, defaultColor: AppPreferences.defaultLeftEarColor)
-        Divider()
         colorRow(label: "Right ear", binding: $preferences.rightEarColor, defaultColor: AppPreferences.defaultRightEarColor)
-        caption("Colors for the left/right curves, audiogram thresholds, and EQ sliders.")
+        caption("Used for curves, audiogram thresholds, and EQ sliders.")
         Divider()
-        Toggle("Show the EQ curve and quick tone adjustments in the menu-bar popover",
-               isOn: $preferences.showPopoverEQCurve)
-            .toggleStyle(.switch)
-            .controlSize(.small)
-        caption("A small read-only view of what your EQ is doing right now, with Bass, Mids, and Treble buttons that nudge the curve. Turn it off for a shorter popover — detailed editing always happens on the Equalizer screen.")
+        toggleRow("Show EQ and quick tone controls in popover",
+                  isOn: $preferences.showPopoverEQCurve,
+                  caption: "A live curve plus Bass, Mids, and Treble nudges.",
+                  help: "Turn it off for a shorter popover. Detailed editing always happens on the Equalizer screen.")
     }
 
     private func colorRow(label: String, binding: Binding<Color>, defaultColor: Color) -> some View {
@@ -140,10 +147,10 @@ struct SettingsView: View {
     // MARK: - Keyboard (Reference Mode shortcut)
 
     @ViewBuilder private var keyboardContent: some View {
-        Toggle("Global ⌘⇧B toggles Reference Mode", isOn: $preferences.globalReferenceShortcutEnabled)
-            .toggleStyle(.switch)
-            .controlSize(.small)
-        caption("Reference Mode temporarily bypasses all processing so you hear the source unchanged. This makes ⌘⇧B work even when SherlockEQ is in the background; the ⌘B menu item always works when the window is key. Off by default — global shortcuts can collide with other apps.")
+        toggleRow("Global Reference Mode shortcut",
+                  isOn: $preferences.globalReferenceShortcutEnabled,
+                  caption: "⌘⇧B works even when SherlockEQ is in the background.",
+                  help: "Reference Mode bypasses all processing so you hear the source unchanged. ⌘B always works when the window is key; the global shortcut is off by default because it can collide with other apps.")
     }
 
     // MARK: - Advanced Audio (master gain + peak limiter)
@@ -269,7 +276,7 @@ struct SettingsView: View {
                 .controlSize(.small)
             }
         }
-        caption("Point this at iCloud Drive / Dropbox / an external disk to back up or sync your profiles.")
+        caption("Point at iCloud Drive or an external disk to back up or sync.")
 
         Divider()
 
@@ -308,7 +315,7 @@ struct SettingsView: View {
                 .help("Clear library folder")
             }
         }
-        caption("A folder of AutoEQ .txt files (one per headphone) that every profile's headphone picker can list by name.")
+        caption("AutoEQ .txt files every profile's headphone picker can list by name.")
     }
 
     private func chooseAutoEQLibrary() {
@@ -353,64 +360,157 @@ struct SettingsView: View {
     // MARK: - Diagnostics
 
     @ViewBuilder private var diagnosticsContent: some View {
-        Toggle("Show Debug in sidebar", isOn: $preferences.showDebugInSidebar)
-            .toggleStyle(.switch)
-            .controlSize(.small)
-        caption("Adds a Debug entry with diagnostic counters and test controls. Off by default.")
+        toggleRow("Show Debug in sidebar",
+                  isOn: $preferences.showDebugInSidebar,
+                  caption: "Diagnostic counters and test controls.")
         Divider()
-        Toggle("Show metadata on profiles", isOn: $preferences.showProfileMetadata)
-            .toggleStyle(.switch)
-            .controlSize(.small)
-        caption("Shows created/modified timestamps and the unique ID on each profile's detail page.")
+        toggleRow("Show metadata on profiles",
+                  isOn: $preferences.showProfileMetadata,
+                  caption: "Created/modified dates and the unique ID.")
     }
 
     // MARK: - About
 
-    private var aboutSection: some View {
-        group("About", systemImage: "info.circle", isExpanded: $showAbout) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Acknowledgments").font(.callout.weight(.medium))
-                    Text("Science, software, and prior art behind SherlockEQ.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
+    /// A footer strip rather than a settings category — it holds nothing you
+    /// can change, so it doesn't earn a place in the grid beside things you can.
+    private var aboutCard: some View {
+        cardChrome {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                Label("SherlockEQ \(HelpCenter.shared.appVersionString)", systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 12)
+                Text("Acknowledgments")
+                    .font(.callout)
                 Button("View…") { acknowledgmentsShown = true }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
             }
         }
+        .help("Science, software, and prior art behind SherlockEQ.")
     }
 
     // MARK: - Building blocks
 
+    /// Roughly a comfortable measure for prose plus two control columns.
+    private static let readableWidth: CGFloat = 880
+    /// Below two of these plus a gutter, the grid drops to one column.
+    private static let cardMinWidth: CGFloat = 340
+    private static let cardSpacing: CGFloat = 16
+
+    /// A row whose control sits at the **trailing** edge, with an optional
+    /// one-line description beneath.
+    ///
+    /// The old rows put the control immediately after its label, so no two
+    /// lined up and the eye had to hunt for each switch. Pinning controls
+    /// right gives the card a single scan column.
+    ///
+    /// `help` carries the nuance the caption used to: a caption is one line
+    /// of orientation, and the detail belongs in a tooltip or Help rather
+    /// than as a paragraph the user re-reads every visit.
+    @ViewBuilder
+    private func settingRow<Control: View>(
+        _ title: String,
+        caption: String? = nil,
+        help: String? = nil,
+        @ViewBuilder control: () -> Control
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(title)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                control()
+            }
+            if let caption {
+                Text(caption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .help(help ?? caption ?? title)
+    }
+
+    /// Convenience for the common case: a switch at the trailing edge.
+    @ViewBuilder
+    private func toggleRow(
+        _ title: String,
+        isOn: Binding<Bool>,
+        caption: String? = nil,
+        help: String? = nil
+    ) -> some View {
+        settingRow(title, caption: caption, help: help) {
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .accessibilityLabel(title)
+        }
+    }
+
     private func caption(_ text: String) -> some View {
         Text(text)
-            .font(.callout)
+            .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
     }
 
+    /// The card chrome. Title lives *inside* the card rather than on a
+    /// separate header bar — the border already separates categories, so a
+    /// heavy header would be a second divider doing the same job.
     @ViewBuilder
-    private func group<Content: View>(
+    private func cardChrome<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color.secondary.opacity(0.14)))
+    }
+
+    private func cardTitle(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.headline)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    /// An always-open category. Everyday preferences shouldn't need a click
+    /// to reveal.
+    @ViewBuilder
+    private func card<Content: View>(
+        _ title: String,
+        systemImage: String,
+        @ViewBuilder _ content: @escaping () -> Content
+    ) -> some View {
+        cardChrome {
+            VStack(alignment: .leading, spacing: 12) {
+                cardTitle(title, systemImage: systemImage)
+                content()
+            }
+        }
+    }
+
+    /// A folded category, for the specialised ones. Kept collapsible because
+    /// these are genuinely infrequent and long — not because settings in
+    /// general deserve hiding.
+    @ViewBuilder
+    private func disclosureCard<Content: View>(
         _ title: String,
         systemImage: String,
         isExpanded: Binding<Bool>,
         @ViewBuilder _ content: @escaping () -> Content
     ) -> some View {
-        DisclosureGroup(isExpanded: isExpanded) {
-            VStack(alignment: .leading, spacing: 10) {
-                content()
+        cardChrome {
+            DisclosureGroup(isExpanded: isExpanded) {
+                VStack(alignment: .leading, spacing: 12) {
+                    content()
+                }
+                .padding(.top, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } label: {
+                cardTitle(title, systemImage: systemImage)
             }
-            .padding(.top, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            Label(title, systemImage: systemImage)
-                .font(.headline)
         }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.06)))
     }
-
 }
