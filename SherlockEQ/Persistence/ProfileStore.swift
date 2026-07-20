@@ -371,6 +371,51 @@ final class ProfileStore: ObservableObject {
     private static let factoryPresetsVersion = 2
     private static let factoryPresetsVersionKey = "sherlockeq.factoryPresetsVersion"
 
+    private static let autoEQScopeMigrationKey = "sherlockeq.autoEQScopeMigrated"
+    private static let legacyGlobalAutoEQKey = "sherlockeq.autoEQEnabled"
+
+    /// One-time move of the AutoEQ on/off switch from a single app-wide
+    /// preference onto each profile.
+    ///
+    /// The flag now defaults to `true` when decoding, which is right for the
+    /// overwhelming majority — but wrong for anyone who had deliberately
+    /// switched the old global off. For them, a silent default would turn a
+    /// bypassed correction back on the first time they launched the new
+    /// build: headphone EQ they had chosen to disable, re-applied without a
+    /// word. So carry the old value across before it stops being consulted.
+    ///
+    /// Gated on its own key rather than the app version so it runs exactly
+    /// once, and only stamps profiles that actually carry a correction —
+    /// there is nothing to bypass on the others, and marking them edited
+    /// would be a lie.
+    func migrateAutoEQScopeIfNeeded() {
+        guard !defaults.bool(forKey: Self.autoEQScopeMigrationKey) else { return }
+        defer { defaults.set(true, forKey: Self.autoEQScopeMigrationKey) }
+
+        // Absent key → the user never touched it → it was on → nothing to do.
+        guard defaults.object(forKey: Self.legacyGlobalAutoEQKey) != nil,
+              defaults.bool(forKey: Self.legacyGlobalAutoEQKey) == false else { return }
+
+        var carried = 0
+        for profile in profiles where !(profile.autoEQBands?.isEmpty ?? true) {
+            var updated = profile
+            updated.autoEQEnabled = false
+            do {
+                try save(updated)
+                carried += 1
+            } catch {
+                log.error("AutoEQ scope migration failed for \(profile.id.uuidString, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        // The global is now a Debug-only per-stage bypass. Leave it off only
+        // if we failed to carry the intent onto any profile, so the user's
+        // correction can't come back on behind their back.
+        if carried > 0 {
+            defaults.set(true, forKey: Self.legacyGlobalAutoEQKey)
+        }
+        log.info("Migrated AutoEQ bypass onto \(carried, privacy: .public) profile(s)")
+    }
+
     /// The complete v1 factory-preset definitions, frozen for the v1 → v2
     /// migration's edit detection (spec Design note 3). Comparing a stored
     /// preset against the CURRENT builders is circular — after a re-voicing,

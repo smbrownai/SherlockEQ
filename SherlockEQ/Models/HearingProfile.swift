@@ -47,6 +47,23 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     /// existed) — no warning until re-attached; no fuzzy name matching.
     var autoEQDeviceUID: String?
     var autoEQDeviceName: String?
+    /// Whether this profile's headphone correction is applied.
+    ///
+    /// Lives on the profile, not in app preferences, because everything else
+    /// about the correction does: a profile carries its own headphones, bands,
+    /// and preamp, so "am I using them" belongs in the same place. It used to
+    /// be a single app-wide flag, which meant bypassing the correction on one
+    /// profile silently bypassed it on every other profile too — invisible,
+    /// because the row it lived in showed per-profile content on every side.
+    ///
+    /// Defaults to true (`decodeIfPresent`): a profile that predates this
+    /// field was, by definition, using whatever correction it had loaded.
+    /// The one-time migration in `ProfileStore` handles the users who had the
+    /// old global flag switched off.
+    ///
+    /// Still ANDed with `EQChainState.autoEQEnabled`, which remains as a
+    /// chain-level per-stage bypass alongside its four siblings in Debug.
+    var autoEQEnabled: Bool = true
     var safeListeningCeilingDB: Double          // user-set, default 85.0
     /// Target correction strength (0.25–1.0), applied at CONSUMPTION time:
     /// `correctionBands` store the FULL NAL-R prescription and every
@@ -144,6 +161,9 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.autoEQSourcePath       = try c.decodeIfPresent(String.self, forKey: .autoEQSourcePath)
         self.autoEQDeviceUID        = try c.decodeIfPresent(String.self, forKey: .autoEQDeviceUID)
         self.autoEQDeviceName       = try c.decodeIfPresent(String.self, forKey: .autoEQDeviceName)
+        // Absent on every profile written before the flag moved onto the
+        // profile — those were using their correction, so default to on.
+        self.autoEQEnabled          = try c.decodeIfPresent(Bool.self, forKey: .autoEQEnabled) ?? true
         self.safeListeningCeilingDB = try c.decode(Double.self, forKey: .safeListeningCeilingDB)
         self.compensationFactor     = try c.decode(Double.self, forKey: .compensationFactor)
         self.acclimatizationStartDate = try c.decodeIfPresent(Date.self, forKey: .acclimatizationStartDate)
@@ -307,6 +327,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         autoEQName: String? = nil, autoEQBands: [EQBand]? = nil, autoEQPreampDB: Double? = nil,
         autoEQSourcePath: String? = nil,
         autoEQDeviceUID: String? = nil, autoEQDeviceName: String? = nil,
+        autoEQEnabled: Bool = true,
         safeListeningCeilingDB: Double, compensationFactor: Double,
         acclimatizationStartDate: Date? = nil,
         correctionMode: CorrectionMode = .steady,
@@ -332,6 +353,7 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.autoEQSourcePath = autoEQSourcePath
         self.autoEQDeviceUID = autoEQDeviceUID
         self.autoEQDeviceName = autoEQDeviceName
+        self.autoEQEnabled = autoEQEnabled
         self.safeListeningCeilingDB = safeListeningCeilingDB
         self.compensationFactor = compensationFactor
         self.acclimatizationStartDate = acclimatizationStartDate

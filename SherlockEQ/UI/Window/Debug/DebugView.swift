@@ -210,7 +210,9 @@ struct DebugView: View {
 
         Text("Per-stage bypass").font(.caption).foregroundStyle(.secondary).padding(.top, 4)
         chainToggle("EQ master stage", \.eqMasterEnabled)
-        chainToggle("AutoEQ headphone correction", \.autoEQEnabled)
+        // Chain-level bypass for every profile at once. Each profile also has
+        // its own `autoEQEnabled`; both must be on for the stage to run.
+        chainToggle("AutoEQ headphone correction (all profiles)", \.autoEQEnabled)
         chainToggle("Manual EQ bands", \.manualEQEnabled)
         chainToggle("Tinnitus notch", \.notchFilterEnabled)
         chainToggle("Dynamics", \.dynamicsEnabled)

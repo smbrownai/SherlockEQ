@@ -28,12 +28,15 @@ nonisolated struct CorrectionLayerStatus: Equatable {
 
     var any: Bool { audiogram || headphone }
 
+    /// - Parameter autoEQEnabled: the *chain-level* per-stage bypass. The
+    ///   profile's own `autoEQEnabled` is read from `profile`; both must be on.
     init(profile: HearingProfile, masterEnabled: Bool, autoEQEnabled: Bool) {
         let hasAudiogramBands = !profile.leftEar.correctionBands.isEmpty
             || !profile.rightEar.correctionBands.isEmpty
         let hasHeadphoneBands = !(profile.autoEQBands?.isEmpty ?? true)
         self.audiogram = masterEnabled && hasAudiogramBands
-        self.headphone = masterEnabled && autoEQEnabled && hasHeadphoneBands
+        self.headphone = masterEnabled && autoEQEnabled
+            && profile.autoEQEnabled && hasHeadphoneBands
     }
 
     /// Human-readable names of the active layers, low-level first — the order
