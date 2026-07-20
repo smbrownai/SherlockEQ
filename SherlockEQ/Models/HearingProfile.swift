@@ -182,6 +182,13 @@ struct HearingProfile: Codable, Identifiable, Hashable {
         self.createdAt              = try c.decode(Date.self, forKey: .createdAt)
         self.modifiedAt             = try c.decode(Date.self, forKey: .modifiedAt)
 
+        // Fill any standard audiogram frequency the stored thresholds are
+        // missing — 750 Hz and 1500 Hz on everything written before they
+        // joined the set. Must run BEFORE the two correction passes below, so
+        // the prescription they derive is the one the full set implies rather
+        // than one re-derived a launch later.
+        Self.fillMissingThresholds(&self.leftEar)
+        Self.fillMissingThresholds(&self.rightEar)
         // Backfill the audiogram correction layer for profiles whose audiogram
         // predates it (correctionBands empty but thresholds carry loss), or
         // whose derived bands were deleted out of `bands`. Derive from the
@@ -223,6 +230,60 @@ struct HearingProfile: Codable, Identifiable, Hashable {
     /// the steppers, so float noise can't read as data.
     private static func hasNonFlatThresholds(_ ear: EarProfile) -> Bool {
         ear.thresholds.contains { abs($0.thresholddBHL) >= 0.5 }
+    }
+
+    /// Add any `AudiogramPoint.standardFrequencies` entry the stored
+    /// thresholds lack, log-interpolating from the neighbours either side.
+    ///
+    /// Exists for 750 Hz and 1500 Hz, which joined the standard set after
+    /// profiles had already been written with eight points. Interpolation
+    /// rather than zero: a missing point means "not measured", and 0 dB HL
+    /// means "measured, normal" — filling with zero would invent a notch of
+    /// perfect hearing between two losses and prescribe a dip to match it.
+    /// The interpolated value is what the surrounding measurements already
+    /// imply, so the prescription is unchanged in shape and the user can
+    /// overwrite either point with a real reading.
+    ///
+    /// Idempotent: a profile that already has all ten is untouched, and
+    /// re-running never disturbs a value the user typed.
+    ///
+    /// Flat/never-entered audiograms interpolate to 0 throughout, which is
+    /// exactly `AudiogramPoint.flat` — so factory presets keep matching their
+    /// canonical definition and stay pristine.
+    private static func fillMissingThresholds(_ ear: inout EarProfile) {
+        let present = Set(ear.thresholds.map(\.frequencyHz))
+        let missing = AudiogramPoint.standardFrequencies.filter { !present.contains($0) }
+        guard !missing.isEmpty else { return }
+        guard !ear.thresholds.isEmpty else {
+            ear.thresholds = AudiogramPoint.flat
+            return
+        }
+        let sorted = ear.thresholds.sorted { $0.frequencyHz < $1.frequencyHz }
+        for hz in missing {
+            ear.thresholds.append(
+                AudiogramPoint(frequencyHz: hz,
+                               thresholddBHL: interpolatedThreshold(at: hz, in: sorted)))
+        }
+        ear.thresholds.sort { $0.frequencyHz < $1.frequencyHz }
+    }
+
+    /// Log-frequency interpolation, clamped to the end values outside the
+    /// measured range. Log rather than linear because audiograms are read on a
+    /// log axis — 750 Hz sits visually midway between 500 and 1000, and the
+    /// value a clinician would read off the line there is the log-interpolated
+    /// one.
+    private static func interpolatedThreshold(at hz: Int, in sorted: [AudiogramPoint]) -> Double {
+        guard let first = sorted.first, let last = sorted.last else { return 0 }
+        if hz <= first.frequencyHz { return first.thresholddBHL }
+        if hz >= last.frequencyHz { return last.thresholddBHL }
+        for i in 1..<sorted.count where hz <= sorted[i].frequencyHz {
+            let lo = sorted[i - 1], hi = sorted[i]
+            let span = log(Double(hi.frequencyHz)) - log(Double(lo.frequencyHz))
+            guard span > 0 else { return lo.thresholddBHL }
+            let t = (log(Double(hz)) - log(Double(lo.frequencyHz))) / span
+            return lo.thresholddBHL + t * (hi.thresholddBHL - lo.thresholddBHL)
+        }
+        return last.thresholddBHL
     }
 
     /// Populate `ear.correctionBands` from its thresholds when the layer is

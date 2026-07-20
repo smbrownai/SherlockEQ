@@ -13,9 +13,25 @@ import Foundation
 
 struct AudiogramConversionTests {
 
+    /// Build a full standard-set audiogram from the frequencies a test cares
+    /// about, log-interpolating the rest.
+    ///
+    /// Interpolating rather than defaulting to 0 dB HL matters since 750 and
+    /// 1500 joined the standard set: zero-filling them would drop perfect
+    /// hearing between two real losses, and a fixture like the ski-slope below
+    /// would then describe an audiogram no ear has. Mirrors what
+    /// `HearingProfile.fillMissingThresholds` does to stored profiles.
     private static func audiogram(_ byFreq: [Int: Double]) -> [AudiogramPoint] {
-        AudiogramPoint.standardFrequencies.map {
-            AudiogramPoint(frequencyHz: $0, thresholddBHL: byFreq[$0] ?? 0)
+        let known = byFreq.keys.sorted()
+        func value(_ hz: Int) -> Double {
+            if let exact = byFreq[hz] { return exact }
+            guard let lo = known.last(where: { $0 < hz }) else { return byFreq[known.first!]! }
+            guard let hi = known.first(where: { $0 > hz }) else { return byFreq[lo]! }
+            let t = (log(Double(hz)) - log(Double(lo))) / (log(Double(hi)) - log(Double(lo)))
+            return byFreq[lo]! + t * (byFreq[hi]! - byFreq[lo]!)
+        }
+        return AudiogramPoint.standardFrequencies.map {
+            AudiogramPoint(frequencyHz: $0, thresholddBHL: value($0))
         }
     }
 
