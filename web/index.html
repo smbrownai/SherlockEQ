@@ -8,7 +8,6 @@
 
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
   <link rel="stylesheet" href="colors_and_type.css" />
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
 
   <style>
     :root {
@@ -523,7 +522,7 @@
         <a href="compare.html">Compare</a>
         <a href="release-notes.html">Release notes</a>
         <a href="#install">Install</a>
-        <a href="https://github.com/smbrownai/SherlockEQ">Source <i data-lucide="arrow-up-right" style="width:12px;height:12px"></i></a>
+        <a href="https://github.com/smbrownai/SherlockEQ">Source <svg style="width:12px;height:12px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg></a>
       </nav>
     </div>
   </header>
@@ -543,7 +542,7 @@
         </p>
         <div class="cta-row">
           <a class="btn btn-primary" href="#install">
-            <i data-lucide="arrow-down-to-line" style="width:16px;height:16px"></i>
+            <svg style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></svg>
             Download for macOS
           </a>
           <a class="btn btn-secondary" href="#what">
@@ -735,19 +734,19 @@
 
       <div class="install-grid">
         <div class="install-card">
-          <h3><i data-lucide="arrow-down-to-line" style="width:14px;height:14px;color:var(--fg-2)"></i> Direct download</h3>
+          <h3><svg style="width:14px;height:14px;color:var(--fg-2)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></svg> Direct download</h3>
           <p>Signed and notarized .dmg from GitHub Releases. Drag SherlockEQ into Applications and launch.</p>
           <pre><code>SherlockEQ-0.9.4.dmg
 10.6 MB</code></pre>
           <a class="btn btn-primary" href="https://github.com/smbrownai/SherlockEQ/releases/latest">
             Download .dmg
-            <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i>
+            <svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
           </a>
           <a class="install-notes-link" href="release-notes.html">What's new in this version →</a>
         </div>
 
         <div class="install-card">
-          <h3><i data-lucide="terminal" style="width:14px;height:14px;color:var(--fg-2)"></i> Homebrew</h3>
+          <h3><svg style="width:14px;height:14px;color:var(--fg-2)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg> Homebrew</h3>
           <p>Installs the same notarized bundle and tracks updates via <code>brew upgrade</code>. The in-app updater stands down when installed this way.</p>
           <pre><code>brew tap smbrownai/sherlockeq
 brew install --cask sherlockeq</code></pre>
@@ -851,8 +850,6 @@ brew install --cask sherlockeq</code></pre>
   </footer>
 
   <script>
-    if (window.lucide) window.lucide.createIcons();
-    else window.addEventListener('load', () => window.lucide && window.lucide.createIcons());
   </script>
 </body>
 </html>

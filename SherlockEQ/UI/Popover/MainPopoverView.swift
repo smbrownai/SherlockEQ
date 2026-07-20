@@ -380,7 +380,7 @@ private struct PopoverLiveStatusRows: View {
             // now, and what it's cost today. The EQ curve used to sit between
             // them; it now lives with the tone controls it belongs to.
             DoseBarView(
-                percent: tracker.sessionDose,
+                percent: tracker.displayDose,
                 status: ExposureStatus.resolve(sessionDose: tracker.sessionDose,
                                                levelDBA: tracker.currentLevelDBA,
                                                hasCalibration: audioState.hasUserCalibration),
