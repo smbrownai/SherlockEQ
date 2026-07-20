@@ -474,15 +474,15 @@ struct GraphicEQView: View {
 
     @ViewBuilder
     private func slidersRow(_ profile: HearingProfile) -> some View {
-        // Twelve 62 pt columns + 11 gaps + row padding ≈ 812 pt, which fits
-        // the detail column at the minimum window width now that the monitor
-        // panel collapses by default (the nav sidebar is a fixed 240 pt).
-        HStack(alignment: .top, spacing: 4) {
+        // Width is `Self.contentWidth` — see there for the arithmetic and for
+        // why the main window's minimum is derived from it rather than
+        // restated.
+        HStack(alignment: .top, spacing: Self.columnSpacing) {
             ForEach(Array(Self.frequencies.enumerated()), id: \.offset) { _, freq in
                 bandColumn(profile: profile, frequency: freq)
             }
         }
-        .padding(12)
+        .padding(Self.rowPadding)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color.secondary.opacity(0.06))
@@ -494,7 +494,32 @@ struct GraphicEQView: View {
     /// "Sibilance") without either reflowing when Link toggles. The monitor
     /// panel now collapses by default, so the detail column has room for the
     /// wider grid.
-    private static let columnWidth: CGFloat = 62
+    static let columnWidth: CGFloat = 62
+
+    /// Gap between band columns, and the padding around the whole row.
+    static let columnSpacing: CGFloat = 4
+    static let rowPadding: CGFloat = 12
+    /// Padding around the screen's content, outside the slider row.
+    static let screenPadding: CGFloat = 20
+
+    /// The width this screen needs, derived from the live band count.
+    ///
+    /// The grid is deliberately fixed-width — it must not reflow when Link
+    /// toggles — so it sets the main window's minimum width, and
+    /// `MainWindowView` reads this rather than restating the arithmetic.
+    ///
+    /// That indirection is the point. The number was previously written out
+    /// in a comment there ("12 × 62 pt columns … = 812"), and when the grid
+    /// went from twelve bands to ten it was left behind, holding the window
+    /// 132 pt wider than the content needed. Deriving it means a future grid
+    /// change moves the minimum with it.
+    static var contentWidth: CGFloat {
+        let columns = CGFloat(EQMode.graphicCenters.count)
+        return columns * columnWidth
+            + max(0, columns - 1) * columnSpacing
+            + 2 * rowPadding
+            + 2 * screenPadding
+    }
 
     @ViewBuilder
     private func bandColumn(profile: HearingProfile, frequency: Double) -> some View {
