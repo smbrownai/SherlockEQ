@@ -102,11 +102,17 @@ struct PopoverQuickAdjustRows: View {
         guard !worst.isNoOp else {
             // Nothing moved, so there's nothing to save. Say so — a button
             // that silently does nothing reads as broken.
-            note = "\(macro.label) is already at its limit."
+            //
+            // `String(localized:)` rather than a plain literal: this is built
+            // here and handed to `Text(_ String)`, which renders verbatim
+            // without localizing.
+            note = String(localized: "\(macro.label) is already at its limit.",
+                          comment: "Shown when every band in a tone region is already at ±12 dB. Parameter is Bass/Mids/Treble")
             return
         }
         note = worst.clamped > 0
-            ? "Some bands are at their limit, so the change was partial."
+            ? String(localized: "Some bands are at their limit, so the change was partial.",
+                     comment: "Shown when a tone nudge was clamped at ±12 dB on some bands but not all")
             : nil
 
         // One save per press → one undo entry in the main window's
