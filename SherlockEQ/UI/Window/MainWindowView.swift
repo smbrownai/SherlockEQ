@@ -163,12 +163,6 @@ struct MainWindowView: View {
                idealWidth: Self.windowWidth,
                minHeight: Self.windowMinHeight,
                idealHeight: Self.windowIdealHeight)
-        // Consolidated Health & Safety disclosure — presented at the window
-        // level so it's reachable identically from the sidebar item and every
-        // screen's compact disclosure chip (all set `audioState.showHealthSafety`).
-        .sheet(isPresented: $audioState.showHealthSafety) {
-            HealthSafetySheet()
-        }
         .linkUndoManagerToProfileStore()
         // Honor cross-window deep-link requests (e.g. the onboarding wizard's
         // "next steps" cards). `onAppear` catches an intent set before this
@@ -193,6 +187,7 @@ struct MainWindowView: View {
         case .toneFinder:    ToneFinderView()
         case .clarity:       ClarityView()
         case .safeListening: SafeListeningView()
+        case .healthSafety:  HealthSafetyView()
         case .settings:      SettingsView()
         case .debug:         DebugView()
         }

@@ -1,11 +1,14 @@
 import XCTest
 
-/// UI tests for the Health & Safety disclosure: persistent access from every
-/// main destination, opening/dismissing the sheet (button, Done, keyboard),
-/// the required section content, Help-link navigation, and the sidebar
-/// row's accessibility. The entry point is the "Health & Safety Info" row
-/// in the sidebar's App group (it moved out of the footer, which now holds
-/// only the active-profile control).
+/// UI tests for the Health & Safety page: reachable from every main
+/// destination, showing the required disclosure sections, and offering Help
+/// links that leave the page in place.
+///
+/// It used to be a modal sheet reached from an untagged sidebar button, and
+/// these tests were shaped around that — opening it, dismissing with Done,
+/// dismissing with Escape. It's an ordinary detail page in Comfort & Safety
+/// now, so the dismissal tests are gone rather than rewritten: there is
+/// nothing to dismiss, and selecting another sidebar item is how you leave.
 ///
 /// The app launches with `-uitest`, which opens the main window and skips the
 /// audio pipeline and onboarding (see `AppDelegate.isUITesting`), so the tests
@@ -33,31 +36,33 @@ final class HealthSafetyUITests: XCTestCase {
 
     // MARK: - Helpers
 
-    private var healthSafetyButton: XCUIElement {
-        app.buttons["Health and Safety Info"]
+    /// The sidebar row. Scoped to the outline because the page's own header
+    /// carries the same words — in the sheet era a bare "Health & Safety"
+    /// was unambiguous, since the row read "Health & Safety Info" and only
+    /// the sheet said "Health & Safety".
+    private var sidebarRow: XCUIElement {
+        app.outlines.firstMatch.staticTexts["Health & Safety"]
     }
 
-    private var sheetTitle: XCUIElement {
-        // The sheet's title text ("Health & Safety", no "Info") is distinct
-        // from the sidebar row's VoiceOver label, so the two can't collide.
-        app.staticTexts["Health & Safety"]
+    /// Proof the page is showing: a heading that exists nowhere else. Using a
+    /// section rather than the title sidesteps the row/header collision
+    /// entirely.
+    private var pageMarker: XCUIElement {
+        app.staticTexts["Not a medical device or hearing aid"]
     }
 
-    private func openSheet(file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertTrue(healthSafetyButton.waitForExistence(timeout: 10),
-                      "Health & Safety Info sidebar item missing", file: file, line: line)
-        healthSafetyButton.click()
-        // The List-backed sidebar row doesn't accept the window-activating
-        // first mouse the way the old footer button (outside the List) did,
-        // so under XCUITest the first synthesized click can be spent on
-        // activation. Verified by hand: with the window already active, one
-        // real click opens the sheet immediately. A single deliberate retry
-        // makes the open deterministic without weakening the assertion.
-        if !sheetTitle.waitForExistence(timeout: 3) {
-            healthSafetyButton.click()
+    private func openHealthSafety(file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(sidebarRow.waitForExistence(timeout: 10),
+                      "Health & Safety sidebar row missing", file: file, line: line)
+        sidebarRow.click()
+        // The List-backed sidebar can spend a synthesized first click on
+        // window activation under XCUITest. One deliberate retry keeps this
+        // deterministic without weakening the assertion.
+        if !pageMarker.waitForExistence(timeout: 3) {
+            sidebarRow.click()
         }
-        XCTAssertTrue(sheetTitle.waitForExistence(timeout: 5),
-                      "Disclosure sheet did not open", file: file, line: line)
+        XCTAssertTrue(pageMarker.waitForExistence(timeout: 5),
+                      "Health & Safety page did not appear", file: file, line: line)
     }
 
     private func navigate(to destination: String) {
@@ -71,45 +76,40 @@ final class HealthSafetyUITests: XCTestCase {
 
     // MARK: - Tests
 
-    /// The App-group row exists, carries its VoiceOver label (understandable
-    /// without the icon), and is operable — clicking it opens the sheet, which
-    /// also proves it isn't obscured.
-    func testSidebarItemIsPresentAndAccessible() {
-        XCTAssertTrue(healthSafetyButton.waitForExistence(timeout: 10))
-        XCTAssertEqual(healthSafetyButton.label, "Health and Safety Info")
-        openSheet()
+    /// The row exists in the sidebar and is operable — selecting it shows the
+    /// page, which also proves it isn't obscured.
+    func testSidebarRowIsPresentAndOperable() {
+        XCTAssertTrue(sidebarRow.waitForExistence(timeout: 10))
+        openHealthSafety()
     }
 
-    /// Opening from the sidebar row presents the sheet; Done dismisses it.
-    func testOpenAndDismissWithDone() {
-        openSheet()
-        app.buttons["Done"].click()
-        XCTAssertFalse(sheetTitle.waitForExistence(timeout: 3),
-                       "Sheet should dismiss on Done")
+    /// It belongs to Comfort & Safety now, not App. Asserted by position: the
+    /// row must sit below Safe Listening, the group it joined, and above
+    /// Settings, the group it left.
+    func testRowSitsInComfortAndSafety() {
+        let outline = app.outlines.firstMatch
+        XCTAssertTrue(sidebarRow.waitForExistence(timeout: 10))
+        let safeListening = outline.staticTexts["Safe Listening"]
+        let settings = outline.staticTexts["Settings"]
+        XCTAssertTrue(safeListening.exists && settings.exists)
+        XCTAssertGreaterThan(sidebarRow.frame.minY, safeListening.frame.minY,
+                             "Health & Safety should follow Safe Listening")
+        XCTAssertLessThan(sidebarRow.frame.minY, settings.frame.minY,
+                          "Health & Safety should sit above the App group")
     }
 
-    /// The sheet is keyboard-dismissable (Done is the cancel action → Escape).
-    func testDismissWithKeyboard() {
-        openSheet()
-        app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
-        XCTAssertFalse(sheetTitle.waitForExistence(timeout: 3),
-                       "Sheet should dismiss on Escape")
-    }
-
-    /// Health & Safety is reachable from every main navigation destination.
-    func testAccessibleFromEveryDestination() {
+    /// Reachable from every main navigation destination. No dismissal step —
+    /// navigating away is simply selecting the next destination.
+    func testReachableFromEveryDestination() {
         for destination in destinations {
             navigate(to: destination)
-            openSheet()
-            app.buttons["Done"].click()
-            XCTAssertFalse(sheetTitle.waitForExistence(timeout: 3),
-                           "Sheet should dismiss before the next destination (\(destination))")
+            openHealthSafety()
         }
     }
 
-    /// The sheet contains the required, non-negotiable disclosure sections.
-    func testSheetShowsRequiredSections() {
-        openSheet()
+    /// The page carries the required, non-negotiable disclosure sections.
+    func testPageShowsRequiredSections() {
+        openHealthSafety()
         let required = [
             "Not a medical device or hearing aid",
             "Audiograms and hearing adjustments",
@@ -124,21 +124,22 @@ final class HealthSafetyUITests: XCTestCase {
         }
     }
 
-    /// A Help link is present and operable (it dismisses the sheet and opens
-    /// the Help window). Per-section "Learn more" links were removed — all
-    /// Help links now live in the footer "Learn more in Help" list, whose
-    /// controls carry "Open Help: <topic>" VoiceOver labels. Matching the old
-    /// "learn more" text would hit the footer's *header* (a static text whose
-    /// click is a no-op). Query across element types, not `app.buttons`:
-    /// `.buttonStyle(.link)` controls don't surface as buttons (verified —
-    /// a buttons-only query found nothing at runtime).
-    func testLearnMoreLinkOperates() {
-        openSheet()
+    /// A Help link is present and operable, and the page **stays**.
+    ///
+    /// This assertion is inverted from the sheet era, and the inversion is the
+    /// point: a modal had to dismiss itself before opening Help so the user
+    /// wasn't left with a window behind a sheet. A page doesn't, so Help opens
+    /// alongside and the reader keeps their place.
+    ///
+    /// Query across element types, not `app.buttons`: `.buttonStyle(.link)`
+    /// controls don't surface as buttons.
+    func testLearnMoreLinkLeavesThePageInPlace() {
+        openHealthSafety()
         let predicate = NSPredicate(format: "label BEGINSWITH[c] 'open help'")
         let helpLink = app.descendants(matching: .any).matching(predicate).firstMatch
         XCTAssertTrue(helpLink.waitForExistence(timeout: 3), "No footer Help link")
         helpLink.click()
-        XCTAssertFalse(sheetTitle.waitForExistence(timeout: 3),
-                       "Sheet should dismiss when opening a Help article")
+        XCTAssertTrue(pageMarker.waitForExistence(timeout: 3),
+                      "The page should remain visible behind the Help window")
     }
 }
