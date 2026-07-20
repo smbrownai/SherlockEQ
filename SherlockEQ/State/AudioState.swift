@@ -522,7 +522,8 @@ final class AudioState: ObservableObject {
         let profile = connectedStore.flatMap { activeProfile(in: $0) }
         let next = AutoEQMismatch.evaluate(
             profile: profile,
-            autoEQStageEnabled: eqChain.eqMasterEnabled && eqChain.autoEQEnabled,
+            autoEQStageEnabled: eqChain.eqMasterEnabled && eqChain.autoEQEnabled
+                && (profile?.autoEQEnabled ?? true),
             currentDeviceUID: tap.currentOutputDeviceUID,
             currentDeviceName: tap.currentOutputDeviceName,
             currentIsBuiltInSpeakers: tap.currentOutputDeviceIsBuiltIn,
@@ -540,13 +541,21 @@ final class AudioState: ObservableObject {
         autoEQMismatch = nil
     }
 
-    /// "Bypass here" — turn the AutoEQ stage off for this session via the
-    /// existing per-stage toggle. The toggle's sink re-applies the profile,
-    /// which clears the warning (stage disabled → no mismatch). Deliberately
-    /// NOT remembered as a dismissal: re-enabling the stage on the same
+    /// "Bypass here" — turn this profile's correction off, clearing the
+    /// warning (no correction applied → no mismatch). Deliberately NOT
+    /// remembered as a dismissal: switching it back on against the same
     /// device should warn again.
+    ///
+    /// Writes the profile's own flag rather than the chain-level bypass. The
+    /// mismatch is a statement about *this* profile's correction against the
+    /// current device, so silencing it by muting the stage for every other
+    /// profile would be far wider than the warning it answers.
     func bypassAutoEQForSession() {
-        eqChain.autoEQEnabled = false
+        guard let store = connectedStore, let profile = activeProfile(in: store) else { return }
+        var updated = store.profiles.first { $0.id == profile.id } ?? profile
+        guard updated.autoEQEnabled else { return }
+        updated.autoEQEnabled = false
+        try? store.save(updated, actionName: "Bypass headphone correction")
     }
 
     /// Return a copy of `profile` with the appropriate stages zeroed
@@ -573,7 +582,10 @@ final class AudioState: ObservableObject {
             copy.dynamics = DynamicProcessingSettings()
             return copy
         }
-        if !eqChain.autoEQEnabled {
+        // Two independent switches, both of which must be on: the profile's
+        // own flag (does this profile use its correction) and the chain-level
+        // per-stage bypass (Debug's A/B). Either one off means no correction.
+        if !eqChain.autoEQEnabled || !profile.autoEQEnabled {
             copy.autoEQBands = nil
             copy.autoEQPreampDB = nil
         }

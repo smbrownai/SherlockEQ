@@ -144,6 +144,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         UserDefaults.standard.removeObject(forKey: "sherlockeq.graphic.toneGuide")
         profileStore.loadAll()
         profileStore.reconcileFactoryPresets()
+        // Must run before the first profile is applied, so a carried-over
+        // bypass takes effect on the very first buffer rather than one
+        // launch late.
+        profileStore.migrateAutoEQScopeIfNeeded()
         audioState.adoptDefaultProfileIfNeeded(from: profileStore)
         audioState.connect(profileStore: profileStore)
         if Self.isUITesting {

@@ -341,7 +341,7 @@ struct ProfileDetailView: View {
         if profile.autoEQName != nil {
             appliedAutoEQRow(profile)
             conflictBanner(for: profile)
-            if !audioState.eqChain.autoEQEnabled { autoEQDisabledHint }
+            autoEQDisabledHint(for: profile)
             managementDisclosure(profile)
         } else if showHeadphoneSearch {
             HStack {
@@ -404,7 +404,7 @@ struct ProfileDetailView: View {
     @ViewBuilder
     private func appliedAutoEQRow(_ profile: HearingProfile) -> some View {
         if let name = profile.autoEQName, let bands = profile.autoEQBands {
-            let active = audioState.eqChain.autoEQEnabled
+            let active = profile.autoEQEnabled && audioState.eqChain.autoEQEnabled
             HStack(spacing: 10) {
                 Image(systemName: active ? "checkmark.circle.fill" : "speaker.slash.circle.fill")
                     .foregroundStyle(active ? Color.green : Color.secondary)
@@ -421,14 +421,14 @@ struct ProfileDetailView: View {
                 // needs the noun, since the headphone name beside it isn't
                 // read as this control's label (audit UX-03).
                 Toggle("", isOn: Binding(
-                    get: { audioState.eqChain.autoEQEnabled },
-                    set: { audioState.eqChain.autoEQEnabled = $0 }
+                    get: { profile.autoEQEnabled },
+                    set: { setAutoEQEnabled($0, on: profile) }
                 ))
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)
                 .accessibilityLabel("Headphone correction")
-                .help("Bypass the AutoEQ stage without losing the loaded correction. Applies to every profile.")
+                .help("Use this profile's headphone correction. Turning it off keeps the correction loaded.")
                 Button(role: .destructive) { clearAutoEQ(on: profile) } label: {
                     Image(systemName: "xmark.circle")
                 }
@@ -471,17 +471,27 @@ struct ProfileDetailView: View {
         }
     }
 
-    /// Shown under the row when the stage is bypassed. Says the two things the
-    /// switch itself can't: that the correction is still loaded (so turning it
-    /// back on costs nothing), and that the switch is app-wide despite sitting
-    /// inside one profile's card — the scope is the genuinely surprising part.
-    /// "(toggle is off)" is gone: the switch is right there and now reads off.
+    /// Shown under the row when the correction isn't being applied, naming
+    /// *which* switch is responsible.
+    ///
+    /// Two can stop it, and they deserve different sentences. The profile's
+    /// own switch is right above, so that message only needs to say nothing
+    /// was lost. The chain-level bypass lives in Debug, nowhere near here, and
+    /// overrides a switch that still reads on — without naming it, that
+    /// combination is unexplainable from this screen.
     @ViewBuilder
-    private var autoEQDisabledHint: some View {
-        Label("Bypassed for every profile. The correction stays loaded.",
-              systemImage: "speaker.slash")
-            .font(.caption)
-            .foregroundStyle(.secondary)
+    private func autoEQDisabledHint(for profile: HearingProfile) -> some View {
+        if !audioState.eqChain.autoEQEnabled {
+            Label("The AutoEQ stage is bypassed app-wide in Debug, so this is off regardless of the switch above.",
+                  systemImage: "exclamationmark.triangle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else if !profile.autoEQEnabled {
+            Label("Off for this profile. The correction stays loaded.",
+                  systemImage: "speaker.slash")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     @ViewBuilder
@@ -881,6 +891,16 @@ struct ProfileDetailView: View {
             $0.autoEQDeviceUID = deviceUID
             $0.autoEQDeviceName = deviceUID == nil ? nil : deviceName
         }
+    }
+
+    /// Named so the undo entry reads as the user's intent rather than a
+    /// generic "Edit <profile>" — this is now a profile edit, not a preference.
+    private func setAutoEQEnabled(_ enabled: Bool, on profile: HearingProfile) {
+        var copy = profileStore.profiles.first { $0.id == profile.id } ?? profile
+        copy.autoEQEnabled = enabled
+        try? profileStore.save(copy, actionName: enabled
+                               ? "Use headphone correction"
+                               : "Bypass headphone correction")
     }
 
     private func clearAutoEQ(on profile: HearingProfile) {
