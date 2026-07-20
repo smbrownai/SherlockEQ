@@ -43,11 +43,12 @@ struct MainPopoverView: View {
             AutoEQMismatchRow(compact: true)
             Divider()
             // Live readouts: what's actually happening right now, and the
-            // two controls worth a quick nudge (gain, balance). No scope
-            // badges — the popover's job is a glance, not a legend.
+            // controls worth a quick nudge. No scope badges — the popover's
+            // job is a glance, not a legend.
             PopoverLiveStatusRows(tracker: audioState.safeListening)
             masterGainRow
             balanceRow
+            toneBlock
             Divider()
             processingDetails
             Divider()
@@ -182,6 +183,31 @@ struct MainPopoverView: View {
         }
         .buttonStyle(.plain)
         .help(help)
+    }
+
+    // MARK: - Tone block
+
+    /// The read-only EQ curve and the three quick-adjustment rows, as one
+    /// unit: the picture and the controls that change it.
+    ///
+    /// Both hang off the same preference. Showing the nudge buttons without
+    /// the curve would leave the popover's only tone controls with nowhere to
+    /// show their effect — the whole reason these are relative nudges rather
+    /// than faders is that the curve is where the state is legible. So the
+    /// preference governs the block, not just the drawing.
+    ///
+    /// Separated by a divider on both sides and given no heading: the curve
+    /// and the row labels already say what this is.
+    @ViewBuilder private var toneBlock: some View {
+        if audioState.preferences.showPopoverEQCurve {
+            Divider()
+            PopoverEQCurve()
+            // Stepped tone nudges that move the twelve graphic bands directly.
+            // Not filters, and not faders: the Equalizer stays the single
+            // source of truth, and the popover claims no authoritative
+            // "Bass: +2 dB" for a curve that can't have one. See `ToneMacro`.
+            PopoverQuickAdjustRows()
+        }
     }
 
     // MARK: - Master gain + balance
@@ -350,12 +376,9 @@ private struct PopoverLiveStatusRows: View {
                 calibrationOffsetDBA: audioState.effectiveCalibrationOffsetDBA,
                 isReceivingAudio: tracker.currentLevelDBA >= ExposureStatus.audioFloorDBA
             )
-            // Read-only EQ curve, between the live level and the accumulated
-            // exposure — "here's the signal, here's what we're doing to it,
-            // here's what it's cost you today."
-            if audioState.preferences.showPopoverEQCurve {
-                PopoverEQCurve()
-            }
+            // Output level and exposure read as one pair — what's coming out
+            // now, and what it's cost today. The EQ curve used to sit between
+            // them; it now lives with the tone controls it belongs to.
             DoseBarView(
                 percent: tracker.sessionDose,
                 status: ExposureStatus.resolve(sessionDose: tracker.sessionDose,

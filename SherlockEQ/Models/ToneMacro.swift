@@ -1,0 +1,151 @@
+import Foundation
+
+/// A quick tone adjustment that moves several **graphic bands at once**.
+///
+/// This is deliberately *not* a filter. There is no stored "bass" value and no
+/// bass band — a macro is a gesture that adds a fixed weighting vector to the
+/// twelve graphic gains and then stops existing. The 12-band curve remains the
+/// single source of truth: opening the Equalizer shows exactly what a nudge
+/// did, because a nudge did nothing except move those sliders.
+///
+/// That's the difference from `ToneTrim`, which is a real three-band shelf
+/// layout with real stored parameters. `ToneTrim` is right for the CLI,
+/// Shortcuts, and the Analog unit, where a script needs a stable `--bass 3` to
+/// set and read back. It's wrong for the popover, where a persistent
+/// "Bass: +2 dB" fader would have to claim one authoritative bass value for an
+/// arbitrary 12-band curve — a number that can't survive the user touching the
+/// Graphic sliders. Relative nudges make no such claim.
+///
+/// **Weights are keyed by frequency, not by array position.** Positional
+/// vectors silently re-shape themselves if `EQMode.graphicCenters` ever gains
+/// or reorders a band; a frequency that isn't a center simply contributes
+/// nothing, and `ToneMacroTests` pins that every key is a real center.
+///
+/// (Not `nonisolated`, for the same reason as `ToneTrim`: it reads
+/// `EQMode.graphicCenters` and `EQBandLookup`, both MainActor-isolated.)
+enum ToneMacro: String, CaseIterable, Identifiable {
+    case bass, mid, treble
+
+    var id: String { rawValue }
+
+    // MARK: - Shape
+
+    /// dB per nudge at full weight. One dB is small enough that a press is a
+    /// nudge rather than a commitment, and large enough to hear.
+    static let step: Double = 1.0
+
+    /// The graphic sliders' own range. Clamping here rather than at the band
+    /// range means a macro can never push the curve somewhere the Graphic
+    /// screen can't display or the user can't drag back.
+    static let limit: ClosedRange<Double> = -12...12
+
+    /// Weight per graphic center. Broad and overlapping by design — the point
+    /// of a macro is to move a *region*, so the shoulders taper instead of
+    /// ending on a cliff that would read as a resonance.
+    var weights: [Double: Double] {
+        switch self {
+        // Low shelf-ish: flat through the bottom two octaves, tapering out
+        // through 500 Hz so a bass nudge never muddies vocal fundamentals.
+        case .bass:
+            return [31.5: 1.0, 63: 1.0, 125: 0.9, 250: 0.6, 500: 0.2]
+        // A broad hump over the presence region, symmetric about 1 kHz.
+        case .mid:
+            return [250: 0.3, 500: 0.8, 1000: 1.0, 2000: 0.8, 3000: 0.3]
+        // Mirror of bass: flat across the top, tapering down toward 2 kHz.
+        case .treble:
+            return [2000: 0.2, 3000: 0.6, 4000: 0.9, 6000: 1.0, 8000: 1.0, 16000: 1.0]
+        }
+    }
+
+    /// Centers this macro actually touches, in ascending order.
+    var centers: [Double] {
+        EQMode.graphicCenters.filter { (weights[$0] ?? 0) != 0 }
+    }
+
+    // MARK: - Naming
+
+    /// Row label. "Mids" plural — it's a region, not a band.
+    var label: String {
+        switch self {
+        case .bass:   return "Bass"
+        case .mid:    return "Mids"
+        case .treble: return "Treble"
+        }
+    }
+
+    /// Short button titles. The row label supplies the noun, so the buttons
+    /// only carry the direction and stay narrow enough for a 380 pt popover.
+    func buttonTitle(_ direction: Direction) -> String {
+        switch (self, direction) {
+        case (.bass, .down):   return "Less"
+        case (.bass, .up):     return "More"
+        case (.mid, .down):    return "Recess"
+        case (.mid, .up):      return "Forward"
+        case (.treble, .down): return "Softer"
+        case (.treble, .up):   return "Brighter"
+        }
+    }
+
+    /// The full phrase, for VoiceOver and the undo action name. The buttons
+    /// show only the direction, so a bare "Recess" or "More" carries no
+    /// indication of *what* it moves — VoiceOver needs the noun (audit UX-03).
+    func actionName(_ direction: Direction) -> String {
+        switch (self, direction) {
+        case (.bass, .down):   return "Less bass"
+        case (.bass, .up):     return "More bass"
+        case (.mid, .down):    return "Recess mids"
+        case (.mid, .up):      return "Forward mids"
+        case (.treble, .down): return "Softer treble"
+        case (.treble, .up):   return "Brighter treble"
+        }
+    }
+
+    enum Direction {
+        case up, down
+        var sign: Double { self == .up ? 1 : -1 }
+    }
+
+    // MARK: - Applying
+
+    /// What a nudge actually managed to do.
+    struct Outcome: Equatable {
+        /// Bands whose gain changed.
+        var moved: Int
+        /// Bands that hit the ±12 rail and so moved less than asked (or not
+        /// at all). Non-zero means the user got less than they pressed for,
+        /// which the popover says out loud rather than silently swallowing.
+        var clamped: Int
+        /// Nothing moved — the whole region is already at the rail.
+        var isNoOp: Bool { moved == 0 }
+    }
+
+    /// Add this macro's weighted delta to the current graphic gains in `bands`.
+    ///
+    /// Deltas, not targets: the existing curve is read and added to, never
+    /// re-fitted. Nothing here tries to solve for a shelf shape, so repeated
+    /// nudges accumulate exactly as the arithmetic suggests and a nudge in one
+    /// direction followed by its opposite returns to where it started (except
+    /// where a rail intervened, which `Outcome.clamped` reports).
+    @discardableResult
+    static func apply(_ macro: ToneMacro, direction: Direction,
+                      step: Double = ToneMacro.step, to bands: inout [EQBand]) -> Outcome {
+        var outcome = Outcome(moved: 0, clamped: 0)
+        for center in macro.centers {
+            guard let weight = macro.weights[center] else { continue }
+            let current = EQBandLookup.gain(at: center, filterType: .parametric, in: bands)
+            let desired = current + step * direction.sign * weight
+            let clamped = min(max(desired, limit.lowerBound), limit.upperBound)
+            if abs(clamped - desired) > 0.0001 { outcome.clamped += 1 }
+            guard abs(clamped - current) > 0.0001 else { continue }
+            outcome.moved += 1
+            EQBandLookup.setGain(clamped, at: center, bandwidth: graphicBandwidth,
+                                 filterType: .parametric, in: &bands)
+        }
+        return outcome
+    }
+
+    /// 1 octave — the Graphic surface's own Q. Macros must produce bands that
+    /// are indistinguishable from ones dragged on that screen, or the "the
+    /// main EQ is the source of truth" promise would be a half-truth.
+    static let graphicBandwidth: Double = 1.0
+}
