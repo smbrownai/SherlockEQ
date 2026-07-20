@@ -42,17 +42,25 @@ struct GraphicContentWidthTests {
     /// The window must never be narrower than the screen it has to hold. This
     /// is the invariant the stale comment broke — not by clipping, but by
     /// reserving 132 pt that nothing needed.
-    @Test func windowMinimumCoversTheGridExactly() {
-        // Reconstruct the same composition MainWindowView uses: nav sidebar,
-        // the grid, and the agreed slack.
+    ///
+    /// The window holds ONE width for both inspector states, sized for the
+    /// panel being open. A minimum that only fitted the closed state would let
+    /// the window sit at 994 and then clip the grid the moment the panel came
+    /// out — which is the failure this composition exists to prevent.
+    @Test func windowWidthCoversTheGridWithTheInspectorOpen() {
+        // Reconstruct the same composition MainWindowView uses.
         let navSidebar: CGFloat = 240
         let slack: CGFloat = 34
-        let expectedClosed = navSidebar + GraphicEQView.contentWidth + slack
-        #expect(expectedClosed == 994, "ten bands → 240 + 720 + 34")
+        let withPanelClosed = navSidebar + GraphicEQView.contentWidth + slack
+        #expect(withPanelClosed == 994, "ten bands → 240 + 720 + 34")
 
-        // With the inspector out, the panel and its divider come on top.
         let panel: CGFloat = 260, divider: CGFloat = 1
-        #expect(expectedClosed + divider + panel == 1255)
+        let windowWidth = withPanelClosed + divider + panel
+        #expect(windowWidth == 1255, "the window's min and ideal width")
+
+        // The slack the closed state carries. Real, and spent on the canvas —
+        // but it must never go negative, which would mean the panel doesn't fit.
+        #expect(windowWidth - withPanelClosed == 261)
     }
 
     /// Guards the shape of the formula rather than a number: adding a band
