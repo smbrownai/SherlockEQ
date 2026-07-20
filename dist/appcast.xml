@@ -21,6 +21,114 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 0.9.4</title>
+      <pubDate>Mon, 20 Jul 2026 18:31:36 +0000</pubDate>
+      <sparkle:version>00904</sparkle:version>
+      <sparkle:shortVersionString>0.9.4</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<h2>SherlockEQ 0.9.4</h2>
+
+<p>
+  An interface release. Nothing about the sound changes, and no settings move
+  or reset — Settings and Health &amp; Safety were both presented in ways that
+  worked against their own content, and this fixes that.
+</p>
+
+<h3>Settings is easier to scan</h3>
+
+<ul>
+  <li>
+    <strong>Categories are now cards, in two columns.</strong>
+    General, Appearance, Keyboard, and Data &amp; Profiles sit open side by
+    side instead of stacked full-width down the page. In a narrow window the
+    columns collapse to one automatically.
+  </li>
+  <li>
+    <strong>Every switch lines up at the right edge.</strong>
+    Controls used to sit immediately after their label, so no two were in the
+    same place and you had to hunt down the page for the one you wanted.
+  </li>
+  <li>
+    <strong>Descriptions are shorter.</strong>
+    Each setting keeps a one-line description; the longer explanation is now a
+    tooltip you can hover for. The detail is still there when you want it,
+    rather than a paragraph to re-read on every visit.
+  </li>
+  <li>
+    <strong>Only the specialized sections stay folded.</strong>
+    Advanced Audio and Diagnostics are still collapsed by default, because
+    they're long and rarely needed. Everything else is open — a setting like
+    "Launch at login" shouldn't need a click to reveal.
+  </li>
+  <li>
+    <strong>Three settings were renamed</strong> to say what they do at a
+    glance: <em>Hide Dock icon when window closes</em>, <em>Show EQ and quick
+    tone controls in popover</em>, and <em>Global Reference Mode
+    shortcut</em>. The settings themselves are unchanged.
+  </li>
+</ul>
+
+<h3>Health &amp; Safety is a page, not a popup</h3>
+
+<ul>
+  <li>
+    <strong>It moved into Comfort &amp; Safety, below Safe Listening.</strong>
+    It's the reference material behind those tools, so it belongs with them
+    rather than under App with things about the app itself.
+  </li>
+  <li>
+    <strong>It opens in place, like any other screen.</strong>
+    Nothing on it asks you to decide or confirm anything, so it no longer
+    interrupts what you were doing or asks to be dismissed. Choosing another
+    item in the sidebar is how you leave it.
+  </li>
+  <li>
+    <strong>Its Help links no longer close it.</strong>
+    Opening a Help article used to dismiss the whole disclosure; now Help
+    opens alongside and you keep your place.
+  </li>
+</ul>
+
+<p>
+  The short safety notes that appear on the Equalizer and Audiogram screens
+  are unchanged. Those are meant to catch you in the moment, and still do.
+</p>
+
+<h3>Also in this release</h3>
+
+<ul>
+  <li>
+    <strong>The window fits its contents again.</strong>
+    Since the equalizer moved to ten bands it needed less room than it was
+    asking for, so the window refused to be made as small as it could be, and
+    opened wider than it needed to. Both now follow the actual content.
+  </li>
+</ul>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not diagnose,
+  treat, measure, or monitor any hearing condition, tinnitus, or disability.
+  For concerns about your hearing, consult a doctor, audiologist, or licensed
+  healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.9.3">0.9.3 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v0.9.4/SherlockEQ-0.9.4.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="p90PBp0ULblA2m2bkEsJ9JGVuqrxOEaA0A05Ejmn2IbPNABB2WZWMaPAkmgZESoo+sM5HK76qX+Z0KrjEw3BAQ==" length="11099879" />
+    </item>
+
+    <item>
       <title>SherlockEQ 0.9.3</title>
       <pubDate>Mon, 20 Jul 2026 17:24:22 +0000</pubDate>
       <sparkle:version>00903</sparkle:version>
