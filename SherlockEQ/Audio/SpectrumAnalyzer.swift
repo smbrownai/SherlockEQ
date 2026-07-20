@@ -234,11 +234,33 @@ final class SpectrumAnalyzer: ObservableObject {
         if frames == 0 || chCount == 0 { return }
 
         // === Cheap, always-on level pass ===
-        // vDSP_measqv on channel 0 is microsecond work. Fires onLevelUpdate
-        // at ~20 Hz so the dose tracker keeps integrating accurately even
-        // when the expensive FFT pipeline is dormant (no canvas observer).
+        // vDSP_measqv is microsecond work; doing it per channel is still
+        // microsecond work. Fires onLevelUpdate at ~20 Hz so the dose tracker
+        // keeps integrating accurately even when the expensive FFT pipeline is
+        // dormant (no canvas observer).
+        //
+        // **Worst ear, not channel 0, and not the mono mixdown.** This feeds a
+        // hearing-exposure meter, so it has to answer "how hard is either ear
+        // being driven", and the two ears are independent chains by
+        // construction (ch 0 = left, ch 1 = right). Measuring only channel 0
+        // meant that panning balance right — or simply playing one-sided
+        // material — left the dose near zero while the right ear took full
+        // level: no alerts, and the sustained-quiet reset could erase real
+        // accumulated exposure. Users with asymmetric hearing who pan toward
+        // their better ear are exactly who this app is for.
+        //
+        // Max rather than the (L+R)/2 the FFT path uses below: an average
+        // under-reports a hard-panned signal by up to 3 dB, and for a safety
+        // meter the conservative direction is the correct one. The two paths
+        // answer different questions — this one "how loud is the loudest ear",
+        // the display one "what does the spectrum look like" — so they
+        // deliberately differ.
         var rawMS: Float = 0
-        vDSP_measqv(channels[0], 1, &rawMS, vDSP_Length(frames))
+        for ch in 0..<chCount {
+            var channelMS: Float = 0
+            vDSP_measqv(channels[ch], 1, &channelMS, vDSP_Length(frames))
+            rawMS = max(rawMS, channelMS)
+        }
         emitLevelIfDue(meanSquared: rawMS)
 
         // === Expensive path gate ===
