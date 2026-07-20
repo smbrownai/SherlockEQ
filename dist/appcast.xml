@@ -21,6 +21,91 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 0.9.5</title>
+      <pubDate>Mon, 20 Jul 2026 20:33:21 +0000</pubDate>
+      <sparkle:version>00905</sparkle:version>
+      <sparkle:shortVersionString>0.9.5</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<h2>SherlockEQ 0.9.5</h2>
+
+<p>
+  A correctness fix to listening-exposure tracking. If you use the balance
+  control, or listen to material that's much louder in one ear, please read the
+  first item — exposure was being under-counted for you, and the safe-listening
+  alerts may not have fired when they should have.
+</p>
+
+<h3>Fixed</h3>
+
+<ul>
+  <li>
+    <strong>Exposure tracking now measures both ears.</strong>
+    It measured only the left channel. For most listening that's harmless,
+    because both ears carry roughly the same level — but with balance panned,
+    or with strongly one-sided audio, the right ear could be driven hard while
+    the tracker recorded almost nothing. In that state the daily exposure
+    reading stayed near zero, the amber and red alerts didn't appear, and a
+    long enough quiet stretch could clear exposure that had genuinely
+    accumulated. SherlockEQ now takes the louder of the two ears, which is the
+    conservative reading for a safety measure.
+  </li>
+  <li>
+    <strong>About your existing history.</strong>
+    Days recorded before this update were measured the old way, so any day you
+    listened with balance panned may read lower than it truly was. Those
+    records can't be recalculated after the fact. Tracking is accurate from
+    this version onward.
+  </li>
+</ul>
+
+<h3>Under the hood</h3>
+
+<ul>
+  <li>
+    <strong>The website no longer loads any third-party code.</strong>
+    Its handful of icons were being fetched from an outside content network on
+    every visit; they're now part of the page itself. Nothing about the app
+    changes — this closes a route by which someone else's compromised code
+    could have run on the page you download from.
+  </li>
+  <li>
+    <strong>Exposure history now keeps its full magnitude.</strong>
+    A day's reading was previously stored capped at 100 %, so a day well past
+    the limit was indistinguishable from a day that just reached it. The
+    displays still read 0–100 % exactly as before; the underlying record now
+    keeps the real figure, so a future version can show how far past the limit
+    a day went.
+  </li>
+  <li>
+    Build reproducibility: the exact version of the update framework used for
+    each release is now recorded in the source repository.
+  </li>
+</ul>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not diagnose,
+  treat, measure, or monitor any hearing condition, tinnitus, or disability.
+  For concerns about your hearing, consult a doctor, audiologist, or licensed
+  healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.9.4">0.9.4 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v0.9.5/SherlockEQ-0.9.5.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="lfalXQPXpHnDyc77AlsAfVXCqR/cIAljAl5aM5ocB9KlHETQyzUBOankt30dfxYKjiYaA6mc74453bldWLEqDw==" length="11100448" />
+    </item>
+
+    <item>
       <title>SherlockEQ 0.9.4</title>
       <pubDate>Mon, 20 Jul 2026 18:31:36 +0000</pubDate>
       <sparkle:version>00904</sparkle:version>
