@@ -20,6 +20,30 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.9.4
+
+An interface release. Nothing about the sound changes, and no settings move or reset — Settings and Health & Safety were both presented in ways that worked against their own content, and this fixes that.
+
+**Settings is easier to scan**
+
+- **Categories are now cards, in two columns.** General, Appearance, Keyboard, and Data & Profiles sit open side by side instead of stacked full-width down the page. In a narrow window the columns collapse to one automatically.
+- **Every switch lines up at the right edge.** Controls used to sit immediately after their label, so no two were in the same place and you had to hunt down the page for the one you wanted.
+- **Descriptions are shorter.** Each setting keeps a one-line description; the longer explanation is now a tooltip you can hover for. The detail is still there when you want it, rather than a paragraph to re-read on every visit.
+- **Only the specialized sections stay folded.** Advanced Audio and Diagnostics are still collapsed by default, because they're long and rarely needed. Everything else is open — a setting like "Launch at login" shouldn't need a click to reveal.
+- **Three settings were renamed** to say what they do at a glance: *Hide Dock icon when window closes*, *Show EQ and quick tone controls in popover*, and *Global Reference Mode shortcut*. The settings themselves are unchanged.
+
+**Health & Safety is a page, not a popup**
+
+- **It moved into Comfort & Safety, below Safe Listening.** It's the reference material behind those tools, so it belongs with them rather than under App with things about the app itself.
+- **It opens in place, like any other screen.** Nothing on it asks you to decide or confirm anything, so it no longer interrupts what you were doing or asks to be dismissed. Choosing another item in the sidebar is how you leave it.
+- **Its Help links no longer close it.** Opening a Help article used to dismiss the whole disclosure; now Help opens alongside and you keep your place.
+
+The short safety notes that appear on the Equalizer and Audiogram screens are unchanged. Those are meant to catch you in the moment, and still do.
+
+**Also in this release**
+
+- **The window fits its contents again.** Since the equalizer moved to ten bands it needed less room than it was asking for, so the window refused to be made as small as it could be, and opened wider than it needed to. Both now follow the actual content.
+
 ## 0.9.3
 
 This release makes the menu-bar popover somewhere you can actually change how things sound, moves both frequency layouts onto their standard sets, and fixes a few places where the app described its own settings inaccurately. Your profiles carry over — where a setting had to move, it was converted so the sound stays the same.
