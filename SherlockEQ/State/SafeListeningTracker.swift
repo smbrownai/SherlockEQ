@@ -15,6 +15,20 @@ final class SafeListeningTracker: ObservableObject {
 
     /// 0…1. 1.0 means "at safe daily limit"; bar goes red in the UI.
     @Published private(set) var sessionDose: Double = 0
+
+    /// `sessionDose` clamped to the 0…1 the UI promises.
+    ///
+    /// Every current surface — the popover bar, the monitor strip, the Safe
+    /// Listening ring and its percentage — reads "fraction of your daily
+    /// limit", and 143 % would break that contract mid-sentence. So the
+    /// clamp lives here rather than in the accumulator: displays stay
+    /// honest to their own wording, while `sessionDose` and `peakDoseToday`
+    /// keep the real magnitude for the history store.
+    ///
+    /// When the 7-day chart is ready to show overexposure, it reads the
+    /// unclamped value and this property simply stops being the only
+    /// consumer — no migration, because nothing was ever discarded.
+    var displayDose: Double { min(1.0, sessionDose) }
     /// Highest `sessionDose` reached since the last midnight rollover. Unlike
     /// `sessionDose` (which a sustained-quiet period or manual reset zeroes
     /// mid-day), this is the day's high-water mark — the figure the 7-day
@@ -188,7 +202,14 @@ final class SafeListeningTracker: ObservableObject {
         if chunk > 0 {
             let perm = Self.permissibleDuration(at: clamped)
             if perm.isFinite, perm > 0 {
-                sessionDose = min(1.0, sessionDose + chunk / perm)
+                // Deliberately uncapped. Saturating at 1.0 here threw away
+                // real information: a 300 % day and a 100 % day were stored
+                // identically, so the 7-day history could never show HOW far
+                // past the limit a day went. The cap moved to display time —
+                // see `displayDose` — which keeps every current readout's
+                // "fraction of the daily limit" contract intact while leaving
+                // the magnitude available to anything that wants it later.
+                sessionDose += chunk / perm
             }
         }
 
@@ -387,8 +408,8 @@ final class SafeListeningTracker: ObservableObject {
         // The persisted peak is newer than the day's `dose` (which a quiet
         // period may have zeroed); fall back to `dose` for installs that
         // predate the peak key.
-        let storedPeak = min(1.0, max(0, (defaults.object(forKey: DefaultsKey.peak) as? Double)
-            ?? defaults.double(forKey: DefaultsKey.dose)))
+        let storedPeak = max(0, (defaults.object(forKey: DefaultsKey.peak) as? Double)
+            ?? defaults.double(forKey: DefaultsKey.dose))
 
         guard storedDayKey == Self.dayKey(for: currentResetDay) else {
             // Persisted state belongs to a previous calendar day — the app was
@@ -400,7 +421,7 @@ final class SafeListeningTracker: ObservableObject {
             clearPersistedState()
             return
         }
-        sessionDose = min(1.0, max(0, defaults.double(forKey: DefaultsKey.dose)))
+        sessionDose = max(0, defaults.double(forKey: DefaultsKey.dose))
         peakDoseToday = max(storedPeak, sessionDose)
         didCrossAmberToday = defaults.bool(forKey: DefaultsKey.crossedAmber)
         didCrossRedToday = defaults.bool(forKey: DefaultsKey.crossedRed)

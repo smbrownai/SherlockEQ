@@ -18,7 +18,14 @@ xcuserdata/
 .build/
 Packages/
 Package.pins
-Package.resolved
+# Package.resolved is a lockfile, and an *application* wants it committed —
+# it records exactly which Sparkle the shipped binary contained. Ignoring it
+# globally meant a fresh clone resolved "newest 2.x at build time" for the
+# most security-critical dependency, with nothing in the repo recording what
+# any release actually shipped (security review SEQ-02). Only ignore the
+# copies inside resolved package checkouts.
+.build/**/Package.resolved
+Packages/**/Package.resolved
 
 # CocoaPods (not used, but defensive)
 Pods/

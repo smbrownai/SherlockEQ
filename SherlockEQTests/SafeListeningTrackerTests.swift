@@ -218,7 +218,7 @@ struct SafeListeningTrackerTests {
         let tracker = SafeListeningTracker()
         tracker.notificationsEnabled = false
         tracker.forceForTesting(dose: 1.0)
-        #expect(tracker.sessionDose == 1.0)
+        #expect(tracker.displayDose == 1.0)
 
         var publishes = 0
         let sub = tracker.objectWillChange.sink { _ in publishes += 1 }
@@ -235,7 +235,33 @@ struct SafeListeningTrackerTests {
         #expect(tracker.currentLevelDBA == 72)
         #expect(publishes > before, "publishing must be continuous, not one-shot")
 
-        // And the dose itself stays pinned — the cap is the display truth.
-        #expect(tracker.sessionDose == 1.0)
+        // The *display* stays pinned at the limit — that's the contract every
+        // readout's wording depends on. `sessionDose` itself is free to climb
+        // past 1.0 now (the cap moved to display time so history can show
+        // overexposure magnitude), so this asserts the clamped value, not the
+        // raw one. Asserting `sessionDose == 1.0` here is what caught the
+        // change — it was pinning the old saturating accumulator.
+        #expect(tracker.displayDose == 1.0)
+        #expect(tracker.sessionDose >= 1.0)
+    }
+
+    /// The point of moving the cap: a day that goes far past the limit has to
+    /// keep its magnitude, or the 7-day chart can never show how far.
+    @Test func doseAccumulatesPastTheLimitWhileDisplayStaysClamped() {
+        let tracker = SafeListeningTracker()
+        tracker.notificationsEnabled = false
+        tracker.forceForTesting(dose: 1.0)
+
+        // 100 dBA is ~15 minutes of permissible exposure, so a few seconds of
+        // integration at that level pushes meaningfully past the limit.
+        for _ in 0..<40 {
+            tracker.update(levelDBA: 100)
+            usleep(20_000)
+        }
+
+        #expect(tracker.sessionDose > 1.0, "accumulation must not saturate")
+        #expect(tracker.displayDose == 1.0, "every current readout still says 100 %")
+        #expect(tracker.peakDoseToday >= tracker.sessionDose,
+                "the peak history keeps the real magnitude")
     }
 }

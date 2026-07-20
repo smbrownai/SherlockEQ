@@ -518,7 +518,7 @@ private struct DoseCardBody: View {
 
     @ViewBuilder private var measuredBody: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(String(format: "%.0f%%", tracker.sessionDose * 100))
+            Text(String(format: "%.0f%%", tracker.displayDose * 100))
                 .font(.system(size: 44, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(doseTint)
@@ -536,7 +536,7 @@ private struct DoseCardBody: View {
                 Capsule().fill(.quaternary)
                 Capsule()
                     .fill(doseTint)
-                    .frame(width: max(0, geo.size.width * min(1, tracker.sessionDose)))
+                    .frame(width: max(0, geo.size.width * tracker.displayDose))
                     .animation(.easeOut(duration: 0.2), value: tracker.sessionDose)
                 Rectangle().fill(Color.orange.opacity(0.3)).frame(width: 1).offset(x: geo.size.width * 0.8)
                 Rectangle().fill(Color.red.opacity(0.4)).frame(width: 1).offset(x: geo.size.width)

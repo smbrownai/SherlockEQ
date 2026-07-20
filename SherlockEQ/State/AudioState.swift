@@ -892,6 +892,11 @@ final class AudioState: ObservableObject {
     }
 
     deinit {
+        // Sibling to the observer removals below — `SafeListeningTracker`
+        // invalidates its rollover timer the same way. AudioState is a
+        // process-lifetime singleton so nothing misbehaves today, but a
+        // deinit this symmetric shouldn't quietly leave one timer running.
+        doseDrainTimer?.invalidate()
         if let t = sleepObserverToken {
             NSWorkspace.shared.notificationCenter.removeObserver(t)
         }

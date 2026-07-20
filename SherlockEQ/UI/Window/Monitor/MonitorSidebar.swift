@@ -237,7 +237,7 @@ private struct MonitorDoseCard: View {
                 Image(systemName: doseZoneSymbol)
                     .foregroundStyle(doseColor)
                     .font(.caption.weight(.semibold))
-                Text(String(format: "%.0f %%", tracker.sessionDose * 100))
+                Text(String(format: "%.0f %%", tracker.displayDose * 100))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(doseColor)
             }
@@ -246,7 +246,7 @@ private struct MonitorDoseCard: View {
                     Capsule().fill(Color.secondary.opacity(0.15))
                     Capsule()
                         .fill(doseColor)
-                        .frame(width: max(2, geo.size.width * min(1, tracker.sessionDose)))
+                        .frame(width: max(2, geo.size.width * tracker.displayDose))
                 }
             }
             .frame(height: 5)
@@ -279,7 +279,7 @@ private struct MonitorDoseCard: View {
     }
 
     private var doseAccessibilityValue: String {
-        let percent = Int(tracker.sessionDose * 100)
+        let percent = Int(tracker.displayDose * 100)
         let zone: String = {
             switch tracker.doseSeverity {
             case .safe:  return "safe"
