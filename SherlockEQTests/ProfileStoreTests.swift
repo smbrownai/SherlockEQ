@@ -159,7 +159,7 @@ struct ProfileStoreTests {
         #expect(store.profiles.map(\.name) == ["Voice Clarity", "Music Balanced", "Gentle Listening", "Reduce Boom"])
         #expect(store.profiles.allSatisfy { $0.isBuiltIn })
         #expect(store.profiles.allSatisfy { $0.eqMode == .advanced })
-        #expect(store.profiles.allSatisfy { $0.leftEar.bands.count == 12 })
+        #expect(store.profiles.allSatisfy { $0.leftEar.bands.count == EQMode.graphicCenters.count })
     }
 
     @Test func reconcileDemotesUnknownLegacyBuiltIns() throws {
@@ -202,9 +202,9 @@ struct ProfileStoreTests {
         try Self.seedV1(store, defaults: scratch.defaults)
         store.reconcileFactoryPresets()
 
-        // Pristine v1 presets upgraded in place to the 12-band v2 voicings.
+        // Pristine v1 presets upgraded in place to the current voicings.
         let mb = try #require(store.profiles.first { $0.id == HearingProfile.Factory.musicBalanced.id })
-        #expect(mb.leftEar.bands.count == 12)
+        #expect(mb.leftEar.bands.count == EQMode.graphicCenters.count)
         #expect(!store.differsFromFactory(mb))
         // Presence Boost (pristine) retired; Reduce Boom installed.
         #expect(!store.profiles.contains { $0.id == ProfileStore.FrozenFactoryV1.presenceBoostID })
@@ -232,10 +232,10 @@ struct ProfileStoreTests {
         // The edit survives — still the v1 shape with the user's value.
         let mb = try #require(store.profiles.first { $0.id == HearingProfile.Factory.musicBalanced.id })
         #expect(EQBandLookup.gain(at: 1000, filterType: .parametric, in: mb.leftEar.bands) == 5)
-        #expect(mb.isBuiltIn)   // still a factory preset; Reset targets v2 now
+        #expect(mb.isBuiltIn)   // still a factory preset; Reset targets the current set
         // The untouched presets upgraded around it.
         let vc = try #require(store.profiles.first { $0.id == HearingProfile.Factory.voiceClarity.id })
-        #expect(vc.leftEar.bands.count == 12)
+        #expect(vc.leftEar.bands.count == EQMode.graphicCenters.count)
     }
 
     @Test func upgradeDemotesEditedPresenceBoost() throws {

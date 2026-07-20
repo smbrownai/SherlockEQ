@@ -554,15 +554,15 @@ struct GraphicEQView: View {
 
     /// Perceptual role of each band — the "tone guide" (spec §Graphic EQ
     /// polish). Grouped so adjacent bands in the same region share a word,
-    /// which reads as "this area is Bass" rather than 12 unrelated terms.
+    /// which reads as "this area is Bass" rather than 10 unrelated terms.
     static func perceptualLabel(forHz hz: Double) -> String {
         switch hz {
         case ..<45:    return "Rumble"       // 31.5
         case ..<200:   return "Bass"         // 63, 125
         case ..<350:   return "Warmth"       // 250
         case ..<1500:  return "Voice body"   // 500, 1k
-        case ..<3500:  return "Clarity"      // 2k, 3k
-        case ..<7000:  return "Sibilance"    // 4k, 6k
+        case ..<3500:  return "Clarity"      // 2k
+        case ..<7000:  return "Sibilance"    // 4k
         default:       return "Air"          // 8k, 16k
         }
     }

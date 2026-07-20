@@ -46,14 +46,17 @@ struct GraphicConversionTests {
     }
 
     @Test func emptyInputFitsToAllZeros() {
-        #expect(GraphicConversion.fittedGains(for: []) == Array(repeating: 0, count: 12))
+        #expect(GraphicConversion.fittedGains(for: []) == Array(repeating: 0, count: EQMode.graphicCenters.count))
     }
 
     @Test func offGridParametricBandFitsTightly() {
-        // 2.5 kHz +6 dB — squarely between the 2k and 3k sliders.
+        // 2.5 kHz +6 dB — now between the 2k and 4k sliders, a full octave
+        // apart since 3k left the grid. A coarser grid fits a narrow off-grid
+        // bell less tightly, so the tolerance is looser than the 12-band era's
+        // 1.5 dB by design, not by drift.
         let source = [band(hz: 2500, gainDB: 6)]
         let gains = GraphicConversion.fittedGains(for: source)
-        #expect(maxErrorDB(source: source, gains: gains, fromHz: 100, toHz: 16_000) < 1.5)
+        #expect(maxErrorDB(source: source, gains: gains, fromHz: 100, toHz: 16_000) < 2.0)
     }
 
     @Test func simpleModeToneStackFitsWithinTolerance() {

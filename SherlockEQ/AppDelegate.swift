@@ -144,6 +144,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         UserDefaults.standard.removeObject(forKey: "sherlockeq.graphic.toneGuide")
         profileStore.loadAll()
         profileStore.reconcileFactoryPresets()
+        // After the reconcile, which replaces untouched presets outright —
+        // this then folds 3k/6k on everything it left alone.
+        profileStore.migrateRetiredGraphicBandsIfNeeded()
         // Must run before the first profile is applied, so a carried-over
         // bypass takes effect on the very first buffer rather than one
         // launch late.
