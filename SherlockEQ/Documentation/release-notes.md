@@ -20,6 +20,25 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.9.6
+
+A round of window and menu fixes. SherlockEQ now behaves the way a menu-bar app should — the Dock icon means what you told it to mean, the window comes back when you ask for it, and the menus are always there. Nothing about the sound changes, and no settings reset.
+
+**Windows and the Dock**
+
+- **Clicking the Dock icon opens the window again.** If you keep SherlockEQ in the Dock and had closed its window, clicking the icon brought the app forward but showed nothing. It now reopens the window — and specifically the one you last had open, whether that was the main window or the Analog Control Unit.
+- **“Hide the Dock icon” is now a plain on/off setting.** It used to be tied to closing the window — the icon would appear whenever a window was open and only disappear afterward. Now it does exactly what it says: on means no Dock icon at all, off means the Dock icon is always there. It takes effect immediately and doesn’t depend on whether a window is open. SherlockEQ’s menus still appear whenever one of its windows is in front.
+- **The menu bar no longer comes up blank.** On some Macs, opening the window could leave the menu bar showing the previous app’s menus instead of SherlockEQ’s. The underlying cause — the app switching its Dock/menu behavior each time a window opened — is gone, so the menus are reliably present now.
+
+**Menus**
+
+- **The Window menu lists “SherlockEQ” and “Analog Control Unit”** again (⌘0 and ⌘1), and the Audio menu — with Toggle Reference Mode (⌘B) — is reliably present. These were intermittently missing before.
+
+**First launch**
+
+- **The main window opens when the setup wizard finishes,** so a new install lands in the app rather than in an empty menu bar. You can close it and SherlockEQ keeps running, exactly as before.
+- **Clearer guidance about the menu-bar icon.** On Macs with a notch, or a crowded menu bar, macOS can hide an app’s menu-bar icon — and no app can force it back. Setup now says so plainly and offers a one-tap “Keep SherlockEQ in the Dock” option as a dependable way back to the app if the icon is ever hard to find.
+
 ## 0.9.5
 
 A correctness fix to listening-exposure tracking. If you use the balance control, or listen to material that's much louder in one ear, please read the first item — exposure was being under-counted for you, and the safe-listening alerts may not have fired when they should have.

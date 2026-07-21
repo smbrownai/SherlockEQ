@@ -123,7 +123,7 @@ struct MainWindowView: View {
             // Skip the slide / banner animations when Reduce Motion is on —
             // the System Settings toggle exists exactly so users prone to
             // vestibular triggers can disable transitions like these.
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: monitorSidebarVisible)
+.animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: monitorSidebarVisible)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: audioState.noticeCenter.userVisibleNotice)
             // Soft scroll-edge fade where detail content (the EQ screens'
             // ScrollViews) passes under the Liquid Glass toolbar (Tahoe+).
