@@ -42,6 +42,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var analogWindow: NSWindow?
     private var helpWindow: NSWindow?
     private var onboardingWindow: NSWindow?
+
+    /// Which primary window the user last had up, so a Dock-icon reopen brings
+    /// back what they were using rather than always defaulting to the main
+    /// window. Set whenever one is shown. Main is the sensible default before
+    /// anything has been opened.
+    private enum PrimaryWindow { case main, analog }
+    private var lastPrimaryWindow: PrimaryWindow = .main
     private let mainWindowUndoManager = UndoManager()
     private let globalReferenceHotKey = GlobalHotKey()
     private var cancellables: Set<AnyCancellable> = []
@@ -110,7 +117,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Safety net: if anything else (a sub-window, an alert sheet, a
         // scene-restore cycle) reinstalls SwiftUI's default menu, restore
         // ours whenever the app comes forward.
+        //
         installMainMenu()
+    }
+
+    /// Clicking the Dock icon (or `open` on the already-running app) with no
+    /// window on screen should reopen one — a Dock icon that activates the app
+    /// but shows nothing reads as broken. Reopens whichever primary window the
+    /// user last had up.
+    ///
+    /// Only reachable when a Dock icon exists, i.e. `.regular` policy — which,
+    /// with "Keep in Dock" on, persists after the window closes. In the
+    /// default menu-bar-only mode there's no Dock icon and this never fires;
+    /// the menu-bar popover is the way back there.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        let primaryVisible = (mainWindow?.isVisible ?? false)
+            || (analogWindow?.isVisible ?? false)
+        guard !primaryVisible else { return true }
+        switch lastPrimaryWindow {
+        case .analog: showAnalogControlUnit()
+        case .main:   showMainWindow()
+        }
+        return false
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -246,6 +274,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // properly transfers menu-bar focus.
         NSRunningApplication.current.activate(options: [.activateAllWindows])
         window.makeKeyAndOrderFront(nil)
+        lastPrimaryWindow = .main
     }
 
     private func createMainWindow() -> NSWindow {
@@ -266,6 +295,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.minSize = NSSize(width: 1366, height: 756)
         window.setFrameAutosaveName("SherlockEQ.MainWindow")
         window.isReleasedWhenClosed = false
+        // Don't let macOS state-restoration reopen this window on launch. The
+        // app owns its window lifecycle explicitly (showMainWindow / the Dock
+        // reopen handler), and a returning launch is intentionally menu-bar-
+        // only. A restored window bypasses both our menu reinstall and the
+        // last-window tracking, which is how it came up carrying AppKit's
+        // default Window menu instead of ours. Frame is still remembered via
+        // the autosave name above — only auto-reopen is off.
+        window.isRestorable = false
         window.delegate = self
         // Visible on all Spaces is wrong for a main window; just default.
         window.center()
@@ -294,6 +331,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         NSRunningApplication.current.activate(options: [.activateAllWindows])
         window.makeKeyAndOrderFront(nil)
+        lastPrimaryWindow = .analog
     }
 
     private func createAnalogControlWindow() -> NSWindow {
@@ -328,6 +366,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         frame.origin.y = top - initialHeight
         window.setFrame(frame, display: false)
         window.isReleasedWhenClosed = false
+        // Same rationale as the main window: no macOS auto-reopen. The analog
+        // unit also begins an audio override on show, so a restored one would
+        // re-enter that mode out of band.
+        window.isRestorable = false
         window.delegate = self
         window.center()
         return window
