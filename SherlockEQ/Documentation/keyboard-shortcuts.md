@@ -92,6 +92,10 @@ Note: ⇧Tab is reserved by macOS for focus traversal and can't be used as a
 
 ## Help
 
+| Shortcut | Action |
+|---|---|
+| ⌘? | Open SherlockEQ Help |
+
 Open this help window and its topics from the **Help** menu. Each menu item
 jumps directly to its article.
 

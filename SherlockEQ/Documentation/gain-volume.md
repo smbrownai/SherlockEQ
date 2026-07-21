@@ -49,7 +49,7 @@ frequencies equally.
 - **EQ boosts + gain:** a +6 dB band plus +6 dB master gain can stack to +12 dB at that frequency, which is a fast route to clipping.
 - **Cutting vs. boosting:** cutting bands and adding modest make-up gain preserves headroom better than boosting bands. **Cutting is generally safer than boosting.**
 - **Balance:** [balance](help:balance) is applied per ear before master gain; gain then scales both ears together.
-- **Limiter:** SherlockEQ runs a peak limiter near the end of the chain as a safety net, but a limiter constantly catching peaks will audibly pump — it is not a substitute for leaving headroom.
+- **Limiter:** SherlockEQ runs a peak limiter after EQ and balance but *before* master gain — it catches overshoot from EQ boosts, not from the gain stage itself, so pushing master gain up to its ceiling can still clip. A limiter constantly catching peaks will also audibly pump — it is not a substitute for leaving headroom.
 
 ## Recommended uses
 

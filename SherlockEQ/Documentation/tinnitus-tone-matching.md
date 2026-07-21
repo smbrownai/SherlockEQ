@@ -39,7 +39,7 @@ The screen is a short four-step flow:
 1. **Set a comfortable tone level** — press Play and set a quiet level; you'll match pitch first, loudness doesn't matter. A prominent **Stop** is available while the tone plays.
 2. **Sweep for the closest pitch** — drag across the range; pause where a tone matches. Use the **Step** selector (1 / 10 / 100 Hz) with **−** / **+** to fine-tune.
 3. **Compare slightly higher and lower** — nudge a little each way, and check an **octave** down/up (a common source of confusion).
-4. **Use this pitch** — places the notch at the current tone and turns it on. A Left / Right / Both choice appears only when **Separate L+R notch** is enabled (see [Per-Ear EQ](help:per-ear-eq)).
+4. **Use this pitch** — places the notch at the current tone and turns it on. A Left / Right / Both choice appears only when this screen's own **Adjust ears separately** toggle is enabled — a separate control from the profile-wide [Per-Ear EQ](help:per-ear-eq) toggle.
 
 Keep the level low. The goal is comparison, not loudness.
 
@@ -92,8 +92,8 @@ to your per-ear EQ chain — it does not change the tone generator.
 
 - If your [audiogram](help:audiogram-profiles) correction **boosts** the same frequency your notch **cuts**, a warning explains the collision — a narrower notch keeps more of the correction, a shallower notch keeps more relief. Common with high-frequency hearing loss, where tinnitus usually sits in the region of maximum loss.
 
-- A notch is a dedicated per-profile control, shown only as a marker on the [Parametric EQ](help:parametric-eq) curve. You adjust or remove it on the Tinnitus Tools screen, not as an ordinary EQ band.
-- With [Per-Ear EQ](help:per-ear-eq), you can notch one ear independently.
+- A notch is a dedicated per-profile control, shown as a marker on both the [Graphic EQ](help:graphic-eq) and [Parametric EQ](help:parametric-eq) curves. You adjust or remove it on the Tinnitus Tools screen, not as an ordinary EQ band.
+- Turn on **Adjust ears separately** on this screen to notch one ear independently — a separate control from the profile-wide [Per-Ear EQ](help:per-ear-eq) toggle.
 - The reference tone ignores your profile EQ so the pitch you hear isn't colored by it.
 
 ## Limitations of self-directed tone matching

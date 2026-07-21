@@ -2,12 +2,12 @@
 title: "Graphic EQ"
 slug: "graphic-eq"
 category: "Core EQ"
-summary: "A twelve-band graphic equalizer on the audiometric grid — the everyday EQ surface, with full Parametric one click away."
+summary: "A ten-band graphic equalizer on the audiometric grid — the everyday EQ surface, with full Parametric one click away."
 keywords:
   - advanced
   - graphic
   - equalizer
-  - twelve band
+  - ten band
   - octave
   - sliders
 related:
@@ -20,16 +20,16 @@ related:
 
 ## What it does
 
-Graphic EQ is a **twelve-band graphic equalizer**: a row of vertical sliders
-on the audiometric grid — the standard octave centers plus 3 and 6 kHz, the
-same frequencies your [audiogram](help:audiogram-profiles) is measured at.
-It's the everyday surface: enough resolution to shape a curve across the
-whole spectrum without managing individual filter parameters. For arbitrary
-bands, use [Parametric EQ](help:parametric-eq).
+Graphic EQ is a **ten-band graphic equalizer**: a row of vertical sliders on
+the audiometric grid — the standard octave centers your
+[audiogram](help:audiogram-profiles) is also measured at. It's the everyday
+surface: enough resolution to shape a curve across the whole spectrum without
+managing individual filter parameters. For arbitrary bands, use
+[Parametric EQ](help:parametric-eq).
 
-The twelve bands are fixed at:
+The ten bands are fixed at:
 
-**31.5 · 63 · 125 · 250 · 500 Hz · 1 · 2 · 3 · 4 · 6 · 8 · 16 kHz**
+**31.5 · 63 · 125 · 250 · 500 Hz · 1 · 2 · 4 · 8 · 16 kHz**
 
 Each is a one-octave-wide peaking filter, so neighbouring sliders blend into a
 smooth overall shape.
@@ -42,16 +42,15 @@ isn't enough, this is the fastest tool.
 
 ## How to use it
 
-- Open the **Equalizer** screen and choose **Graphic** in the surface control at the top (next to the screen title).
-- Drag sliders to shape the curve, or start from the **Preset** button: a small set named for outcomes — Clearer voices, Music balance, Gentle listening, Reduce boom, Reduce harshness. The button shows **Custom** whenever your sliders diverge from every preset.
-- The **Tone flavors** button beside it holds genre / taste curves (Warm, Bright, Rock, Jazz, …) — a matter of preference, not hearing correction. They stack on top of your profile's correction.
-- Turn on the **Tone guide** to label what each band affects — Rumble, Bass, Warmth, Voice body, Clarity, Sibilance, Air.
+- Open the **Equalizer** screen and choose **Graphic** in the surface switch above the preset row.
+- Drag sliders to shape the curve, or open the **Preset** menu: a **Presets** section named for outcomes — Clearer voices, Music balance, Gentle listening, Reduce boom, Reduce harshness — plus a **Tone flavors** section of genre / taste curves (Warm, Bright, Rock, Jazz, …), a matter of preference rather than hearing correction. Only one selection applies at a time; the button shows **Custom** whenever your sliders diverge from every preset.
+- The region-label strip — Rumble, Bass, Warmth, Voice body, Clarity, Sibilance, Air — is always shown under the sliders.
 - Move in small steps; each slider reads out in dB. **Reset to Flat** returns every band to zero.
 
 ## What changes in the audio
 
 Each slider drives a one-octave peaking biquad at its center frequency, applied
-per ear in the same cascade as the rest of the equalizer. The twelve bells sum into the
+per ear in the same cascade as the rest of the equalizer. The ten bells sum into the
 curve you see drawn over the spectrum.
 
 ## How it interacts with other settings
