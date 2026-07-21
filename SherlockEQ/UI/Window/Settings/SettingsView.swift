@@ -410,9 +410,9 @@ struct SettingsView: View {
     /// than as a paragraph the user re-reads every visit.
     @ViewBuilder
     private func settingRow<Control: View>(
-        _ title: String,
-        caption: String? = nil,
-        help: String? = nil,
+        _ title: LocalizedStringKey,
+        caption: LocalizedStringKey? = nil,
+        help: LocalizedStringKey? = nil,
         @ViewBuilder control: () -> Control
     ) -> some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -435,10 +435,10 @@ struct SettingsView: View {
     /// Convenience for the common case: a switch at the trailing edge.
     @ViewBuilder
     private func toggleRow(
-        _ title: String,
+        _ title: LocalizedStringKey,
         isOn: Binding<Bool>,
-        caption: String? = nil,
-        help: String? = nil
+        caption: LocalizedStringKey? = nil,
+        help: LocalizedStringKey? = nil
     ) -> some View {
         settingRow(title, caption: caption, help: help) {
             Toggle("", isOn: isOn)
@@ -449,7 +449,7 @@ struct SettingsView: View {
         }
     }
 
-    private func caption(_ text: String) -> some View {
+    private func caption(_ text: LocalizedStringKey) -> some View {
         Text(text)
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -469,7 +469,7 @@ struct SettingsView: View {
                 .strokeBorder(Color.secondary.opacity(0.14)))
     }
 
-    private func cardTitle(_ title: String, systemImage: String) -> some View {
+    private func cardTitle(_ title: LocalizedStringKey, systemImage: String) -> some View {
         Label(title, systemImage: systemImage)
             .font(.headline)
             .accessibilityAddTraits(.isHeader)
@@ -479,7 +479,7 @@ struct SettingsView: View {
     /// to reveal.
     @ViewBuilder
     private func card<Content: View>(
-        _ title: String,
+        _ title: LocalizedStringKey,
         systemImage: String,
         @ViewBuilder _ content: @escaping () -> Content
     ) -> some View {
@@ -496,7 +496,7 @@ struct SettingsView: View {
     /// general deserve hiding.
     @ViewBuilder
     private func disclosureCard<Content: View>(
-        _ title: String,
+        _ title: LocalizedStringKey,
         systemImage: String,
         isExpanded: Binding<Bool>,
         @ViewBuilder _ content: @escaping () -> Content
