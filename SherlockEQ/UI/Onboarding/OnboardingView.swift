@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import UserNotifications
 
 /// First-launch onboarding wizard (spec §8.4). A lean five-step flow:
@@ -530,6 +531,29 @@ private struct OnboardingPersonalizationStep: View {
 /// user sees points them at the status-bar icon and the "Open Main Window"
 /// route — otherwise a fresh install looks like it quit.
 private struct OnboardingAllSetStep: View {
+    @EnvironmentObject private var preferences: AppPreferences
+
+    /// True when the built-in display has a notch (a non-zero top safe-area
+    /// inset). Notched Macs are where the menu-bar icon most often goes
+    /// missing, so the copy names the situation directly rather than in the
+    /// abstract. Not definitive — a crowded menu bar hides icons on
+    /// non-notched Macs too — which is why the guidance below applies either
+    /// way and only the lead sentence is tailored.
+    private var hasNotch: Bool {
+        NSScreen.screens.contains { $0.safeAreaInsets.top > 0 }
+    }
+
+    /// The Dock-icon toggle is the inverse of `hideFromDockEnabled` (on by
+    /// default). Showing it here is the one reliable escape from the dead-end
+    /// this step exists to prevent: if the menu-bar icon is hidden and there's
+    /// no Dock icon, a menu-bar-only app has no way back on screen.
+    private var keepInDock: Binding<Bool> {
+        Binding(
+            get: { !preferences.hideFromDockEnabled },
+            set: { preferences.hideFromDockEnabled = !$0 }
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("You're all set")
@@ -549,7 +573,14 @@ private struct OnboardingAllSetStep: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Look for this icon in your menu bar")
                             .font(.callout.weight(.medium))
-                        Text("It sits at the top-right of your screen. Click it anytime to open SherlockEQ's controls.")
+                        // Honest about the limitation: macOS can hide a
+                        // status item behind the notch or off a full menu bar,
+                        // and gives the app no way to force it back or even
+                        // know it's gone. So we set the expectation rather than
+                        // promising "top-right" unconditionally.
+                        Text(hasNotch
+                             ? "It sits near the top-right. Your Mac has a notch, so if your menu bar is full the icon can be hidden behind it — the Dock option below is the sure way to keep SherlockEQ reachable."
+                             : "It sits at the top-right. If your menu bar is crowded, macOS may hide it — the Dock option below keeps SherlockEQ reachable either way.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -558,14 +589,28 @@ private struct OnboardingAllSetStep: View {
             }
 
             OnboardingCard {
+                Toggle(isOn: keepInDock) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Keep SherlockEQ in the Dock")
+                            .font(.callout.weight(.medium))
+                        Text("A dependable way back to the app if the menu-bar icon is ever hard to find. You can change this later in Settings.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .toggleStyle(.switch)
+            }
+
+            OnboardingCard {
                 Label {
-                    Text("Need the full app?")
+                    Text("Opening the app")
                         .font(.callout.weight(.medium))
                 } icon: {
                     Image(systemName: "macwindow")
                         .foregroundStyle(.tint)
                 }
-                Text("Click the menu-bar icon, then “Open Main Window” for the audiogram, equalizer, profiles, and every setting. Prefer a Dock icon? Turn it on in Settings.")
+                Text("The main window opens now — the audiogram, equalizer, profiles, and every setting. Close it whenever you like; SherlockEQ keeps running. Reopen it from the menu-bar icon (or the Dock, if you kept it).")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

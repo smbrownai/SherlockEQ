@@ -437,12 +437,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// that the flag is already set.
     private func finishOnboarding(deepLink section: SidebarSection?) {
         audioState.preferences.hasCompletedOnboarding = true
+        // Always open the main window when the wizard finishes — first run
+        // shouldn't depend on finding the menu-bar icon, which on a notched or
+        // crowded menu bar macOS may not render at all (and gives the app no
+        // way to detect or force). The window is closeable and the app keeps
+        // running menu-bar-only afterward, exactly as before; onboarding only
+        // runs on first launch, so returning launches are unchanged.
         if let section {
             // Set the intent before opening so the main window's `onAppear`
             // catches it on first construction.
             audioState.pendingMainSection = section
-            showMainWindow()
         }
+        showMainWindow()
         onboardingWindow?.close()
         requestNotificationsAndStartAudio()
     }
