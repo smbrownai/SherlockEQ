@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// 12-band graphic EQ — vertical sliders on the audiometric grid (the
-/// octave series plus 3 kHz and 6 kHz, so the graphic surface speaks the
-/// same frequencies as the audiogram). Like Simple, it shares the
-/// underlying band array with the other tabs.
+/// 10-band graphic EQ — vertical sliders on the standard octave grid (31.5 Hz
+/// through 16 kHz), the same series hardware equalizers and audiogram
+/// screens use. Shares the underlying band array with the other EQ surface.
 struct GraphicEQView: View {
     @EnvironmentObject private var profileStore: ProfileStore
     @EnvironmentObject private var audioState: AudioState
@@ -592,20 +591,26 @@ struct GraphicEQView: View {
         }
     }
 
+    /// Linked profiles show one full-width chip. Unlinked (per-ear) profiles
+    /// used to show two chips side by side at ~29 pt each — too narrow for
+    /// "-12.0"-shaped values, which read as truncated ("-3...", "-2...").
+    /// Stacking them full-width instead gives each the same room as the
+    /// linked case; the tint (matching each ear's slider/legend color, see
+    /// `EQGainChip`) is what tells left from right, not width.
     @ViewBuilder
     private func chipRow(profile: HearingProfile, frequency: Double) -> some View {
-        HStack(spacing: 4) {
-            if linkChannels {
-                EQGainChip(
-                    value: gainBinding(profile: profile, frequency: frequency, ear: .left),
-                    range: -12...12,
-                    tint: audioState.preferences.leftEarColor,
-                    accessibilityLabel: "\(formatFreq(frequency)) hertz, both ears, gain",
-                    valueFont: Self.chipFont,
-                    height: Self.chipHeight
-                )
-                .frame(width: 46)
-            } else {
+        if linkChannels {
+            EQGainChip(
+                value: gainBinding(profile: profile, frequency: frequency, ear: .left),
+                range: -12...12,
+                tint: audioState.preferences.leftEarColor,
+                accessibilityLabel: "\(formatFreq(frequency)) hertz, both ears, gain",
+                valueFont: Self.chipFont,
+                height: Self.chipHeight
+            )
+            .frame(width: Self.columnWidth)
+        } else {
+            VStack(spacing: 3) {
                 EQGainChip(
                     value: gainBinding(profile: profile, frequency: frequency, ear: .left),
                     range: -12...12,
@@ -614,7 +619,6 @@ struct GraphicEQView: View {
                     valueFont: Self.chipFont,
                     height: Self.chipHeight
                 )
-                .frame(width: 29)
                 EQGainChip(
                     value: gainBinding(profile: profile, frequency: frequency, ear: .right),
                     range: -12...12,
@@ -623,10 +627,9 @@ struct GraphicEQView: View {
                     valueFont: Self.chipFont,
                     height: Self.chipHeight
                 )
-                .frame(width: 29)
             }
+            .frame(width: Self.columnWidth)
         }
-        .frame(width: Self.columnWidth)
     }
 
     /// Larger gain readout than Expert's compact chip — this is the

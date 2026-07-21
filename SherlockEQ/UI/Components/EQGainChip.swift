@@ -56,6 +56,11 @@ struct EQGainChip: View {
                 }
                 .onDisappear { removeOutsideClickMonitor() }
         } else {
+            // Tinted at rest, not just while editing — on surfaces with one
+            // chip per ear (Graphic EQ, unlinked), this ties each readout to
+            // its ear's color at a glance, matching the slider handle below
+            // it and the Left/Right legend above, without relying on the
+            // (truncatable) "left"/"right" text alone.
             Text(formattedValue)
                 .font(valueFont)
                 .foregroundStyle(.primary)
@@ -66,11 +71,11 @@ struct EQGainChip: View {
                 .frame(maxWidth: .infinity)
                 .background(
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.secondary.opacity(0.12))
+                        .fill(tint.opacity(0.16))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
-                        .stroke(Color.secondary.opacity(0.28), lineWidth: 1)
+                        .stroke(tint.opacity(0.55), lineWidth: 1)
                 )
                 .contentShape(Rectangle())
                 .onTapGesture { beginEditing() }
