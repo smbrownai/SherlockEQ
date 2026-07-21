@@ -42,6 +42,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var analogWindow: NSWindow?
     private var helpWindow: NSWindow?
     private var onboardingWindow: NSWindow?
+
+    /// Which primary window the user last had up, so a Dock-icon reopen brings
+    /// back what they were using rather than always defaulting to the main
+    /// window. Set whenever one is shown. Main is the sensible default before
+    /// anything has been opened.
+    private enum PrimaryWindow { case main, analog }
+    private var lastPrimaryWindow: PrimaryWindow = .main
     private let mainWindowUndoManager = UndoManager()
     private let globalReferenceHotKey = GlobalHotKey()
     private var cancellables: Set<AnyCancellable> = []
@@ -86,10 +93,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.shared = self
-        // Start as a menu-bar-only app. Flips to `.regular` on first
-        // `showMainWindow`; flips back on window close if the user has
-        // `hideFromDockEnabled` set.
-        NSApp.setActivationPolicy(.accessory)
+        // The Dock icon is absolute: it follows `hideFromDockEnabled` alone,
+        // set once here and never toggled by window state. `.accessory` hides
+        // the Dock icon (the menu bar still appears when a window is active);
+        // `.regular` shows it. Changing the toggle re-applies immediately via
+        // its didSet. Not transitioning policy per window is deliberate — the
+        // old `.accessory → .regular` swap on window show is what glitched the
+        // menu-bar redraw (see this file's header).
+        NSApp.setActivationPolicy(audioState.preferences.hideFromDockEnabled ? .accessory : .regular)
         // Under XCTest, leave the host inert: no audio pipeline, CLI port,
         // notification prompts, menu install, or onboarding — just a live
         // process for the test bundle to load into.
@@ -100,17 +111,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // stays here; routing stays in HelpCenter.
         HelpCenter.shared.onShow = { [weak self] in self?.showHelpWindow() }
         bootstrap()
-        // SwiftUI's scene system installs its own NSApp.mainMenu *after*
-        // applicationDidFinishLaunching returns, wiping anything we set
-        // here. Defer our install to the next runloop tick so ours wins.
-        Task { @MainActor in installMainMenu() }
+        // The main menu is SwiftUI's — declared in `SherlockEQApp.commands`.
+        // AppDelegate no longer touches `NSApp.mainMenu`; fighting SwiftUI for
+        // it never won reliably.
     }
 
-    func applicationDidBecomeActive(_ notification: Notification) {
-        // Safety net: if anything else (a sub-window, an alert sheet, a
-        // scene-restore cycle) reinstalls SwiftUI's default menu, restore
-        // ours whenever the app comes forward.
-        installMainMenu()
+    /// Clicking the Dock icon (or `open` on the already-running app) with no
+    /// window on screen should reopen one — a Dock icon that activates the app
+    /// but shows nothing reads as broken. Reopens whichever primary window the
+    /// user last had up.
+    ///
+    /// Only reachable when a Dock icon exists, i.e. `.regular` policy — which,
+    /// with "Keep in Dock" on, persists after the window closes. In the
+    /// default menu-bar-only mode there's no Dock icon and this never fires;
+    /// the menu-bar popover is the way back there.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        let primaryVisible = (mainWindow?.isVisible ?? false)
+            || (analogWindow?.isVisible ?? false)
+        guard !primaryVisible else { return true }
+        switch lastPrimaryWindow {
+        case .analog: showAnalogControlUnit()
+        case .main:   showMainWindow()
+        }
+        return false
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -156,7 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if Self.isUITesting {
             // Deterministic UI-test launch: open the main window and stop —
             // no audio, CLI, notifications, or onboarding.
-            Task { @MainActor in installMainMenu(); showMainWindow() }
+            Task { @MainActor in showMainWindow() }
             return
         }
         startCLIServer()
@@ -223,20 +246,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         guard let window = mainWindow else { return }
 
-        // Sequence matters. The Cmd-Tab dance under SwiftUI's `Window`
-        // scene was the policy change and the activate landing in the
-        // same runloop tick, before AppKit's bookkeeping caught up. By
-        // owning the window we can:
-        //   1. Set the policy.
-        //   2. Spin the runloop a moment so AppKit registers it.
-        //   3. Activate the app — now the menu bar attaches correctly.
-        //   4. Order our window front and make it key.
-        if NSApp.activationPolicy() != .regular {
-            NSApp.setActivationPolicy(.regular)
-            // ~10 ms of runloop pumping is plenty for AppKit to process
-            // the policy change without a perceptible delay.
-            RunLoop.current.run(mode: .common, before: Date(timeIntervalSinceNow: 0.01))
-        }
+        // No activation-policy flip: the Dock icon is governed solely by
+        // `hideFromDockEnabled` (applied at launch), not by opening a window.
+        // Activating alone brings the window front and, for an `.accessory`
+        // app, attaches its menu bar.
+        //
         // `NSApp.activate(ignoringOtherApps:)` is deprecated in macOS 14
         // and the system can silently drop the request — the window
         // appears but the menu bar stays in its inactive (greyed) state
@@ -246,6 +260,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // properly transfers menu-bar focus.
         NSRunningApplication.current.activate(options: [.activateAllWindows])
         window.makeKeyAndOrderFront(nil)
+        lastPrimaryWindow = .main
     }
 
     private func createMainWindow() -> NSWindow {
@@ -266,6 +281,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.minSize = NSSize(width: 1366, height: 756)
         window.setFrameAutosaveName("SherlockEQ.MainWindow")
         window.isReleasedWhenClosed = false
+        // Don't let macOS state-restoration reopen this window on launch. The
+        // app owns its window lifecycle explicitly (showMainWindow / the Dock
+        // reopen handler), and a returning launch is intentionally menu-bar-
+        // only. A restored window bypasses both our menu reinstall and the
+        // last-window tracking, which is how it came up carrying AppKit's
+        // default Window menu instead of ours. Frame is still remembered via
+        // the autosave name above — only auto-reopen is off.
+        window.isRestorable = false
         window.delegate = self
         // Visible on all Spaces is wrong for a main window; just default.
         window.center()
@@ -288,12 +311,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let window = analogWindow else { return }
         if firstOpen { audioState.beginAnalogOverride() }
 
-        if NSApp.activationPolicy() != .regular {
-            NSApp.setActivationPolicy(.regular)
-            RunLoop.current.run(mode: .common, before: Date(timeIntervalSinceNow: 0.01))
-        }
+        // No policy flip here: the Dock icon is governed solely by
+        // `hideFromDockEnabled` (set at launch). Activating surfaces the
+        // window and, for an `.accessory` app, its menu bar.
         NSRunningApplication.current.activate(options: [.activateAllWindows])
         window.makeKeyAndOrderFront(nil)
+        lastPrimaryWindow = .analog
     }
 
     private func createAnalogControlWindow() -> NSWindow {
@@ -328,6 +351,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         frame.origin.y = top - initialHeight
         window.setFrame(frame, display: false)
         window.isReleasedWhenClosed = false
+        // Same rationale as the main window: no macOS auto-reopen. The analog
+        // unit also begins an audio override on show, so a restored one would
+        // re-enter that mode out of band.
+        window.isRestorable = false
         window.delegate = self
         window.center()
         return window
@@ -358,10 +385,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         guard let window = helpWindow else { return }
 
-        if NSApp.activationPolicy() != .regular {
-            NSApp.setActivationPolicy(.regular)
-            RunLoop.current.run(mode: .common, before: Date(timeIntervalSinceNow: 0.01))
-        }
+        // No policy flip here: the Dock icon is governed solely by
+        // `hideFromDockEnabled` (set at launch). Activating surfaces the
+        // window and, for an `.accessory` app, its menu bar.
         NSRunningApplication.current.activate(options: [.activateAllWindows])
         window.makeKeyAndOrderFront(nil)
     }
@@ -396,10 +422,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         guard let window = onboardingWindow else { return }
 
-        if NSApp.activationPolicy() != .regular {
-            NSApp.setActivationPolicy(.regular)
-            RunLoop.current.run(mode: .common, before: Date(timeIntervalSinceNow: 0.01))
-        }
+        // No policy flip here: the Dock icon is governed solely by
+        // `hideFromDockEnabled` (set at launch). Activating surfaces the
+        // window and, for an `.accessory` app, its menu bar.
         NSRunningApplication.current.activate(options: [.activateAllWindows])
         window.makeKeyAndOrderFront(nil)
     }
@@ -453,82 +478,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         requestNotificationsAndStartAudio()
     }
 
-    @objc private func openHelpHome(_ sender: Any?) {
-        HelpCenter.shared.open(topic: .home)
-    }
-
-    @objc private func openHelpTopic(_ sender: NSMenuItem) {
-        guard let slug = sender.representedObject as? String else { return }
-        HelpCenter.shared.open(slug: slug)
-    }
-
-    // MARK: - Main menu (AppKit)
-
-    private func installMainMenu() {
-        let mainMenu = NSMenu()
-        mainMenu.addItem(makeAppMenuItem())
-        mainMenu.addItem(makeFileMenuItem())
-        mainMenu.addItem(makeEditMenuItem())
-        mainMenu.addItem(makeAudioMenuItem())
-        mainMenu.addItem(makeWindowMenuItem())
-        mainMenu.addItem(makeHelpMenuItem())
-        NSApp.mainMenu = mainMenu
-    }
-
-    /// Standard macOS Help menu. The first item opens the help window at
-    /// its home article; the rest jump straight to a topic. Assigning
-    /// `NSApp.helpMenu` gives us the system-provided Spotlight-for-Help
-    /// search field at the top of the menu for free, and positions the
-    /// menu correctly as the trailing menu.
-    private func makeHelpMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Help", action: nil, keyEquivalent: "")
-        let menu = NSMenu(title: "Help")
-
-        // Primary entry — opens (or focuses) the window at the home page.
-        let main = NSMenuItem(title: "SherlockEQ Help",
-                              action: #selector(openHelpHome(_:)),
-                              keyEquivalent: "?")
-        main.target = self
-        menu.addItem(main)
-        menu.addItem(.separator())
-
-        // One item per documented topic, in the spec's order. Each carries
-        // its slug as `representedObject`, so a single action handles them all.
-        let topics: [HelpTopic] = [
-            .gettingStarted, .featureGuide, .understandingEQ,
-            .audiogramProfiles, .tinnitusToneMatching, .headphoneCorrection,
-            .vuMeters, .analogControlUnit, .safetyLimits, .privacy,
-            .troubleshooting, .keyboardShortcuts, .commandLineTool, .releaseNotes,
-        ]
-        for topic in topics {
-            let title = HelpCenter.shared.library.title(for: topic.slug)
-            let mi = NSMenuItem(title: title,
-                                action: #selector(openHelpTopic(_:)),
-                                keyEquivalent: "")
-            mi.target = self
-            mi.representedObject = topic.slug
-            menu.addItem(mi)
-        }
-
-        item.submenu = menu
-        NSApp.helpMenu = menu
-        return item
-    }
-
-    private func makeFileMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "File", action: nil, keyEquivalent: "")
-        let menu = NSMenu(title: "File")
-        menu.addItem(withTitle: "Close Window",
-                     action: #selector(NSWindow.performClose(_:)),
-                     keyEquivalent: "w")
-        item.submenu = menu
-        return item
-    }
-
     /// Standard About panel with custom credit lines under the version: the
     /// tagline, copyright, and a "Free and Open Source • Website" line where
-    /// "Website" is a clickable link.
-    @objc private func showAboutPanel(_ sender: Any?) {
+    /// "Website" is a clickable link. Called from the SwiftUI `.commands`
+    /// About item — hence internal, not private.
+    func showAboutPanel() {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
         let baseAttributes: [NSAttributedString.Key: Any] = [
@@ -558,128 +512,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
     }
 
-    private func makeAppMenuItem() -> NSMenuItem {
-        let item = NSMenuItem()
-        let menu = NSMenu()
-        let appName = ProcessInfo.processInfo.processName
-
-        let about = NSMenuItem(title: "About \(appName)",
-                               action: #selector(showAboutPanel(_:)),
-                               keyEquivalent: "")
-        about.target = self
-        menu.addItem(about)
-
-        if UpdaterController.shared.hasUpdater {
-            let check = NSMenuItem(title: "Check for Updates…",
-                                   action: #selector(UpdaterController.checkForUpdates(_:)),
-                                   keyEquivalent: "")
-            check.target = UpdaterController.shared
-            menu.addItem(check)
-        }
-
-        menu.addItem(.separator())
-
-        let hide = NSMenuItem(title: "Hide \(appName)",
-                              action: #selector(NSApplication.hide(_:)),
-                              keyEquivalent: "h")
-        menu.addItem(hide)
-        let hideOthers = NSMenuItem(title: "Hide Others",
-                                    action: #selector(NSApplication.hideOtherApplications(_:)),
-                                    keyEquivalent: "h")
-        hideOthers.keyEquivalentModifierMask = [.command, .option]
-        menu.addItem(hideOthers)
-        menu.addItem(withTitle: "Show All",
-                     action: #selector(NSApplication.unhideAllApplications(_:)),
-                     keyEquivalent: "")
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit \(appName)",
-                     action: #selector(NSApplication.terminate(_:)),
-                     keyEquivalent: "q")
-
-        item.submenu = menu
-        return item
-    }
-
-    private func makeEditMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
-        let menu = NSMenu(title: "Edit")
-
-        // Undo/Redo dispatch via responder chain to the window's
-        // UndoManager (provided by `windowWillReturnUndoManager`).
-        menu.addItem(withTitle: "Undo",
-                     action: Selector(("undo:")),
-                     keyEquivalent: "z")
-        let redo = NSMenuItem(title: "Redo",
-                              action: Selector(("redo:")),
-                              keyEquivalent: "z")
-        redo.keyEquivalentModifierMask = [.command, .shift]
-        menu.addItem(redo)
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "Cut",
-                     action: #selector(NSText.cut(_:)),
-                     keyEquivalent: "x")
-        menu.addItem(withTitle: "Copy",
-                     action: #selector(NSText.copy(_:)),
-                     keyEquivalent: "c")
-        menu.addItem(withTitle: "Paste",
-                     action: #selector(NSText.paste(_:)),
-                     keyEquivalent: "v")
-        menu.addItem(withTitle: "Select All",
-                     action: #selector(NSText.selectAll(_:)),
-                     keyEquivalent: "a")
-
-        item.submenu = menu
-        return item
-    }
-
-    private func makeAudioMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Audio", action: nil, keyEquivalent: "")
-        let menu = NSMenu(title: "Audio")
-        let toggle = NSMenuItem(title: "Toggle Reference Mode",
-                                action: #selector(toggleReferenceMode(_:)),
-                                keyEquivalent: "b")
-        toggle.target = self
-        menu.addItem(toggle)
-        item.submenu = menu
-        return item
-    }
-
-    private func makeWindowMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Window", action: nil, keyEquivalent: "")
-        let menu = NSMenu(title: "Window")
-        menu.addItem(withTitle: "Minimize",
-                     action: #selector(NSWindow.performMiniaturize(_:)),
-                     keyEquivalent: "m")
-        menu.addItem(withTitle: "Zoom",
-                     action: #selector(NSWindow.performZoom(_:)),
-                     keyEquivalent: "")
-        menu.addItem(.separator())
-        let show = NSMenuItem(title: "SherlockEQ",
-                              action: #selector(showMainWindowFromMenu(_:)),
-                              keyEquivalent: "0")
-        show.target = self
-        menu.addItem(show)
-        let analog = NSMenuItem(title: "Analog Control Unit",
-                                action: #selector(showAnalogControlUnitFromMenu(_:)),
-                                keyEquivalent: "1")   // ⌘1, pairs with ⌘0 → main window
-        analog.target = self
-        menu.addItem(analog)
-        item.submenu = menu
-        NSApp.windowsMenu = menu
-        return item
-    }
-
-    @objc private func toggleReferenceMode(_ sender: Any?) {
-        audioState.eqChain.referenceMode.toggle()
-    }
-
-    @objc private func showMainWindowFromMenu(_ sender: Any?) {
-        showMainWindow()
-    }
-
-    @objc private func showAnalogControlUnitFromMenu(_ sender: Any?) {
-        showAnalogControlUnit()
-    }
 }
 
 // MARK: - NSWindowDelegate
@@ -703,18 +535,10 @@ extension AppDelegate: NSWindowDelegate {
             }
             onboardingWindow = nil
         }
-        // Mirror the old SwiftUI `.onDisappear` policy flip. With the
-        // window-close trigger this fires reliably on every close. Only
-        // drop back to accessory when the *last* managed window closes —
-        // otherwise closing the Analog Control Unit while the main window
-        // is open (or vice versa) would wrongly hide the Dock icon.
-        guard audioState.preferences.hideFromDockEnabled else { return }
-        let stillOpen = [mainWindow, analogWindow, helpWindow, onboardingWindow]
-            .compactMap { $0 }
-            .contains { $0 !== closing && $0.isVisible }
-        if !stillOpen {
-            NSApp.setActivationPolicy(.accessory)
-        }
+        // No activation-policy change on close. The Dock icon is absolute now
+        // (`hideFromDockEnabled`, applied at launch and on toggle), so closing
+        // the last window neither hides nor shows it — the app simply keeps
+        // running in whatever Dock state the user chose.
     }
 
     func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {

@@ -100,10 +100,10 @@ struct SettingsView: View {
                   caption: "Start in the menu bar when you log in.",
                   help: "Revoke it any time in System Settings → General → Login Items.")
         Divider()
-        toggleRow("Hide Dock icon when window closes",
+        toggleRow("Hide the Dock icon",
                   isOn: $preferences.hideFromDockEnabled,
-                  caption: "Keep running in the menu bar only.",
-                  help: "Turn this off if the menu bar fails to redraw when you reopen the window.")
+                  caption: "Run in the menu bar only, with no Dock icon.",
+                  help: "Applies immediately and stays that way — it doesn't depend on whether a window is open. SherlockEQ's menus still appear when a window is in front.")
     }
 
     // MARK: - Appearance

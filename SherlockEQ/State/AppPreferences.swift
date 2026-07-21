@@ -51,11 +51,12 @@ final class AppPreferences: ObservableObject {
     ) {
         didSet {
             UserDefaults.standard.set(hideFromDockEnabled, forKey: Self.hideFromDockKey)
-            // Turning the toggle off (show in Dock) takes effect right
-            // away. Turning it on only kicks in on next window close.
-            if !hideFromDockEnabled {
-                NSApp.setActivationPolicy(.regular)
-            }
+            // Absolute: the Dock icon follows this toggle alone, independent of
+            // whether a window is open. On → `.accessory` (no Dock icon, but
+            // the menu bar still appears when a window is active). Off →
+            // `.regular` (Dock icon always). Applied immediately on change; the
+            // launch-time value is applied by AppDelegate.
+            NSApp.setActivationPolicy(hideFromDockEnabled ? .accessory : .regular)
         }
     }
 
