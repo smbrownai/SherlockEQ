@@ -107,18 +107,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // stays here; routing stays in HelpCenter.
         HelpCenter.shared.onShow = { [weak self] in self?.showHelpWindow() }
         bootstrap()
-        // SwiftUI's scene system installs its own NSApp.mainMenu *after*
-        // applicationDidFinishLaunching returns, wiping anything we set
-        // here. Defer our install to the next runloop tick so ours wins.
-        Task { @MainActor in installMainMenu() }
-    }
-
-    func applicationDidBecomeActive(_ notification: Notification) {
-        // Safety net: if anything else (a sub-window, an alert sheet, a
-        // scene-restore cycle) reinstalls SwiftUI's default menu, restore
-        // ours whenever the app comes forward.
-        //
-        installMainMenu()
+        // The main menu is SwiftUI's — declared in `SherlockEQApp.commands`.
+        // AppDelegate no longer touches `NSApp.mainMenu`; fighting SwiftUI for
+        // it never won reliably.
     }
 
     /// Clicking the Dock icon (or `open` on the already-running app) with no
@@ -184,7 +175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if Self.isUITesting {
             // Deterministic UI-test launch: open the main window and stop —
             // no audio, CLI, notifications, or onboarding.
-            Task { @MainActor in installMainMenu(); showMainWindow() }
+            Task { @MainActor in showMainWindow() }
             return
         }
         startCLIServer()
@@ -495,82 +486,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         requestNotificationsAndStartAudio()
     }
 
-    @objc private func openHelpHome(_ sender: Any?) {
-        HelpCenter.shared.open(topic: .home)
-    }
-
-    @objc private func openHelpTopic(_ sender: NSMenuItem) {
-        guard let slug = sender.representedObject as? String else { return }
-        HelpCenter.shared.open(slug: slug)
-    }
-
-    // MARK: - Main menu (AppKit)
-
-    private func installMainMenu() {
-        let mainMenu = NSMenu()
-        mainMenu.addItem(makeAppMenuItem())
-        mainMenu.addItem(makeFileMenuItem())
-        mainMenu.addItem(makeEditMenuItem())
-        mainMenu.addItem(makeAudioMenuItem())
-        mainMenu.addItem(makeWindowMenuItem())
-        mainMenu.addItem(makeHelpMenuItem())
-        NSApp.mainMenu = mainMenu
-    }
-
-    /// Standard macOS Help menu. The first item opens the help window at
-    /// its home article; the rest jump straight to a topic. Assigning
-    /// `NSApp.helpMenu` gives us the system-provided Spotlight-for-Help
-    /// search field at the top of the menu for free, and positions the
-    /// menu correctly as the trailing menu.
-    private func makeHelpMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Help", action: nil, keyEquivalent: "")
-        let menu = NSMenu(title: "Help")
-
-        // Primary entry — opens (or focuses) the window at the home page.
-        let main = NSMenuItem(title: "SherlockEQ Help",
-                              action: #selector(openHelpHome(_:)),
-                              keyEquivalent: "?")
-        main.target = self
-        menu.addItem(main)
-        menu.addItem(.separator())
-
-        // One item per documented topic, in the spec's order. Each carries
-        // its slug as `representedObject`, so a single action handles them all.
-        let topics: [HelpTopic] = [
-            .gettingStarted, .featureGuide, .understandingEQ,
-            .audiogramProfiles, .tinnitusToneMatching, .headphoneCorrection,
-            .vuMeters, .analogControlUnit, .safetyLimits, .privacy,
-            .troubleshooting, .keyboardShortcuts, .commandLineTool, .releaseNotes,
-        ]
-        for topic in topics {
-            let title = HelpCenter.shared.library.title(for: topic.slug)
-            let mi = NSMenuItem(title: title,
-                                action: #selector(openHelpTopic(_:)),
-                                keyEquivalent: "")
-            mi.target = self
-            mi.representedObject = topic.slug
-            menu.addItem(mi)
-        }
-
-        item.submenu = menu
-        NSApp.helpMenu = menu
-        return item
-    }
-
-    private func makeFileMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "File", action: nil, keyEquivalent: "")
-        let menu = NSMenu(title: "File")
-        menu.addItem(withTitle: "Close Window",
-                     action: #selector(NSWindow.performClose(_:)),
-                     keyEquivalent: "w")
-        item.submenu = menu
-        return item
-    }
-
     /// Standard About panel with custom credit lines under the version: the
     /// tagline, copyright, and a "Free and Open Source • Website" line where
-    /// "Website" is a clickable link.
-    @objc private func showAboutPanel(_ sender: Any?) {
+    /// "Website" is a clickable link. Called from the SwiftUI `.commands`
+    /// About item — hence internal, not private.
+    func showAboutPanel() {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
         let baseAttributes: [NSAttributedString.Key: Any] = [
@@ -600,128 +520,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
     }
 
-    private func makeAppMenuItem() -> NSMenuItem {
-        let item = NSMenuItem()
-        let menu = NSMenu()
-        let appName = ProcessInfo.processInfo.processName
-
-        let about = NSMenuItem(title: "About \(appName)",
-                               action: #selector(showAboutPanel(_:)),
-                               keyEquivalent: "")
-        about.target = self
-        menu.addItem(about)
-
-        if UpdaterController.shared.hasUpdater {
-            let check = NSMenuItem(title: "Check for Updates…",
-                                   action: #selector(UpdaterController.checkForUpdates(_:)),
-                                   keyEquivalent: "")
-            check.target = UpdaterController.shared
-            menu.addItem(check)
-        }
-
-        menu.addItem(.separator())
-
-        let hide = NSMenuItem(title: "Hide \(appName)",
-                              action: #selector(NSApplication.hide(_:)),
-                              keyEquivalent: "h")
-        menu.addItem(hide)
-        let hideOthers = NSMenuItem(title: "Hide Others",
-                                    action: #selector(NSApplication.hideOtherApplications(_:)),
-                                    keyEquivalent: "h")
-        hideOthers.keyEquivalentModifierMask = [.command, .option]
-        menu.addItem(hideOthers)
-        menu.addItem(withTitle: "Show All",
-                     action: #selector(NSApplication.unhideAllApplications(_:)),
-                     keyEquivalent: "")
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit \(appName)",
-                     action: #selector(NSApplication.terminate(_:)),
-                     keyEquivalent: "q")
-
-        item.submenu = menu
-        return item
-    }
-
-    private func makeEditMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
-        let menu = NSMenu(title: "Edit")
-
-        // Undo/Redo dispatch via responder chain to the window's
-        // UndoManager (provided by `windowWillReturnUndoManager`).
-        menu.addItem(withTitle: "Undo",
-                     action: Selector(("undo:")),
-                     keyEquivalent: "z")
-        let redo = NSMenuItem(title: "Redo",
-                              action: Selector(("redo:")),
-                              keyEquivalent: "z")
-        redo.keyEquivalentModifierMask = [.command, .shift]
-        menu.addItem(redo)
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "Cut",
-                     action: #selector(NSText.cut(_:)),
-                     keyEquivalent: "x")
-        menu.addItem(withTitle: "Copy",
-                     action: #selector(NSText.copy(_:)),
-                     keyEquivalent: "c")
-        menu.addItem(withTitle: "Paste",
-                     action: #selector(NSText.paste(_:)),
-                     keyEquivalent: "v")
-        menu.addItem(withTitle: "Select All",
-                     action: #selector(NSText.selectAll(_:)),
-                     keyEquivalent: "a")
-
-        item.submenu = menu
-        return item
-    }
-
-    private func makeAudioMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Audio", action: nil, keyEquivalent: "")
-        let menu = NSMenu(title: "Audio")
-        let toggle = NSMenuItem(title: "Toggle Reference Mode",
-                                action: #selector(toggleReferenceMode(_:)),
-                                keyEquivalent: "b")
-        toggle.target = self
-        menu.addItem(toggle)
-        item.submenu = menu
-        return item
-    }
-
-    private func makeWindowMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: "Window", action: nil, keyEquivalent: "")
-        let menu = NSMenu(title: "Window")
-        menu.addItem(withTitle: "Minimize",
-                     action: #selector(NSWindow.performMiniaturize(_:)),
-                     keyEquivalent: "m")
-        menu.addItem(withTitle: "Zoom",
-                     action: #selector(NSWindow.performZoom(_:)),
-                     keyEquivalent: "")
-        menu.addItem(.separator())
-        let show = NSMenuItem(title: "SherlockEQ",
-                              action: #selector(showMainWindowFromMenu(_:)),
-                              keyEquivalent: "0")
-        show.target = self
-        menu.addItem(show)
-        let analog = NSMenuItem(title: "Analog Control Unit",
-                                action: #selector(showAnalogControlUnitFromMenu(_:)),
-                                keyEquivalent: "1")   // ⌘1, pairs with ⌘0 → main window
-        analog.target = self
-        menu.addItem(analog)
-        item.submenu = menu
-        NSApp.windowsMenu = menu
-        return item
-    }
-
-    @objc private func toggleReferenceMode(_ sender: Any?) {
-        audioState.eqChain.referenceMode.toggle()
-    }
-
-    @objc private func showMainWindowFromMenu(_ sender: Any?) {
-        showMainWindow()
-    }
-
-    @objc private func showAnalogControlUnitFromMenu(_ sender: Any?) {
-        showAnalogControlUnit()
-    }
 }
 
 // MARK: - NSWindowDelegate
