@@ -20,6 +20,15 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.9.7
+
+A small fix-and-polish release: the Graphic EQ's per-ear gain readouts are legible again, and the in-app Help articles have been brought back in line with how the app actually works today. No settings move, and nothing about the sound changes.
+
+**Fixed**
+
+- **Per-ear gain numbers on the Graphic EQ no longer get cut off.** With "Adjust ears separately" turned on, the two gain readouts for each band were squeezed side by side and values like "-12.0" showed as "-12..." — unreadable at a glance. They're now stacked and color-coded to match each ear's slider and the Left/Right legend above the curve, so both numbers are fully visible and easy to tell apart.
+- **Help articles now match the current app.** Several Help topics still described things the way they used to work — most visibly the Graphic EQ article, which still said "twelve-band" after the grid returned to ten bands. Toggle names, the order corrections are applied in, and a few other details across the Equalizer, Audiogram, Tinnitus Tools, and Spectrum articles have been brought up to date.
+
 ## 0.9.6
 
 A round of window and menu fixes. SherlockEQ now behaves the way a menu-bar app should — the Dock icon means what you told it to mean, the window comes back when you ask for it, and the menus are always there. Nothing about the sound changes, and no settings reset.
