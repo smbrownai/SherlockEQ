@@ -93,10 +93,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.shared = self
-        // Start as a menu-bar-only app. Flips to `.regular` on first
-        // `showMainWindow`; flips back on window close if the user has
-        // `hideFromDockEnabled` set.
-        NSApp.setActivationPolicy(.accessory)
+        // The Dock icon is absolute: it follows `hideFromDockEnabled` alone,
+        // set once here and never toggled by window state. `.accessory` hides
+        // the Dock icon (the menu bar still appears when a window is active);
+        // `.regular` shows it. Changing the toggle re-applies immediately via
+        // its didSet. Not transitioning policy per window is deliberate — the
+        // old `.accessory → .regular` swap on window show is what glitched the
+        // menu-bar redraw (see this file's header).
+        NSApp.setActivationPolicy(audioState.preferences.hideFromDockEnabled ? .accessory : .regular)
         // Under XCTest, leave the host inert: no audio pipeline, CLI port,
         // notification prompts, menu install, or onboarding — just a live
         // process for the test bundle to load into.
@@ -242,20 +246,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         guard let window = mainWindow else { return }
 
-        // Sequence matters. The Cmd-Tab dance under SwiftUI's `Window`
-        // scene was the policy change and the activate landing in the
-        // same runloop tick, before AppKit's bookkeeping caught up. By
-        // owning the window we can:
-        //   1. Set the policy.
-        //   2. Spin the runloop a moment so AppKit registers it.
-        //   3. Activate the app — now the menu bar attaches correctly.
-        //   4. Order our window front and make it key.
-        if NSApp.activationPolicy() != .regular {
-            NSApp.setActivationPolicy(.regular)
-            // ~10 ms of runloop pumping is plenty for AppKit to process
-            // the policy change without a perceptible delay.
-            RunLoop.current.run(mode: .common, before: Date(timeIntervalSinceNow: 0.01))
-        }
+        // No activation-policy flip: the Dock icon is governed solely by
+        // `hideFromDockEnabled` (applied at launch), not by opening a window.
+        // Activating alone brings the window front and, for an `.accessory`
+        // app, attaches its menu bar.
+        //
         // `NSApp.activate(ignoringOtherApps:)` is deprecated in macOS 14
         // and the system can silently drop the request — the window
         // appears but the menu bar stays in its inactive (greyed) state
@@ -316,10 +311,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let window = analogWindow else { return }
         if firstOpen { audioState.beginAnalogOverride() }
 
-        if NSApp.activationPolicy() != .regular {
-            NSApp.setActivationPolicy(.regular)
-            RunLoop.current.run(mode: .common, before: Date(timeIntervalSinceNow: 0.01))
-        }
+        // No policy flip here: the Dock icon is governed solely by
+        // `hideFromDockEnabled` (set at launch). Activating surfaces the
+        // window and, for an `.accessory` app, its menu bar.
         NSRunningApplication.current.activate(options: [.activateAllWindows])
         window.makeKeyAndOrderFront(nil)
         lastPrimaryWindow = .analog
@@ -391,10 +385,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         guard let window = helpWindow else { return }
 
-        if NSApp.activationPolicy() != .regular {
-            NSApp.setActivationPolicy(.regular)
-            RunLoop.current.run(mode: .common, before: Date(timeIntervalSinceNow: 0.01))
-        }
+        // No policy flip here: the Dock icon is governed solely by
+        // `hideFromDockEnabled` (set at launch). Activating surfaces the
+        // window and, for an `.accessory` app, its menu bar.
         NSRunningApplication.current.activate(options: [.activateAllWindows])
         window.makeKeyAndOrderFront(nil)
     }
@@ -429,10 +422,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         guard let window = onboardingWindow else { return }
 
-        if NSApp.activationPolicy() != .regular {
-            NSApp.setActivationPolicy(.regular)
-            RunLoop.current.run(mode: .common, before: Date(timeIntervalSinceNow: 0.01))
-        }
+        // No policy flip here: the Dock icon is governed solely by
+        // `hideFromDockEnabled` (set at launch). Activating surfaces the
+        // window and, for an `.accessory` app, its menu bar.
         NSRunningApplication.current.activate(options: [.activateAllWindows])
         window.makeKeyAndOrderFront(nil)
     }
@@ -543,18 +535,10 @@ extension AppDelegate: NSWindowDelegate {
             }
             onboardingWindow = nil
         }
-        // Mirror the old SwiftUI `.onDisappear` policy flip. With the
-        // window-close trigger this fires reliably on every close. Only
-        // drop back to accessory when the *last* managed window closes —
-        // otherwise closing the Analog Control Unit while the main window
-        // is open (or vice versa) would wrongly hide the Dock icon.
-        guard audioState.preferences.hideFromDockEnabled else { return }
-        let stillOpen = [mainWindow, analogWindow, helpWindow, onboardingWindow]
-            .compactMap { $0 }
-            .contains { $0 !== closing && $0.isVisible }
-        if !stillOpen {
-            NSApp.setActivationPolicy(.accessory)
-        }
+        // No activation-policy change on close. The Dock icon is absolute now
+        // (`hideFromDockEnabled`, applied at launch and on toggle), so closing
+        // the last window neither hides nor shows it — the app simply keeps
+        // running in whatever Dock state the user chose.
     }
 
     func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
