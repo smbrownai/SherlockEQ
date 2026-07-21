@@ -32,9 +32,9 @@ particular frequencies. A single stereo EQ can't address that; per-ear EQ can.
 
 ## How to use it
 
-Turn on **Separate L + R** for the profile. The EQ views then show independent
-left and right controls. Adjust each side to taste. With it off, both ears
-share one shape (the common case).
+Turn on **Adjust ears separately** for the profile. The EQ views then show
+independent left and right controls. Adjust each side to taste. With it off,
+both ears share one shape (the common case).
 
 ## What changes in the audio
 

@@ -68,7 +68,7 @@ goes with the audio rather than being baked into a fixed curve.
 ## How it interacts with other settings
 
 - Runs alongside your chosen EQ mode and [headphone correction](help:headphone-correction-autoeq); it shapes dynamically on top of those static curves.
-- With [Per-Ear EQ](help:per-ear-eq) on, each feature can be set independently for the left and right ears; otherwise one control drives both.
+- Turn on **Adjust ears separately** (its own toggle here, independent of [Per-Ear EQ](help:per-ear-eq)) to set each feature independently for the left and right ears; otherwise one control drives both.
 - For *static* speech shaping (always-on, not signal-following), shape the voice region on the [Graphic EQ](help:graphic-eq) instead — the two complement each other.
 - Reductions lower level on their moments; "Bring voices forward" interacts with master [gain](help:gain-volume) and [clipping](help:safety-limits) like any boost.
 

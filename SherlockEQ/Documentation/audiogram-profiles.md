@@ -53,8 +53,10 @@ threshold. Age-related high-frequency loss (**presbycusis**) and
 
 ## What changes in the audio
 
-SherlockEQ converts your entered thresholds into per-ear EQ bands and applies
-them through the same per-ear filter chain as the rest of the equalizer.
+SherlockEQ converts your entered thresholds into per-ear correction bands and
+applies them through the same per-ear filter chain as the rest of the
+equalizer. This correction lives in its own layer, separate from your profile
+EQ and presets, so changing the EQ or switching presets never overwrites it.
 
 ## No audiogram? Run the Listening Check
 

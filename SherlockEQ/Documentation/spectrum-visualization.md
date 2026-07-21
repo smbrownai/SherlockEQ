@@ -46,7 +46,7 @@ alter it.
 
 - Overlays the [parametric EQ](help:parametric-eq) curve so you can match a correction to what you see.
 - Shares the safe-listening thresholds with the [VU meters](help:vu-meters) and [safety](help:safety-limits) view.
-- Reflects the processed (post-EQ) signal.
+- The input layer shows the true pre-EQ signal as a ghost trace; the output layer shows the processed (post-EQ) signal — toggle between them to compare before/after.
 
 ## Recommended uses
 

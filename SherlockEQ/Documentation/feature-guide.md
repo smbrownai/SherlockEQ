@@ -23,7 +23,7 @@ A map of SherlockEQ's capabilities. Each entry links to a full article.
 
 - [Volume / Gain](help:gain-volume) — master output level after EQ.
 - [Balance](help:balance) — left/right level offset.
-- [Graphic EQ](help:graphic-eq) — twelve-band graphic EQ on the audiometric grid; the everyday surface.
+- [Graphic EQ](help:graphic-eq) — ten-band graphic EQ on the audiometric grid; the everyday surface.
 - [Parametric EQ](help:parametric-eq) — frequency, gain, Q, filter type, stacked bands.
 - [Per-Ear EQ](help:per-ear-eq) — independent left and right correction.
 

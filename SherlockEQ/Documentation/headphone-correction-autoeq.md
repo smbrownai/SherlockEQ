@@ -73,7 +73,7 @@ the final judge.
 
 ## How it interacts with other settings
 
-- **Order of operations:** correction first (flatten the headphone), then your [profile](help:profiles) EQ and any [audiogram](help:audiogram-profiles) shaping on top.
+- **Order of operations:** correction first (flatten the headphone), then any [audiogram](help:audiogram-profiles) shaping, then your [profile](help:profiles) EQ on top — audiogram correction is staged ahead of profile EQ so the two layer rather than collide.
 - Works per ear alongside [Per-Ear EQ](help:per-ear-eq).
 - The preamp interacts with master [gain](help:gain-volume); large correction boosts cost headroom.
 - Correction is tied to a headphone, so pair it with the right [output device](help:output-devices)/profile.
