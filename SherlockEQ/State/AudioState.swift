@@ -207,6 +207,26 @@ final class AudioState: ObservableObject {
     /// Safe Listening calibration slider binds the base value.
     var effectiveCalibrationOffsetDBA: Double { calibrationOffsetDBA + volumeDeltaDB }
 
+    /// The at-ear loudness (dBA) that the analog VU meters treat as 0 VU.
+    /// This is the app's "moderate" boundary — the same 70 dBA the digital
+    /// meter's yellow zone uses — so the analog dial's 0 mark lines up with
+    /// the digital meter's moderate line.
+    static let vuZeroAnchorDBA: Double = 70
+
+    /// 0 VU reference (in dBFS) for the analog VU meters, derived from the
+    /// live calibration so the needle reads **at-ear dBA − 70**: comfortable
+    /// listening rides near 0 VU and the dial responds to the volume knob
+    /// (via `effectiveCalibrationOffsetDBA`, which tracks it). This replaces
+    /// a fixed −18 dBFS reference that keyed off raw digital level alone, so
+    /// quiet or loudness-normalized program material pinned the needle at the
+    /// dial's floor no matter how loud you were actually listening. When
+    /// uncalibrated it leans on the same default SPL assumption the dose
+    /// meter uses (surfaced as "approximate" elsewhere); the caption reads
+    /// "0 VU = Comfortable level" rather than a precise dBFS figure.
+    var analogVUCalibration: VUCalibration {
+        .comfortableListening(referenceDBFS: Self.vuZeroAnchorDBA - effectiveCalibrationOffsetDBA)
+    }
+
     /// Volume-tracking condition for the Safe Listening status row. Derived
     /// from the same pure function as `volumeDeltaDB` so copy and math agree.
     var volumeTrackingStatus: CalibrationVolumeAnchor.Status {

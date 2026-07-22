@@ -44,7 +44,7 @@ struct AnalogControlUnitView: View {
                     AnalogVUMeter(
                         monitor: audioState.stereoMonitor,
                         mode: .stereo,
-                        calibration: .standardDigital(),
+                        calibration: audioState.analogVUCalibration,
                         showReadout: false
                     )
                     .frame(maxWidth: .infinity)
