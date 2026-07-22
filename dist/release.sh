@@ -292,7 +292,9 @@ SHA=$(shasum -a 256 "$DMG" | awk '{print $1}')
 echo "$SHA  $(basename "$DMG")" > "${DMG}.sha256"
 
 SIZE=$(stat -f%z "$DMG")
-SIZE_MB=$(awk "BEGIN { printf \"%.1f\", $SIZE / 1024 / 1024 }")
+# Decimal MB (÷1,000,000) to match macOS Finder + GitHub, so the summary,
+# the website, and what the user sees after download all agree.
+SIZE_MB=$(awk "BEGIN { printf \"%.1f\", $SIZE / 1000 / 1000 }")
 
 cat <<SUMMARY
 
