@@ -625,7 +625,7 @@
                 <span class="sub">No virtual driver, no kernel extension</span>
               </td>
               <td class="is-self"><span class="mark yes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"/></svg></span></td>
-              <td><span class="mark yes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"/></svg></span></td>
+              <td><span class="mark part" title="Uses Rogue Amoeba's ACE audio-capture system extension, not the Core Audio Tap API">◐</span></td>
               <td><span class="mark no" title="Uses a virtual driver">—</span></td>
               <td><span class="mark no" title="Uses a virtual driver">—</span></td>
               <td><span class="mark no" title="Uses a virtual driver">—</span></td>
@@ -646,7 +646,7 @@
               </td>
               <td class="is-self"><span class="mark yes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"/></svg></span></td>
               <td><span class="mark no" title="macOS Shortcuts automation; no command line tool">—</span></td>
-              <td><span class="mark part" title="No CLI binary, but a documented HTTP API scriptable via curl">◐</span></td>
+              <td><span class="mark part" title="No CLI binary; an HTTP API is listed as in development, not yet documented">◐</span></td>
               <td><span class="mark no" title="AppleScript automation; no command line tool">—</span></td>
               <td><span class="mark no"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"/></svg></span></td>
             </tr>
@@ -692,9 +692,9 @@
         </div>
         <div class="body">
           <p><strong>What it nails.</strong> SoundSource is the most complete Mac audio control utility. Per-app volume, per-app EQ, per-output-device control, and a real AU plugin host in one polished package. If your problem is "Zoom is too loud, Spotify is too quiet, and YouTube needs a bass cut," this is the right answer.</p>
-          <p><strong>Where SherlockEQ differs.</strong> SherlockEQ doesn't do per-app routing and doesn't host plugins. It assumes your ears are the variable, not the source. The four EQ modes (Simple / Speech / Advanced / Expert) drive one chain that applies to all system audio, with per-ear curves derived from your audiogram and a tinnitus notch that travels with each profile. On automation the two overlap: both expose macOS Shortcuts actions via App Intents, and SherlockEQ adds a command line tool for scripting from the terminal — a small edge, not a deciding one.</p>
+          <p><strong>Where SherlockEQ differs.</strong> SherlockEQ doesn't do per-app routing and doesn't host plugins. It assumes your ears are the variable, not the source. Its two EQ surfaces (Graphic and Parametric) drive one chain that applies to all system audio, with per-ear curves derived from your audiogram and a tinnitus notch that travels with each profile. On automation the two overlap: both expose macOS Shortcuts actions via App Intents, and SherlockEQ adds a command line tool for scripting from the terminal — a small edge, not a deciding one. On capture they differ: SherlockEQ reads audio through Apple's native Core Audio Tap API, while SoundSource installs Rogue Amoeba's ACE audio-capture system component.</p>
           <dl class="overlap">
-            <dt>Overlap</dt><dd>Both apply EQ system-wide, both ship per-device profiles, both run native (no virtual driver).</dd>
+            <dt>Overlap</dt><dd>Both apply EQ system-wide, and both ship per-device profiles.</dd>
             <dt>SherlockEQ adds</dt><dd>Audiogram-driven curve, per-ear parametric (not just balance), tinnitus tone finder + notch, NIOSH dose tracker.</dd>
           </dl>
         </div>
@@ -708,7 +708,7 @@
         </div>
         <div class="body">
           <p><strong>What it nails.</strong> eqMac is the most direct "I want a Mac EQ" answer. Free 10-band, paid Pro with unlimited bands, parametric control, Q/bandwidth, spectrum analyzer, separate left/right EQ, app-volume mixing, headphone presets, and device-based preset switching. The asymmetric-EQ feature in Pro overlaps directly with what SherlockEQ does by default.</p>
-          <p><strong>Where SherlockEQ differs.</strong> SherlockEQ leads with the hearing context — you don't start at a 10-band slider, you start at an audiogram or a tinnitus sweep. It is free with no Pro tier, and uses the native Core Audio Tap API instead of a virtual driver, which means no extra device install. eqMac's Pro tier matches several SherlockEQ features behind a subscription. For automation, eqMac is genuinely scriptable too — it exposes an HTTP API you can drive with <code>curl</code> — where SherlockEQ ships a dedicated command line tool; both get you to terminal control by a different route.</p>
+          <p><strong>Where SherlockEQ differs.</strong> SherlockEQ leads with the hearing context — you don't start at a 10-band slider, you start at an audiogram or a tinnitus sweep. It is free with no Pro tier, and uses the native Core Audio Tap API instead of a virtual driver, which means no extra device install. eqMac's Pro tier matches several SherlockEQ features behind a subscription. On automation, SherlockEQ ships a dedicated command line tool; eqMac has long listed an HTTP API for scripting, but it remains marked "in development" rather than a documented, shipping feature.</p>
           <dl class="overlap">
             <dt>Overlap</dt><dd>System-wide EQ, parametric / per-ear capability (Pro), device presets, spectrum analyzer.</dd>
             <dt>SherlockEQ adds</dt><dd>Audiogram-driven curve, tinnitus tone finder + notch, NIOSH dose tracker, native CATap (no driver), free.</dd>
@@ -740,7 +740,7 @@
         </div>
         <div class="body">
           <p><strong>What it nails.</strong> Boom 3D is the friendliest consumer pick. Volume boost, 3D surround simulation, a 31-band graphic EQ, presets, headphone EQ. It is designed to make things sound bigger and more exciting out of the box. For casual movie nights and games, that's a fair pitch.</p>
-          <p><strong>Where SherlockEQ differs.</strong> SherlockEQ is the opposite tool. It is corrective, not enhancing — every boost has a +20 dB ceiling, every profile carries a per-day NIOSH dose limit, and the goal is the sound the source intended, not a louder or more exciting version of it. If the framing "I want bigger sound" matches you, Boom is the right shape. If "I want accurate sound my ears can hear" matches you, SherlockEQ is.</p>
+          <p><strong>Where SherlockEQ differs.</strong> SherlockEQ is the opposite tool. It is corrective, not enhancing — every boost is bounded (the graphic bands cap at ±12 dB) rather than an open-ended volume booster, every profile carries a per-day NIOSH dose limit, and the goal is the sound the source intended, not a louder or more exciting version of it. If the framing "I want bigger sound" matches you, Boom is the right shape. If "I want accurate sound my ears can hear" matches you, SherlockEQ is.</p>
           <dl class="overlap">
             <dt>Overlap</dt><dd>System-wide EQ, multi-band control.</dd>
             <dt>SherlockEQ adds</dt><dd>Hearing-aware framing, per-ear correction, audiogram, tinnitus notch, dose limits.</dd>
