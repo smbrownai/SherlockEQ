@@ -16,8 +16,10 @@
 #     versions → commit → push branch → open PR → exit. Re-run after merge.
 #
 #   PUBLISH (release/<version> branch exists on origin, PR is merged)
-#     dist/release.sh → dist/appcast-publish.sh → tag → GitHub release →
-#     push appcast to snxt.ai repo (if configured) → print cask update steps.
+#     dist/release.sh → dist/appcast-publish.sh → dist/validate-appcast.py →
+#     tag → GitHub release → push appcast to snxt.ai repo (if configured) →
+#     print cask update steps. Validation gates before the tag: a malformed
+#     feed or a signature that doesn't match the DMG stops the ship.
 #
 # Required env (inherited by dist/release.sh):
 #   DEVELOPER_ID    Full identity, e.g. "Developer ID Application: Shawn Brown (X)"
@@ -557,6 +559,31 @@ if [[ "$PHASE" == "publish" ]]; then
     ok "appcast.xml updated"
   else
     warn "dist/appcast-publish.sh not found or not executable — skipping appcast regen"
+  fi
+
+  # ---- step 2b: validate the appcast before it can be tagged/pushed ----------
+  #
+  # The feed the just-built entry lands in is what every existing user's Sparkle
+  # fetches. A malformed item, a truncated/missing signature, the
+  # releaseNotesLink-vs-description trap, a stale top entry, or a signature that
+  # doesn't match the DMG all mean "nobody updates" — and the failure is silent
+  # until you notice installs never climb. Gate here, before the point of no
+  # return. --dmg + --sign-update add the deterministic Ed25519 cross-check:
+  # re-sign the local DMG and confirm it reproduces the appcast signature, which
+  # catches signing-key drift and a DMG/appcast mismatch offline.
+  step "Validate appcast (dist/validate-appcast.py)"
+  VALIDATE_ARGS=("$APPCAST" --expect-version "$VERSION")
+  SIGN_UPDATE="$(find "$HOME/Library/Developer/Xcode/DerivedData" \
+    -path '*Sparkle*/bin/sign_update' -type f 2>/dev/null | head -1)"
+  if [[ -f "$DMG" && -n "$SIGN_UPDATE" ]]; then
+    VALIDATE_ARGS+=(--dmg "$DMG" --sign-update "$SIGN_UPDATE")
+  else
+    warn "DMG or sign_update not found — running structural checks only (no signature cross-check)"
+  fi
+  if python3 "$REPO_ROOT/dist/validate-appcast.py" "${VALIDATE_ARGS[@]}"; then
+    ok "appcast validated"
+  else
+    die "appcast validation failed — see errors above; not tagging or pushing"
   fi
 
   # ---- step 3: bump local cask ----------------------------------------------

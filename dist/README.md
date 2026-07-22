@@ -90,13 +90,17 @@ Review the PR and merge it before continuing.
    corrects it here. (This is why the size looks stale in the release PR — by
    design.)
 4. **Appcast** → `dist/appcast-publish.sh`.
-5. **Bump local cask** (`version` + `sha256`).
-6. **Bookkeeping commit → `main`** (appcast + cask + web size).
-7. **Tag + push** (`v<version>`).
-8. **GitHub release** with the DMG attached.
-9. **Mirror out** — appcast + cask pushed to their repos; `web/` synced to
-   `smbrownai/next` as a **PR** (page content gets a review window; appcast/cask
-   are mechanical and pushed directly).
+5. **Validate appcast** → `dist/validate-appcast.py` (gates before the tag).
+   Structural checks + newest-item-is-`<version>` + a deterministic Ed25519
+   cross-check (re-signs the built DMG, confirms it reproduces the appcast
+   signature). Any error stops the ship before anything is tagged or pushed.
+6. **Bump local cask** (`version` + `sha256`).
+7. **Bookkeeping commit → `main`** (appcast + cask + web size).
+8. **Tag + push** (`v<version>`).
+9. **GitHub release** with the DMG attached.
+10. **Mirror out** — appcast + cask pushed to their repos; `web/` synced to
+    `smbrownai/next` as a **PR** (page content gets a review window; appcast/cask
+    are mechanical and pushed directly).
 
 ## Scripts
 
@@ -106,6 +110,7 @@ Review the PR and merge it before continuing.
 | `draft-release-notes.sh` | Draft user-facing HTML notes from the PRs/commits in `<prev-tag>..HEAD` via the `claude` CLI (mechanical scaffold fallback if absent). Seeds PREP's editor; runnable standalone: `dist/draft-release-notes.sh 0.5.0 > dist/release-notes/0.5.0.md`. Supports `--since <tag>` / `--head <ref>` to scope a range. |
 | `release.sh` | Build → codesign → notarize → staple → DMG → sha256. Standalone-runnable. |
 | `appcast-publish.sh` | Insert the new version into `appcast.xml` (Sparkle feed). |
+| `validate-appcast.py` | Pre-ship gate on `appcast.xml`: structure, no releaseNotesLink/description clash, newest item is the shipping version, and (with `--dmg`/`--sign-update`) the DMG re-signs to the appcast signature. Runnable standalone: `dist/validate-appcast.py dist/appcast.xml`. |
 | `help-release-notes.py` | Convert HTML notes → Markdown, insert into the in-app Help article newest-first. Idempotent. |
 | `web-release-notes.py` | Regenerate `web/release-notes.html` from all `dist/release-notes/*.md`. |
 | `build-cli.sh` | Build the `sherlockeq` CLI bundled into the app. Never edits sources. |
