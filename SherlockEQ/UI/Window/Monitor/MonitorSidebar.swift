@@ -95,7 +95,7 @@ struct MonitorSidebar: View {
                 AnalogVUMeter(
                     monitor: audioState.stereoMonitor,
                     mode: .stereo,
-                    calibration: .standardDigital(),
+                    calibration: audioState.analogVUCalibration,
                     vertical: true
                 )
                 .frame(height: 240)
