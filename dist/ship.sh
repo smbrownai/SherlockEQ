@@ -539,11 +539,13 @@ if [[ "$PHASE" == "publish" ]]; then
   #
   # web/index.html shows the dmg size in two places (meta-row badge + install
   # card). The version + filename were bumped in PREP, but the real size isn't
-  # known until the dmg is built here — so patch it now. Same MiB formula
-  # release.sh prints in its summary. This file rides along in the step-4
-  # bookkeeping commit and then mirrors out in the step-9 web sync.
+  # known until the dmg is built here — so patch it now. Decimal MB (÷1,000,000),
+  # matching what macOS Finder and GitHub's download page report, so the site
+  # agrees with what a user actually sees; release.sh prints the same. This file
+  # rides along in the step-4 bookkeeping commit and mirrors out in the step-9
+  # web sync.
 
-  DMG_SIZE_MB=$(awk "BEGIN { printf \"%.1f\", $(stat -f%z "$DMG") / 1024 / 1024 }")
+  DMG_SIZE_MB=$(awk "BEGIN { printf \"%.1f\", $(stat -f%z "$DMG") / 1000 / 1000 }")
   if file_has_version "$WEB_INDEX" "$DMG_SIZE_MB MB"; then
     info "web/index.html already shows $DMG_SIZE_MB MB"
   else
