@@ -129,25 +129,47 @@ enum MarkdownParser {
                 continue
             }
 
-            // Unordered list run.
+            // Unordered list run. Items are hard-wrapped across source lines
+            // for editor readability (e.g. an indented continuation line
+            // under "- **Volume** → …"); a continuation line doesn't start
+            // with a bullet marker, so it's folded onto the previous item
+            // rather than ending the list — otherwise it fell out as a
+            // stray, unindented paragraph mid-list.
             if isBullet(trimmed) {
                 flushParagraph(); flushFootnotes()
                 var items: [String] = []
-                while i < lines.count, isBullet(lines[i].trimmingCharacters(in: .whitespaces)) {
-                    items.append(stripBullet(lines[i].trimmingCharacters(in: .whitespaces)))
-                    i += 1
+                while i < lines.count {
+                    let t = lines[i].trimmingCharacters(in: .whitespaces)
+                    if isBullet(t) {
+                        items.append(stripBullet(t))
+                        i += 1
+                    } else if !items.isEmpty, isListContinuation(t) {
+                        items[items.count - 1] += " " + t
+                        i += 1
+                    } else {
+                        break
+                    }
                 }
                 blocks.append(.bullets(items))
                 continue
             }
 
-            // Ordered list run.
+            // Ordered list run. Same wrapped-continuation handling as
+            // unordered lists above.
             if isNumbered(trimmed) {
                 flushParagraph(); flushFootnotes()
                 var items: [String] = []
-                while i < lines.count, isNumbered(lines[i].trimmingCharacters(in: .whitespaces)) {
-                    items.append(stripNumber(lines[i].trimmingCharacters(in: .whitespaces)))
-                    i += 1
+                while i < lines.count {
+                    let t = lines[i].trimmingCharacters(in: .whitespaces)
+                    if isNumbered(t) {
+                        items.append(stripNumber(t))
+                        i += 1
+                    } else if !items.isEmpty, isListContinuation(t) {
+                        items[items.count - 1] += " " + t
+                        i += 1
+                    } else {
+                        break
+                    }
                 }
                 blocks.append(.numbered(items))
                 continue
@@ -261,6 +283,23 @@ enum MarkdownParser {
             $0.replacingOccurrences(of: sentinel, with: "|")
                 .trimmingCharacters(in: .whitespaces)
         }
+    }
+
+    /// A non-blank line that continues the previous list item's wrapped
+    /// text rather than starting something new. Excludes anything that
+    /// begins another block (a fresh list marker, heading, rule,
+    /// blockquote, fence, or footnote definition) so those still end the
+    /// list the normal way; blank lines are excluded too (checked by the
+    /// caller's `while i < lines.count` loop hitting an empty line here).
+    private static func isListContinuation(_ line: String) -> Bool {
+        guard !line.isEmpty else { return false }
+        if isBullet(line) || isNumbered(line) { return false }
+        if headingComponents(line) != nil { return false }
+        if line == "---" || line == "***" || line == "___" { return false }
+        if line.hasPrefix(">") { return false }
+        if line.hasPrefix("```") { return false }
+        if line.hasPrefix("[^") { return false }
+        return true
     }
 
     private static func isBullet(_ line: String) -> Bool {

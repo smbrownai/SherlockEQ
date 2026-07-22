@@ -130,6 +130,55 @@ struct HelpSystemTests {
         #expect(blocks.contains { if case .footnotes(let f) = $0 { return f.first?.label == "1" }; return false })
     }
 
+    @Test func bulletItemsJoinWrappedContinuationLines() {
+        // Source docs hard-wrap long bullet text across lines for editor
+        // readability (see analog-control-unit.md's "How the knobs map").
+        // A continuation line has no "- " marker, so it must fold onto the
+        // previous item rather than ending the list and falling out as a
+        // stray unindented paragraph.
+        let md = """
+        - **Volume** → the macOS system output volume (via the system, not the app's
+          internal gain). This reaches outside SherlockEQ.
+        - **Output** → switches the macOS default output device.
+        """
+        let blocks = MarkdownParser.parse(md)
+        #expect(blocks.count == 1)
+        guard case .bullets(let items)? = blocks.first else {
+            Issue.record("expected a single bullets block"); return
+        }
+        #expect(items.count == 2)
+        #expect(items[0].contains("Volume"))
+        #expect(items[0].contains("This reaches outside SherlockEQ."))
+        #expect(items[1] == "**Output** → switches the macOS default output device.")
+    }
+
+    @Test func bulletListStillEndsAtBlankLineOrNewBlock() {
+        let md = """
+        - one
+        - two
+
+        A paragraph after the list.
+        """
+        let blocks = MarkdownParser.parse(md)
+        #expect(blocks.contains { if case .bullets(let items) = $0 { return items == ["one", "two"] }; return false })
+        #expect(blocks.contains { if case .paragraph(let t) = $0 { return t == "A paragraph after the list." }; return false })
+    }
+
+    @Test func numberedItemsJoinWrappedContinuationLines() {
+        let md = """
+        1. **Set a comfortable tone level** — press Play and set a quiet
+           level; loudness doesn't matter.
+        2. **Sweep for the closest pitch** — drag across the range.
+        """
+        let blocks = MarkdownParser.parse(md)
+        guard case .numbered(let items)? = blocks.first else {
+            Issue.record("expected a single numbered block"); return
+        }
+        #expect(items.count == 2)
+        #expect(items[0].contains("loudness doesn't matter."))
+        #expect(items[1] == "**Sweep for the closest pitch** — drag across the range.")
+    }
+
     @Test func preprocessesWikiLinksAndInlineFootnotes() {
         // [[slug]] becomes an internal help: link; [^1] inline marker is
         // de-referenced to [1] so it doesn't collide with definitions.
