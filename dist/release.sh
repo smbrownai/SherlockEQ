@@ -77,10 +77,20 @@ NOTARY_KEYCHAIN="${NOTARY_KEYCHAIN:-$HOME/Library/Keychains/login.keychain-db}"
 # whole build. Check it here, in seconds, and fail with the exact fix. Because
 # the credential is pinned to a file keychain, `security` can actually see it
 # (it can't see Local Items items) — so this check is meaningful.
-if ! security find-generic-password -s "com.apple.gke.notary.tool" "$NOTARY_KEYCHAIN" >/dev/null 2>&1; then
+#
+# Match on the ACCOUNT attribute, not the service. notarytool stores the item
+# with label "com.apple.gke.notary.tool" but account
+# "com.apple.gke.notary.tool.saved-creds.<profile>" and NO matching service —
+# so `-s com.apple.gke.notary.tool` never matches even when the credential is
+# present and valid (that false-negative blocked a real 0.9.8 ship). The
+# account form is deterministic and profile-specific, so it also disambiguates
+# when more than one profile is stored.
+if ! security find-generic-password \
+     -a "com.apple.gke.notary.tool.saved-creds.$NOTARY_PROFILE" \
+     "$NOTARY_KEYCHAIN" >/dev/null 2>&1; then
   cat >&2 <<EOF
-error: notary credential not found in $NOTARY_KEYCHAIN
-       (service com.apple.gke.notary.tool — the item notarytool reads).
+error: notary credential '$NOTARY_PROFILE' not found in $NOTARY_KEYCHAIN
+       (looked for account com.apple.gke.notary.tool.saved-creds.$NOTARY_PROFILE).
        It most likely landed in the "Local Items" keychain and was evicted.
        Recreate it PINNED TO THE FILE LOGIN KEYCHAIN so it persists:
 
