@@ -18,11 +18,23 @@
 #   TEAM_ID         10-char Apple team id, e.g. "XXXXXXXXXX"
 #   NOTARY_PROFILE  notarytool keychain profile name (created once, see below).
 #
-# One-time setup (run interactively, stores credentials in the login keychain):
+# One-time setup — MUST pin to the file login keychain with --keychain:
 #   xcrun notarytool store-credentials SherlockEQ-Notary \
 #     --apple-id you@example.com \
 #     --team-id XXXXXXXXXX \
-#     --password APP_SPECIFIC_PASSWORD     # appleid.apple.com → app-specific
+#     --password APP_SPECIFIC_PASSWORD \    # appleid.apple.com → app-specific
+#     --keychain "$HOME/Library/Keychains/login.keychain-db"
+#
+# Why --keychain matters (this bit us on every 0.9.x ship): without it,
+# store-credentials writes to the "Local Items" (iCloud/data-protection)
+# keychain, which does NOT reliably persist the item across reboots/iCloud
+# reconciliation — so notarize failed ~10 min in with "No Keychain password
+# item found", and `security find-generic-password` couldn't even see it (that
+# tool only reads FILE keychains). Pinning to login.keychain-db makes the
+# credential persist like every other login-keychain item, and lets the
+# pre-flight below actually find it. Recreate the credential once, with
+# --keychain, and it stops vanishing. notarytool submit reads it back via the
+# matching --keychain flag ($NOTARY_KEYCHAIN).
 #
 # Then in your shell rc:
 #   export DEVELOPER_ID="Developer ID Application: Shawn Brown (XXXXXXXXXX)"
@@ -51,6 +63,36 @@ fi
 : "${DEVELOPER_ID:?set DEVELOPER_ID, e.g. 'Developer ID Application: ... (XXXXXXXXXX)'}"
 : "${TEAM_ID:?set TEAM_ID, the 10-char Apple team id}"
 : "${NOTARY_PROFILE:?set NOTARY_PROFILE, the name passed to notarytool store-credentials}"
+
+# The FILE login keychain the notary credential is pinned to (see the setup
+# note above). Overridable, but the default is the whole point of the fix:
+# notarytool store-credentials otherwise lands the item in the "Local Items"
+# keychain, which doesn't persist reliably.
+NOTARY_KEYCHAIN="${NOTARY_KEYCHAIN:-$HOME/Library/Keychains/login.keychain-db}"
+
+# ---- pre-flight: notary credential must resolve BEFORE the ~10-min build -----
+#
+# The notarize step is the LAST thing release.sh does, ~10 minutes in, after
+# archive + export + DMG. Discovering a missing credential there wastes that
+# whole build. Check it here, in seconds, and fail with the exact fix. Because
+# the credential is pinned to a file keychain, `security` can actually see it
+# (it can't see Local Items items) — so this check is meaningful.
+if ! security find-generic-password -s "com.apple.gke.notary.tool" "$NOTARY_KEYCHAIN" >/dev/null 2>&1; then
+  cat >&2 <<EOF
+error: notary credential not found in $NOTARY_KEYCHAIN
+       (service com.apple.gke.notary.tool — the item notarytool reads).
+       It most likely landed in the "Local Items" keychain and was evicted.
+       Recreate it PINNED TO THE FILE LOGIN KEYCHAIN so it persists:
+
+         xcrun notarytool store-credentials "$NOTARY_PROFILE" \\
+           --apple-id <your-apple-id> --team-id "$TEAM_ID" \\
+           --password <app-specific-password> \\
+           --keychain "$NOTARY_KEYCHAIN"
+
+       Then re-run. See the header of this script for why --keychain matters.
+EOF
+  exit 1
+fi
 
 # ---- paths -------------------------------------------------------------------
 
@@ -194,6 +236,7 @@ codesign --sign "$DEVELOPER_ID" --timestamp "$DMG"
 echo "==> submitting to notary service (this can take several minutes)"
 xcrun notarytool submit "$DMG" \
   --keychain-profile "$NOTARY_PROFILE" \
+  --keychain "$NOTARY_KEYCHAIN" \
   --wait
 
 # ---- 6. staple ---------------------------------------------------------------
