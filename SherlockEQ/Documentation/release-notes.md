@@ -20,6 +20,19 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 0.9.8
+
+A small fix-and-polish release. The headline is the analog VU meter, which now moves with how loudly you're actually listening instead of sitting near the bottom of the dial. Nothing about the sound changes, and no settings move.
+
+**Fixed**
+
+- **The analog VU meter reads your listening level now.** It used to follow the raw digital signal, so quieter recordings and anything a streaming app had already turned down or normalized left the needle pinned at the bottom no matter how loud you had it. The dial is now anchored to your comfortable level: **0 on the meter is a moderate listening level** (the same point the level meter marks in yellow), the needle rides mid-dial during normal listening, and it moves up and down with the volume — so the meter actually tells you something again. If you've set your playback calibration in Safe Listening, this tracks it exactly; if not, it uses the same sensible default the rest of the app does.
+- **Help articles read correctly again.** On a few Help pages — the Analog Control Unit and Audiogram articles among them — a bullet point whose text ran onto a second line was breaking off into a stray, unindented paragraph in the middle of the list. Those lists now stay whole.
+
+**Changed**
+
+- **One less repeated note on the Audiogram screen.** A short disclosure that already appears in the Audiogram Help article was also sitting at the bottom of the screen itself. It's been removed from the screen; the same wording is one tap away under Help.
+
 ## 0.9.7
 
 A small fix-and-polish release: the Graphic EQ's per-ear gain readouts are legible again, and the in-app Help articles have been brought back in line with how the app actually works today. No settings move, and nothing about the sound changes.
