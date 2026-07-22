@@ -21,6 +21,80 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 0.9.8</title>
+      <pubDate>Wed, 22 Jul 2026 16:02:14 +0000</pubDate>
+      <sparkle:version>00908</sparkle:version>
+      <sparkle:shortVersionString>0.9.8</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<h2>SherlockEQ 0.9.8</h2>
+
+<p>
+  A small fix-and-polish release. The headline is the analog VU meter, which
+  now moves with how loudly you're actually listening instead of sitting near
+  the bottom of the dial. Nothing about the sound changes, and no settings
+  move.
+</p>
+
+<h3>Fixed</h3>
+
+<ul>
+  <li>
+    <strong>The analog VU meter reads your listening level now.</strong>
+    It used to follow the raw digital signal, so quieter recordings and
+    anything a streaming app had already turned down or normalized left the
+    needle pinned at the bottom no matter how loud you had it. The dial is now
+    anchored to your comfortable level: <strong>0 on the meter is a moderate
+    listening level</strong> (the same point the level meter marks in yellow),
+    the needle rides mid-dial during normal listening, and it moves up and
+    down with the volume — so the meter actually tells you something again. If
+    you've set your playback calibration in Safe Listening, this tracks it
+    exactly; if not, it uses the same sensible default the rest of the app
+    does.
+  </li>
+  <li>
+    <strong>Help articles read correctly again.</strong>
+    On a few Help pages — the Analog Control Unit and Audiogram articles among
+    them — a bullet point whose text ran onto a second line was breaking off
+    into a stray, unindented paragraph in the middle of the list. Those lists
+    now stay whole.
+  </li>
+</ul>
+
+<h3>Changed</h3>
+
+<ul>
+  <li>
+    <strong>One less repeated note on the Audiogram screen.</strong>
+    A short disclosure that already appears in the Audiogram Help article was
+    also sitting at the bottom of the screen itself. It's been removed from the
+    screen; the same wording is one tap away under Help.
+  </li>
+</ul>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not diagnose,
+  treat, measure, or monitor any hearing condition, tinnitus, or disability.
+  For concerns about your hearing, consult a doctor, audiologist, or licensed
+  healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v0.9.7">0.9.7 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v0.9.8/SherlockEQ-0.9.8.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="BYWjDOj/FlZJDj47GcsLeGGtr5qfwXShs6vNcFcx+camdvJRmlj2HN7ALZJbOgzdxsV3ZpvjZX0dxYNxsBQZAw==" length="11111377" />
+    </item>
+
+    <item>
       <title>SherlockEQ 0.9.7</title>
       <pubDate>Tue, 21 Jul 2026 21:50:01 +0000</pubDate>
       <sparkle:version>00907</sparkle:version>
