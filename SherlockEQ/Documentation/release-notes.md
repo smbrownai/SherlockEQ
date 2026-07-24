@@ -20,6 +20,52 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 1.0.0
+
+SherlockEQ leaves beta. This is the first release without a leading zero, and it is deliberately not a feature release: the app here is the same app that shipped as 0.9.8, unchanged. What changed is the label. After a run of releases that added the last of the 1.0 work and then went quiet on fixes, the version number now says what the app has been for a while — finished enough to stand on its own.
+
+If you're already running 0.9.8, updating to 1.0 changes nothing about your sound, your profiles, or your settings. If you're new here, the rest of these notes are an overview of what SherlockEQ actually does, rather than a list of what moved since last week.
+
+**What SherlockEQ is**
+
+A systemwide, per-ear equalizer for macOS. It captures the system audio mix through Apple's Core Audio tap API, processes it, and plays the result to your chosen output device — so every app is affected at once, with no per-app setup, no virtual audio driver, and no kernel extension. Nothing you play is ever recorded or sent anywhere.
+
+**Sound shaping**
+
+- **Graphic EQ.** A ten-band equalizer on the audiometric grid (31 Hz to 16 kHz), with bands labelled by what they do — rumble, bass, warmth, voice body, clarity, sibilance, air — over a live spectrum.
+- **Parametric EQ.** A full canvas when you want it: frequency, gain, Q, and filter type per band, stacked bands, and drag-and-edit directly on the response curve.
+- **Per-ear chains.** Independent left and right filtering, not just a balance offset — for asymmetric hearing, or a single ear that needs something the other doesn't.
+- **Master gain and balance** after EQ, with headroom and clipping made visible rather than left to guesswork.
+- **Presets organized by goal** rather than by music genre, and a preset applies without disturbing your hearing adjustment or notch.
+
+**Hearing-aware tools**
+
+- **Audiogram to EQ.** Enter per-ear thresholds — from a clinical audiogram or from the built-in Listening Check — and SherlockEQ derives a per-ear adjustment that lifts only where you've indicated reduced sensitivity. It lives in its own layer, so presets and EQ edits never overwrite it. New adjustments ease in over the first three weeks instead of arriving at full strength on day one, and an optional Adaptive style gives quiet passages more help and loud ones less.
+- **Listening Check.** An optional five-minute guided estimate of your thresholds, ear by ear, using quiet pulsed tones — headphones and a quiet room required. It's an at-home estimate to tune by ear, not a hearing test and not a diagnosis.
+- **Tinnitus tone finder and notch.** A continuous-phase sine sweep, tunable to one hertz, to explore where a tonal tinnitus sits — with octave comparison and an optional average-a-few-matches aid, because pitch matching is imprecise. Turn the result into a per-ear notch with Subtle, Balanced, or Strong presets, or set depth and width by hand.
+- **Adaptive Comfort.** Three processors that act only when their target appears, then back off: bring voices forward, soften harsh moments, and reduce sharp "s" sounds. Each shows in plain language what it's doing right now.
+- **Headphone correction.** Flatten a specific headphone's measured response using AutoEQ-style curves, imported or downloaded, as a separate layer ahead of your own EQ.
+
+**Levels and safe listening**
+
+- **Live spectrum analyzer** behind the EQ canvas, with switchable lenses — output, pre-EQ input, your manual curve, the resulting response, and a safety overlay.
+- **Metering** in both flavours: per-channel peak/level meters and an analog VU pair anchored to your own comfortable listening level.
+- **Listening-dose estimate** using the NIOSH model — 85 dBA over 8 hours, 3 dB exchange rate — anchored to a playback calibration you provide and tracking your system volume as you change it. Optional notifications as the day's accumulation approaches the warning threshold, plus a 7-day history. It is informational guidance, not a calibrated dosimeter, and it says so wherever a value is an estimate or simply unknown.
+
+**Surfaces and control**
+
+- **Main window** for full editing; **menu-bar popover** for a glance at status plus gain, balance, profile, and reference mode.
+- **Analog Control Unit.** An optional vintage-style front panel with volume, output, balance, bass, mid, and treble knobs, VU meters, and an expandable spectrum panel — a separate quick-adjust mode driving its own tone profile and the macOS volume and output device.
+- **Profiles.** Save a complete setup — EQ, gain, balance, correction, notch, comfort settings — and switch between them, optionally automatically when a given output device appears.
+- **Command line and Shortcuts.** A `sherlockeq` CLI bundled in the app talks to the running app over local IPC, with `--json` output and scriptable exit codes; nine Shortcuts and Siri actions cover profile switching, gain, balance, simple EQ, reference mode, and status.
+- **Help built in.** Around two dozen articles covering every feature, the reasoning behind it, and its limits — reachable in context from the screen you're on.
+
+**Requirements and privacy**
+
+- **macOS 14.6 or later**, Apple silicon and Intel (universal binary). Core Audio process taps need Sonoma 14.2 at minimum; 14.6 is the tested floor.
+- **One permission:** System Audio Recording — grouped under Screen Recording on macOS 14, its own entry on macOS 15 and later. No microphone access, no screen or video capture. Notifications are optional and only used for safe-listening alerts.
+- **No account, no telemetry.** Profiles and settings stay in `~/Library/Application Support/SherlockEQ/`, exports carry no machine-identifying details, and nothing leaves your Mac unless you export it yourself.
+
 ## 0.9.8
 
 A small fix-and-polish release. The headline is the analog VU meter, which now moves with how loudly you're actually listening instead of sitting near the bottom of the dial. Nothing about the sound changes, and no settings move.
