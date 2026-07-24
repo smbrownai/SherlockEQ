@@ -13,6 +13,27 @@
     :root {
       --container: 1040px;
       --gutter: 32px;
+
+      /* Primary button inverts with the theme — see index.html. Hardcoding
+         --ink as the background made it identical to the page background in
+         dark mode (--bg-1 is --ink there), so the CTA vanished. */
+      --btn-primary-bg:    var(--ink);
+      --btn-primary-fg:    var(--paper);
+      --btn-primary-hover: var(--gray-800);
+    }
+
+    [data-theme="dark"] {
+      --btn-primary-bg:    var(--paper);
+      --btn-primary-fg:    var(--ink);
+      --btn-primary-hover: var(--gray-200);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --btn-primary-bg:    var(--paper);
+        --btn-primary-fg:    var(--ink);
+        --btn-primary-hover: var(--gray-200);
+      }
     }
 
     body { margin: 0; }
@@ -384,11 +405,15 @@
       transition: background-color var(--dur-std) var(--ease-standard);
     }
     .btn-primary {
-      background: var(--ink);
-      color: var(--paper);
-      border-color: var(--ink);
+      background: var(--btn-primary-bg);
+      color: var(--btn-primary-fg);
+      border-color: var(--btn-primary-bg);
     }
-    .btn-primary:hover { background: var(--gray-800); text-decoration: none; }
+    .btn-primary:hover {
+      background: var(--btn-primary-hover);
+      border-color: var(--btn-primary-hover);
+      text-decoration: none;
+    }
 
     /* ---- Footer ------------------------------------------------------- */
     footer.site-footer {

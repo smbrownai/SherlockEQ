@@ -13,6 +13,27 @@
     :root {
       --container: 880px;
       --gutter: var(--s-9);
+
+      /* Primary button inverts with the theme. Hardcoding --ink as the
+         background made it identical to the page background in dark mode
+         (--bg-1 is --ink there), so the CTA vanished into the page. */
+      --btn-primary-bg:    var(--ink);
+      --btn-primary-fg:    var(--paper);
+      --btn-primary-hover: var(--gray-800);
+    }
+
+    [data-theme="dark"] {
+      --btn-primary-bg:    var(--paper);
+      --btn-primary-fg:    var(--ink);
+      --btn-primary-hover: var(--gray-200);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --btn-primary-bg:    var(--paper);
+        --btn-primary-fg:    var(--ink);
+        --btn-primary-hover: var(--gray-200);
+      }
     }
 
     body { margin: 0; }
@@ -62,6 +83,49 @@
       text-decoration: none;
     }
     .nav-links a:hover { color: var(--fg-1); text-decoration: underline; text-underline-offset: 3px; }
+
+    /* ---- 1.0 announcement --------------------------------------------- */
+    section.announce {
+      padding-top: var(--s-9);
+    }
+    .announce-inner {
+      display: flex;
+      align-items: baseline;
+      gap: var(--s-5);
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      padding: var(--s-5) var(--s-6);
+    }
+    .announce-badge {
+      flex: none;
+      background: var(--signal);
+      color: var(--paper);
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      font-weight: var(--w-medium);
+      letter-spacing: var(--ls-label);
+      padding: var(--s-1) var(--s-3);
+      border-radius: var(--r-sm);
+    }
+    .announce p {
+      margin: 0;
+      font-size: var(--fs-14);
+      line-height: var(--lh-ui);
+      color: var(--fg-2);
+    }
+    .announce p strong {
+      color: var(--fg-1);
+      font-weight: var(--w-semibold);
+    }
+    .announce a {
+      color: var(--fg-1);
+      text-decoration: underline;
+      text-decoration-color: var(--line-2);
+      text-underline-offset: 3px;
+      white-space: nowrap;
+    }
+    .announce a:hover { text-decoration-color: var(--fg-1); }
 
     /* ---- Hero --------------------------------------------------------- */
     section.hero {
@@ -126,11 +190,15 @@
       transition: background-color var(--dur-std) var(--ease-standard);
     }
     .btn-primary {
-      background: var(--ink);
-      color: var(--paper);
-      border-color: var(--ink);
+      background: var(--btn-primary-bg);
+      color: var(--btn-primary-fg);
+      border-color: var(--btn-primary-bg);
     }
-    .btn-primary:hover { background: var(--gray-800); text-decoration: none; }
+    .btn-primary:hover {
+      background: var(--btn-primary-hover);
+      border-color: var(--btn-primary-hover);
+      text-decoration: none;
+    }
     .btn-secondary {
       background: transparent;
       color: var(--fg-1);
@@ -490,6 +558,7 @@
 
     /* ---- Responsive --------------------------------------------------- */
     @media (max-width: 720px) {
+      .announce-inner { flex-direction: column; align-items: flex-start; gap: var(--s-4); }
       .hero-grid { grid-template-columns: 1fr; gap: var(--s-9); }
       .hero-icon { width: 128px; height: 128px; border-radius: 24px; }
       .hero h1 { font-size: var(--fs-36); }
@@ -526,6 +595,20 @@
       </nav>
     </div>
   </header>
+
+  <!-- =================================================================
+       1.0 announcement
+       ================================================================= -->
+  <section class="announce" aria-label="Release announcement">
+    <div class="container">
+      <div class="announce-inner">
+        <span class="announce-badge">1.0</span>
+        <p>
+          <strong>SherlockEQ 1.0 is here.</strong> Out of beta after 37 releases on the 0.x line. Nothing changed from 0.9.8 — that is the point: the last release had nothing left to fix, so the version number caught up. <a href="release-notes.html#v1.0.0">Release notes</a>
+        </p>
+      </div>
+    </div>
+  </section>
 
   <!-- =================================================================
        Hero
