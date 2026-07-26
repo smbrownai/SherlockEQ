@@ -70,6 +70,37 @@ struct VUMeterCalibrationTests {
         #expect(abs(a - (atEar - 70)) < 0.1)
     }
 
+    @Test func uncalibratedFallsBackToStandardDigitalSoNormalProgramDoesNotPeg() {
+        // Regression for the pegging bug: an UNCALIBRATED user gets the default
+        // 100 dB-SPL assumption, so the comfortable reference is 70 − 100 =
+        // −30 dBFS. Typical program material (RMS −14…−24 dBFS) then pegs.
+        // AudioState.analogVUCalibration falls back to .standardDigital()
+        // (−18 dBFS) when uncalibrated, which keeps that same material on the
+        // readable part of the dial.
+        let topOfDial = VUScale.ticks.last!.vu   // +3 VU
+        let botOfDial = VUScale.ticks.first!.vu  // −20 VU
+
+        // Typical program material lands on the readable dial at −18, but pegs
+        // at the uncalibrated comfortable −30 reference.
+        for rms in [-20.0, -24.0] {
+            let standard = steadyVU(rms: amplitude(dbfs: rms), referenceDBFS: -18)
+            #expect(standard <= topOfDial && standard >= botOfDial,
+                    "at −18 ref, RMS \(rms) → VU \(standard) should sit on the dial")
+            let comfortUncal = steadyVU(rms: amplitude(dbfs: rms), referenceDBFS: -30)
+            #expect(comfortUncal > topOfDial, "at −30 ref, RMS \(rms) pegs — the bug")
+        }
+
+        // Across the whole normal range (incl. a hot −14 master that may still
+        // nudge the peg), the −18 fallback always reads ~12 dB lower than the
+        // buggy −30 reference — the difference between "reads level" and
+        // "welded to the ceiling".
+        for rms in [-14.0, -20.0, -24.0, -30.0] {
+            let standard = steadyVU(rms: amplitude(dbfs: rms), referenceDBFS: -18)
+            let comfortUncal = steadyVU(rms: amplitude(dbfs: rms), referenceDBFS: -30)
+            #expect(comfortUncal - standard > 11.0)
+        }
+    }
+
     @Test func quietMasterNoLongerPinsTheFloorWhenListenedAtComfort() {
         // Regression. A −45 dBFS RMS signal (a quiet / normalized master).
         // Old behaviour: fixed −18 dBFS reference → VU = −45 − (−18) = −27,

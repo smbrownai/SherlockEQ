@@ -213,18 +213,27 @@ final class AudioState: ObservableObject {
     /// the digital meter's moderate line.
     static let vuZeroAnchorDBA: Double = 70
 
-    /// 0 VU reference (in dBFS) for the analog VU meters, derived from the
-    /// live calibration so the needle reads **at-ear dBA − 70**: comfortable
-    /// listening rides near 0 VU and the dial responds to the volume knob
-    /// (via `effectiveCalibrationOffsetDBA`, which tracks it). This replaces
-    /// a fixed −18 dBFS reference that keyed off raw digital level alone, so
-    /// quiet or loudness-normalized program material pinned the needle at the
-    /// dial's floor no matter how loud you were actually listening. When
-    /// uncalibrated it leans on the same default SPL assumption the dose
-    /// meter uses (surfaced as "approximate" elsewhere); the caption reads
-    /// "0 VU = Comfortable level" rather than a precise dBFS figure.
+    /// 0 VU reference (in dBFS) for the analog VU meters.
+    ///
+    /// **Calibrated:** derived from the live calibration so the needle reads
+    /// **at-ear dBA − 70** — comfortable listening rides near 0 VU and the dial
+    /// responds to the volume knob (via `effectiveCalibrationOffsetDBA`, which
+    /// tracks it).
+    ///
+    /// **Uncalibrated (the common case): fall back to the standard digital
+    /// reference (0 VU = −18 dBFS).** The at-ear-loudness model is only
+    /// meaningful with a real SPL calibration; without one, the default
+    /// 100 dB-SPL assumption places typical program material (RMS ≈ −14…−24
+    /// dBFS) at 76–86 dBA — well above the 70 dBA anchor — which *pegs* the
+    /// needle for nearly everything. A digital reference keeps normal program
+    /// centered on the dial, which is what an uncalibrated VU should show.
+    /// (The earlier "always fall through to comfortable" choice was wrong for
+    /// exactly this reason: the VU needle is far more reference-sensitive than
+    /// the digital meter's coarse colour zones, which can share the default
+    /// offset without visibly breaking.)
     var analogVUCalibration: VUCalibration {
-        .comfortableListening(referenceDBFS: Self.vuZeroAnchorDBA - effectiveCalibrationOffsetDBA)
+        guard hasUserCalibration else { return .standardDigital() }
+        return .comfortableListening(referenceDBFS: Self.vuZeroAnchorDBA - effectiveCalibrationOffsetDBA)
     }
 
     /// Volume-tracking condition for the Safe Listening status row. Derived
