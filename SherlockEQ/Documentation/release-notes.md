@@ -20,6 +20,14 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 1.0.1
+
+A small fix for the analog VU meter, which could sit pinned at the top of the dial during normal listening. Nothing else changes, and no settings move.
+
+**Fixed**
+
+- **The analog VU meter reads the signal again.** On the Analog Control Unit and the monitoring sidebar, the needle could stay pegged at the top of the dial for most material, so it wasn't showing you anything. It now rests around the middle of the dial at a normal listening level and moves with the audio. If you've set your playback calibration in Safe Listening, the dial is referenced to your comfortable level; if not, it uses a standard reference so ordinary program material sits mid-dial.
+
 ## 1.0.0
 
 SherlockEQ leaves beta. This is the first release without a leading zero, and it is deliberately not a feature release: the app here is the same app that shipped as 0.9.8, unchanged. What changed is the label. After a run of releases that added the last of the 1.0 work and then went quiet on fixes, the version number now says what the app has been for a while — finished enough to stand on its own.
