@@ -38,6 +38,15 @@
 
     body { margin: 0; }
 
+    html {
+      scroll-behavior: smooth;
+      /* Keep anchor targets clear of the sticky nav. */
+      scroll-padding-top: 72px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+    }
+
     .container {
       max-width: var(--container);
       margin: 0 auto;
@@ -46,8 +55,24 @@
     }
 
     /* ---- Nav ---------------------------------------------------------- */
+    /* Sticky top bar: transparent at the top of the page, frosted with a
+       hairline divider once the reader scrolls past the fold. */
     header.nav {
-      padding-top: var(--s-9);
+      position: sticky;
+      top: 0;
+      z-index: var(--z-sticky);
+      padding-top: var(--s-6);
+      padding-bottom: var(--s-6);
+      border-bottom: 1px solid transparent;
+      transition:
+        background-color var(--dur-std) var(--ease-standard),
+        border-color var(--dur-std) var(--ease-standard);
+    }
+    header.nav.scrolled {
+      background: color-mix(in srgb, var(--bg-1) 85%, transparent);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom-color: var(--line);
     }
     .nav-inner {
       display: flex;
@@ -316,43 +341,114 @@
       margin: 0;
     }
 
-    /* ---- Screenshots -------------------------------------------------- */
-    .shots {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: var(--s-9);
-      align-items: start;
-    }
-    .shot {
-      display: flex;
-      flex-direction: column;
-      gap: var(--s-4);
-      margin: 0;
-    }
-    .shot img {
-      width: 100%;
-      height: auto;
-      display: block;
-      border-radius: var(--r-md);
+    /* ---- Screenshots (tabbed showcase) -------------------------------- */
+    .showcase {
+      background: var(--bg-1);
       border: 1px solid var(--line);
-      box-shadow: var(--shadow-1);
-      background: var(--bg-2);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow-2);
+      overflow: hidden;
     }
-    .shot--narrow img { max-width: 480px; }
-    .shot .cap {
+    .showcase-bar {
       display: flex;
-      align-items: baseline;
-      gap: var(--s-4);
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--s-7);
+      padding: var(--s-5) var(--s-6);
+      background: var(--bg-2);
+      border-bottom: 1px solid var(--line);
     }
-    .shot .cap .key {
+    .showcase-heading {
+      display: flex;
+      align-items: center;
+      gap: var(--s-4);
+      min-width: 0;
+    }
+    .showcase-heading img {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--r-sm);
+      flex: none;
+    }
+    .showcase-heading span {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .showcase-heading strong {
+      font-size: var(--fs-13);
+      font-weight: var(--w-medium);
+      color: var(--fg-1);
+      letter-spacing: var(--ls-normal);
+    }
+    .showcase-heading small {
       font-family: var(--font-mono);
       font-size: var(--fs-12);
       color: var(--fg-3);
       text-transform: uppercase;
       letter-spacing: var(--ls-label);
-      flex-shrink: 0;
     }
-    .shot .cap .label {
+    .showcase-tabs {
+      display: flex;
+      gap: var(--s-2);
+      padding: var(--s-1);
+      background: var(--bg-3);
+      border-radius: var(--r-md);
+      flex: none;
+    }
+    .showcase-tabs button {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--fg-2);
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+      padding: var(--s-3) var(--s-5);
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      transition:
+        background-color var(--dur-micro) var(--ease-standard),
+        color var(--dur-micro) var(--ease-standard);
+    }
+    .showcase-tabs button:hover { color: var(--fg-1); }
+    .showcase-tabs button.active {
+      background: var(--fg-1);
+      color: var(--bg-1);
+    }
+    .showcase-frame {
+      position: relative;
+      aspect-ratio: 1478 / 924;
+      background: var(--bg-2);
+      overflow: hidden;
+    }
+    .showcase-frame img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+      transition: opacity var(--dur-std) var(--ease-standard);
+    }
+    .showcase-frame img.switching { opacity: 0; }
+    .showcase-caption {
+      display: flex;
+      align-items: baseline;
+      gap: var(--s-5);
+      padding: var(--s-5) var(--s-6);
+      border-top: 1px solid var(--line);
+      background: var(--bg-2);
+    }
+    .showcase-caption .key {
+      font-family: var(--font-mono);
+      font-size: var(--fs-12);
+      color: var(--fg-3);
+      text-transform: uppercase;
+      letter-spacing: var(--ls-label);
+      flex: none;
+    }
+    .showcase-caption p {
+      margin: 0;
       font-size: var(--fs-14);
       color: var(--fg-2);
       line-height: var(--lh-ui);
@@ -563,7 +659,9 @@
       .hero-icon { width: 128px; height: 128px; border-radius: 24px; }
       .hero h1 { font-size: var(--fs-36); }
       .pillars { grid-template-columns: 1fr; }
-      .shots { grid-template-columns: 1fr; }
+      .showcase-bar { flex-direction: column; align-items: stretch; gap: var(--s-5); }
+      .showcase-tabs { width: 100%; }
+      .showcase-tabs button { flex: 1; padding-inline: var(--s-3); text-align: center; }
       .specs-grid { gap: var(--s-7); }
       .spec { flex: 1 1 100%; }
       .install-grid { grid-template-columns: 1fr; }
@@ -725,16 +823,28 @@
         <span class="index">SCREENSHOTS</span>
       </div>
 
-      <div class="shots">
-        <figure class="shot">
-          <img src="assets/screenshot-1.png" alt="SherlockEQ's Profiles view — the built-in Music Balanced profile open for editing, with its description and Music / Everyday / Balanced tags. Summary chips show Output device: Any device, Headphone correction: None, Hearing adjustment: No audiogram, and Per-ear: Same for both ears. Sections below cover Identity, Device and headphones, and Hearing personalization. The sidebar lists Equalizer, Audiogram, Adaptive Comfort, Tinnitus Tools, Safe Listening, Health & Safety, and Settings." loading="lazy" />
-        </figure>
-        <figure class="shot">
-          <img src="assets/screenshot-2.png" alt="SherlockEQ's Equalizer — a ten-band graphic EQ on the octave grid from 31 Hz to 16 kHz, drawn as a smooth response curve over a live purple spectrum, with the Output, Input, Manual EQ, and Safety lenses toggled on. Each band is labelled by its role (Rumble, Bass, Warmth, Voice body, Clarity, Sibilance, Air) and the Music balance preset is selected." loading="lazy" />
-        </figure>
-        <figure class="shot">
-          <img src="assets/screenshot-3.png" alt="SherlockEQ's Equalizer with per-ear adjustment on — separate blue Left and red Right response curves, and stacked per-ear gain values above each band slider. The right monitoring sidebar shows L/R output-level meters, a Master gain control, a Balance control centered, and today's listening Exposure at 0 percent." loading="lazy" />
-        </figure>
+      <div class="showcase">
+        <div class="showcase-bar">
+          <div class="showcase-heading">
+            <img src="assets/sherlockeq-mark.png" alt="" />
+            <span>
+              <strong>SherlockEQ, running on macOS</strong>
+              <small>Actual app UI · captured on macOS</small>
+            </span>
+          </div>
+          <div class="showcase-tabs" role="tablist" aria-label="SherlockEQ screens">
+            <button class="active" type="button" role="tab" aria-selected="true" data-screen="profiles">Profiles</button>
+            <button type="button" role="tab" aria-selected="false" data-screen="equalizer">Equalizer</button>
+            <button type="button" role="tab" aria-selected="false" data-screen="perear">Per-ear</button>
+          </div>
+        </div>
+        <div class="showcase-frame">
+          <img src="assets/screenshot-1.png" alt="SherlockEQ's Profiles view — the built-in Music Balanced profile open for editing, with its description and Music / Everyday / Balanced tags. Summary chips show Output device: Any device, Headphone correction: None, Hearing adjustment: No audiogram, and Per-ear: Same for both ears. Sections below cover Identity, Device and headphones, and Hearing personalization. The sidebar lists Equalizer, Audiogram, Adaptive Comfort, Tinnitus Tools, Safe Listening, Health & Safety, and Settings." data-showcase-img />
+        </div>
+        <div class="showcase-caption">
+          <span class="key" data-screen-label>01 / PROFILES</span>
+          <p data-screen-caption>One profile per situation — output device, headphone correction, and hearing adjustment travel together and switch in a click.</p>
+        </div>
       </div>
     </div>
   </section>
@@ -935,6 +1045,74 @@ brew install --cask sherlockeq</code></pre>
   </footer>
 
   <script>
+  (function () {
+    'use strict';
+
+    /* ---- Sticky nav: frost + hairline once scrolled past the top ---- */
+    var nav = document.querySelector('header.nav');
+    if (nav) {
+      var onScroll = function () {
+        nav.classList.toggle('scrolled', window.scrollY > 8);
+      };
+      onScroll();
+      window.addEventListener('scroll', onScroll, { passive: true });
+    }
+
+    /* ---- Tabbed screenshot showcase --------------------------------- */
+    var screens = {
+      profiles: {
+        src: 'assets/screenshot-1.png',
+        alt: "SherlockEQ's Profiles view — the built-in Music Balanced profile open for editing, with its description and Music / Everyday / Balanced tags. Summary chips show Output device: Any device, Headphone correction: None, Hearing adjustment: No audiogram, and Per-ear: Same for both ears. Sections below cover Identity, Device and headphones, and Hearing personalization. The sidebar lists Equalizer, Audiogram, Adaptive Comfort, Tinnitus Tools, Safe Listening, Health & Safety, and Settings.",
+        label: '01 / PROFILES',
+        caption: 'One profile per situation — output device, headphone correction, and hearing adjustment travel together and switch in a click.'
+      },
+      equalizer: {
+        src: 'assets/screenshot-2.png',
+        alt: "SherlockEQ's Equalizer — a ten-band graphic EQ on the octave grid from 31 Hz to 16 kHz, drawn as a smooth response curve over a live purple spectrum, with the Output, Input, Manual EQ, and Safety lenses toggled on. Each band is labelled by its role (Rumble, Bass, Warmth, Voice body, Clarity, Sibilance, Air) and the Music balance preset is selected.",
+        label: '02 / EQUALIZER',
+        caption: 'A ten-band graphic EQ drawn over a live spectrum, with Output, Input, Manual EQ, and Safety lenses you can toggle on or off.'
+      },
+      perear: {
+        src: 'assets/screenshot-3.png',
+        alt: "SherlockEQ's Equalizer with per-ear adjustment on — separate blue Left and red Right response curves, and stacked per-ear gain values above each band slider. The right monitoring sidebar shows L/R output-level meters, a Master gain control, a Balance control centered, and today's listening Exposure at 0 percent.",
+        label: '03 / PER-EAR',
+        caption: 'Turn on per-ear adjustment for independent Left and Right curves, with live L/R meters, master gain, balance, and today’s exposure.'
+      }
+    };
+
+    /* Preload the other screens so tab switches are instant. */
+    Object.keys(screens).forEach(function (key) {
+      var pre = new Image();
+      pre.src = screens[key].src;
+    });
+
+    var img = document.querySelector('[data-showcase-img]');
+    var labelEl = document.querySelector('[data-screen-label]');
+    var captionEl = document.querySelector('[data-screen-caption]');
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-screen]'));
+
+    tabs.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var screen = screens[btn.dataset.screen];
+        if (!screen || !img) return;
+
+        tabs.forEach(function (tab) {
+          var isActive = tab === btn;
+          tab.classList.toggle('active', isActive);
+          tab.setAttribute('aria-selected', String(isActive));
+        });
+
+        img.classList.add('switching');
+        window.setTimeout(function () {
+          img.src = screen.src;
+          img.alt = screen.alt;
+          if (labelEl) labelEl.textContent = screen.label;
+          if (captionEl) captionEl.textContent = screen.caption;
+          img.classList.remove('switching');
+        }, 160);
+      });
+    });
+  })();
   </script>
 </body>
 </html>
