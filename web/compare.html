@@ -38,6 +38,15 @@
 
     body { margin: 0; }
 
+    :root { --nav-h: 55px; }
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: var(--nav-h);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+    }
+
     .container {
       max-width: var(--container);
       margin: 0 auto;
@@ -46,7 +55,25 @@
     }
 
     /* ---- Nav ---------------------------------------------------------- */
-    header.nav { padding-top: var(--s-9); }
+    /* Sticky top bar: transparent at the top, frosted with a hairline
+       once the reader scrolls. */
+    header.nav {
+      position: sticky;
+      top: 0;
+      z-index: var(--z-sticky);
+      padding-top: var(--s-6);
+      padding-bottom: var(--s-6);
+      border-bottom: 1px solid transparent;
+      transition:
+        background-color var(--dur-std) var(--ease-standard),
+        border-color var(--dur-std) var(--ease-standard);
+    }
+    header.nav.scrolled {
+      background: color-mix(in srgb, var(--bg-1) 85%, transparent);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom-color: var(--line);
+    }
     .nav-inner {
       display: flex;
       align-items: center;
@@ -198,7 +225,8 @@
       border-bottom: 1px solid var(--line);
       background: var(--bg-2);
       position: sticky;
-      top: 0;
+      /* Pin below the sticky nav, not under it. */
+      top: var(--nav-h);
     }
     table.matrix thead th.row-head {
       text-align: left;
@@ -841,6 +869,16 @@
   </footer>
 
   <script>
+  (function () {
+    'use strict';
+    var nav = document.querySelector('header.nav');
+    if (!nav) return;
+    var onScroll = function () {
+      nav.classList.toggle('scrolled', window.scrollY > 8);
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+  })();
   </script>
 </body>
 </html>
