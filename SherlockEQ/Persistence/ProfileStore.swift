@@ -294,7 +294,7 @@ final class ProfileStore: ObservableObject {
     @discardableResult
     func importProfile(from url: URL) throws -> HearingProfile {
         try tracking("Import") {
-            let data = try Data(contentsOf: url)
+            let data = try FileImportLimit.data(at: url)
             var imported = try decoder.decode(HearingProfile.self, from: data)
             if profiles.contains(where: { $0.id == imported.id }) {
                 imported.id = UUID()
@@ -323,7 +323,7 @@ final class ProfileStore: ObservableObject {
     /// profile via `HearingProfile.applyingAudiogram(_:modifiedAt:)` and save.
     func importAudiogram(from url: URL) throws -> AudiogramInterchange {
         try tracking("Import audiogram") {
-            let data = try Data(contentsOf: url)
+            let data = try FileImportLimit.data(at: url)
             return try decoder.decode(AudiogramInterchange.self, from: data)
         }
     }
