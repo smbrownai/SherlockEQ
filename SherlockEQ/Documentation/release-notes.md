@@ -20,6 +20,21 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 1.0.2
+
+A maintenance release: one robustness fix for importing files, and two security-hardening changes under the hood. How you use the app doesn't change, and no settings move.
+
+**Fixed**
+
+- **A very large or unexpected import file can no longer freeze the app.** When you import a headphone-correction file, a profile, or an audiogram, SherlockEQ now checks the file first and reads at most 8 MB. Before, pointing the importer at an unusually large file — or at something that wasn't really one of those files — could lock up the window while the whole thing was read. Imports now stop early and show a clear message instead of hanging. Real correction files, profiles, and audiograms are only a few kilobytes, so ordinary imports are unaffected.
+
+**Security**
+
+Two defense-in-depth changes. Neither responds to any known problem in the field; they close small gaps found in an internal review.
+
+- **Headphone-correction downloads stay on GitHub.** When SherlockEQ fetches an AutoEQ headphone-correction profile, it now refuses any redirect that would send the request to a server outside GitHub's content host. That keeps an intercepted or misbehaving response from sourcing correction data from somewhere unexpected. Downloads that stay on GitHub — the normal case — work exactly as before.
+- **The command-line tool's profile import is hardened against symlink swaps.** The optional `sherlockeq` command-line helper imports a profile from a path you give it. It now opens that file without following a symbolic link, closing a brief window in which the path could be swapped between the safety check and the read. This affects only the command-line tool; the app's own *Import…* button is unchanged.
+
 ## 1.0.1
 
 A small fix for the analog VU meter, which could sit pinned at the top of the dial during normal listening. Nothing else changes, and no settings move.
