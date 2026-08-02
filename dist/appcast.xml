@@ -21,6 +21,84 @@
     <!-- NEW RELEASES GO BELOW THIS LINE -->
 
     <item>
+      <title>SherlockEQ 1.0.2</title>
+      <pubDate>Sun, 02 Aug 2026 13:31:32 +0000</pubDate>
+      <sparkle:version>10002</sparkle:version>
+      <sparkle:shortVersionString>1.0.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<h2>SherlockEQ 1.0.2</h2>
+
+<p>
+  A maintenance release: one robustness fix for importing files, and two
+  security-hardening changes under the hood. How you use the app doesn't
+  change, and no settings move.
+</p>
+
+<h3>Fixed</h3>
+
+<ul>
+  <li>
+    <strong>A very large or unexpected import file can no longer freeze the app.</strong>
+    When you import a headphone-correction file, a profile, or an audiogram,
+    SherlockEQ now checks the file first and reads at most 8&nbsp;MB. Before,
+    pointing the importer at an unusually large file — or at something that
+    wasn't really one of those files — could lock up the window while the whole
+    thing was read. Imports now stop early and show a clear message instead of
+    hanging. Real correction files, profiles, and audiograms are only a few
+    kilobytes, so ordinary imports are unaffected.
+  </li>
+</ul>
+
+<h3>Security</h3>
+
+<p>
+  Two defense-in-depth changes. Neither responds to any known problem in the
+  field; they close small gaps found in an internal review.
+</p>
+
+<ul>
+  <li>
+    <strong>Headphone-correction downloads stay on GitHub.</strong>
+    When SherlockEQ fetches an AutoEQ headphone-correction profile, it now
+    refuses any redirect that would send the request to a server outside
+    GitHub's content host. That keeps an intercepted or misbehaving response
+    from sourcing correction data from somewhere unexpected. Downloads that
+    stay on GitHub — the normal case — work exactly as before.
+  </li>
+  <li>
+    <strong>The command-line tool's profile import is hardened against symlink swaps.</strong>
+    The optional <code>sherlockeq</code> command-line helper imports a profile
+    from a path you give it. It now opens that file without following a
+    symbolic link, closing a brief window in which the path could be swapped
+    between the safety check and the read. This affects only the command-line
+    tool; the app's own <em>Import…</em> button is unchanged.
+  </li>
+</ul>
+
+<h3>Not a medical device</h3>
+
+<p>
+  SherlockEQ is not a healthcare or medical application. It does not diagnose,
+  treat, measure, or monitor any hearing condition, tinnitus, or disability.
+  For concerns about your hearing, consult a doctor, audiologist, or licensed
+  healthcare professional.
+</p>
+
+<h3>Previous release</h3>
+
+<p>
+  See the
+  <a href="https://github.com/smbrownai/SherlockEQ/releases/tag/v1.0.1">1.0.1 release notes</a>
+  for what shipped in the prior version.
+</p>
+]]></description>
+      <enclosure url="https://github.com/smbrownai/SherlockEQ/releases/download/v1.0.2/SherlockEQ-1.0.2.dmg"
+                 type="application/octet-stream"
+                 sparkle:edSignature="+5gzL+MyeBiwlqFUvHzpJ6BQ6yuWltdythgAL5VhtFmUKAOm3fSP5GXJhcMN1kLz6b2B0k4hNjHOwOsf/yM6DA==" length="11149369" />
+    </item>
+
+    <item>
       <title>SherlockEQ 1.0.1</title>
       <pubDate>Mon, 27 Jul 2026 01:47:14 +0000</pubDate>
       <sparkle:version>10001</sparkle:version>
