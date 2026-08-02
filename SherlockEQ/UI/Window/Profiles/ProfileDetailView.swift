@@ -880,8 +880,27 @@ struct ProfileDetailView: View {
     }
 
     private func applyAutoEQ(at url: URL, name: String, to profile: HearingProfile) {
-        guard let text = try? String(contentsOf: url, encoding: .utf8),
-              let parsed = AutoEQParser.parse(text) else { return }
+        // Read bounded (audit F-1): a huge picked file would otherwise block
+        // the main thread while it buffers. Surface failures instead of the
+        // former silent return — an oversized or unparseable pick left the
+        // user with no feedback at all.
+        let text: String
+        do {
+            text = try FileImportLimit.string(at: url)
+        } catch {
+            audioState.noticeCenter.showNotice(TransientNotice(
+                severity: .error,
+                message: "Couldn't import “\(name)”: \(error.localizedDescription)"
+            ))
+            return
+        }
+        guard let parsed = AutoEQParser.parse(text) else {
+            audioState.noticeCenter.showNotice(TransientNotice(
+                severity: .error,
+                message: "“\(name)” isn't a readable AutoEQ ParametricEQ file."
+            ))
+            return
+        }
         let deviceUID = audioState.tap.currentOutputDeviceUID
         let deviceName = audioState.tap.currentOutputDeviceName
         update(profile) {
