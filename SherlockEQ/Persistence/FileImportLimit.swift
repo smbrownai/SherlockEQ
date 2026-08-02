@@ -44,6 +44,16 @@ enum FileImportLimit {
         }
     }
 
+    /// Thrown when a `dataNoFollow` open hit a symlink at the final path
+    /// component. Kept distinct from a plain read failure so the CLI can report
+    /// the refusal precisely.
+    struct SymlinkRefusedError: LocalizedError, Equatable {
+        let name: String
+        var errorDescription: String? {
+            "Refusing to import through a symlink (\(name))."
+        }
+    }
+
     /// Throw `FileTooLargeError` if `url` is larger than `maxBytes`. Reads only
     /// the filesystem's size metadata — never any file contents.
     static func check(_ url: URL) throws {
@@ -63,5 +73,42 @@ enum FileImportLimit {
     static func string(at url: URL, encoding: String.Encoding = .utf8) throws -> String {
         try check(url)
         return try String(contentsOf: url, encoding: encoding)
+    }
+
+    /// Bytes of the file at `url`, read through an `O_NOFOLLOW` open so a
+    /// symlink at the final path component is refused *at open time*.
+    ///
+    /// Use this for paths that arrived from an untrusted, unauthenticated
+    /// caller — the CLI control port (audit I-1) — where the separate lstat
+    /// check the handler already does leaves a time-of-check/time-of-use gap:
+    /// the path can be swapped for a symlink between that check and the read.
+    /// Opening the very descriptor we then read from, with the kernel enforcing
+    /// `O_NOFOLLOW`, closes the race. The 8 MB cap (F-1) is applied on the same
+    /// descriptor, so the size check can't be raced either. `data(at:)` — which
+    /// follows symlinks — stays the path for user-picked GUI imports, where the
+    /// file was just chosen in an open panel.
+    static func dataNoFollow(at url: URL) throws -> Data {
+        let fd = open(url.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+        guard fd >= 0 else {
+            let code = errno
+            if code == ELOOP {
+                throw SymlinkRefusedError(name: url.lastPathComponent)
+            }
+            throw NSError(
+                domain: NSPOSIXErrorDomain,
+                code: Int(code),
+                userInfo: [NSLocalizedDescriptionKey: String(cString: strerror(code))]
+            )
+        }
+        // FileHandle takes ownership and closes the descriptor on dealloc,
+        // including if the read below throws.
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        // Read one byte past the cap so an over-size file is refused without
+        // ever buffering the whole thing.
+        let data = try handle.read(upToCount: maxBytes + 1) ?? Data()
+        guard data.count <= maxBytes else {
+            throw FileTooLargeError(byteCount: nil)
+        }
+        return data
     }
 }

@@ -46,6 +46,11 @@ final class AutoEQRemoteService: ObservableObject {
     // MARK: - Config
 
     private let session: URLSession
+
+    /// Stateless redirect pin passed per-task to `session.data(from:delegate:)`
+    /// (audit N-3). One shared instance is fine — it holds no request state.
+    private static let redirectGuard = AutoEQRedirectGuard()
+
     private let log = Logger(subsystem: "com.shawnbrown.SherlockEQ", category: "AutoEQRemoteService")
 
     /// AutoEQ's catalog is published from a single repo. The path inside
@@ -256,7 +261,9 @@ final class AutoEQRemoteService: ObservableObject {
     /// AutoEQ's files are ASCII so no need for fallback encodings.
     private func fetchString(from url: URL) async throws -> String {
         do {
-            let (data, response) = try await session.data(from: url)
+            // Pin redirects to GitHub's content family so a 3xx can't source
+            // the body from an attacker-chosen host (audit N-3).
+            let (data, response) = try await session.data(from: url, delegate: Self.redirectGuard)
             if let http = response as? HTTPURLResponse {
                 switch http.statusCode {
                 case 200..<300:

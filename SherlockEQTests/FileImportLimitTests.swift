@@ -91,4 +91,34 @@ struct FileImportLimitTests {
             _ = try FileImportLimit.string(at: url)
         }
     }
+
+    // MARK: - O_NOFOLLOW path (audit I-1)
+
+    @Test func noFollowReadsARegularFile() throws {
+        let url = try makeTextFile("{\"name\":\"ok\"}")
+        defer { remove(url) }
+        let data = try FileImportLimit.dataNoFollow(at: url)
+        #expect(String(data: data, encoding: .utf8) == "{\"name\":\"ok\"}")
+    }
+
+    @Test func noFollowRefusesASymlinkAtTheFinalComponent() throws {
+        let target = try makeTextFile("{\"secret\":true}")
+        let link = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fil-link-\(UUID().uuidString).json")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+        defer { remove(link); remove(target) }
+
+        // Following the link would read the target; NOFOLLOW must refuse it.
+        #expect(throws: FileImportLimit.SymlinkRefusedError.self) {
+            _ = try FileImportLimit.dataNoFollow(at: link)
+        }
+    }
+
+    @Test func noFollowStillEnforcesTheCap() throws {
+        let url = try makeFile(byteCount: FileImportLimit.maxBytes + 1)
+        defer { remove(url) }
+        #expect(throws: FileImportLimit.FileTooLargeError.self) {
+            _ = try FileImportLimit.dataNoFollow(at: url)
+        }
+    }
 }

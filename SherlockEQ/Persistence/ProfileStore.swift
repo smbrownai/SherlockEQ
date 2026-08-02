@@ -291,10 +291,16 @@ final class ProfileStore: ObservableObject {
     /// current store, force `isBuiltIn = false` (the imported copy is the
     /// user's own), and persist it. Returns the saved profile so callers
     /// can switch selection or activate it.
+    /// - Parameter noFollow: when true, read through an `O_NOFOLLOW` open that
+    ///   refuses a symlink at the final path component (audit I-1). The CLI
+    ///   control port passes this — its caller-supplied path is untrusted and
+    ///   the handler's own symlink check is otherwise a separate, raceable step.
+    ///   GUI imports leave it false (the file was just picked in an open panel).
     @discardableResult
-    func importProfile(from url: URL) throws -> HearingProfile {
+    func importProfile(from url: URL, noFollow: Bool = false) throws -> HearingProfile {
         try tracking("Import") {
-            let data = try FileImportLimit.data(at: url)
+            let data = try noFollow ? FileImportLimit.dataNoFollow(at: url)
+                                    : FileImportLimit.data(at: url)
             var imported = try decoder.decode(HearingProfile.self, from: data)
             if profiles.contains(where: { $0.id == imported.id }) {
                 imported.id = UUID()

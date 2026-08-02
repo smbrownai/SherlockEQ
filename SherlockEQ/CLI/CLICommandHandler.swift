@@ -239,7 +239,11 @@ final class CLICommandHandler {
             return Self.fail(code: "not_found", "No such file: \(path)")
         }
         do {
-            let imported = try profileStore.importProfile(from: url)
+            // noFollow: this path came over the unauthenticated control port.
+            // The symlink lstat above is a check separate from the read, so it
+            // races; the O_NOFOLLOW open refuses a swapped-in symlink at read
+            // time (audit I-1).
+            let imported = try profileStore.importProfile(from: url, noFollow: true)
             return Self.ok(["imported": ["name": imported.name, "id": imported.id.uuidString]])
         } catch {
             return Self.fail(code: "import_failed", "Could not import profile: \(error.localizedDescription)")
