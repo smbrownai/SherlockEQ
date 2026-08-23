@@ -32,7 +32,10 @@ struct AnalogVUMeter: View {
         case stereo
     }
 
-    @ObservedObject var monitor: StereoMonitor
+    /// Subscribes to the monitor's 60 Hz RMS pulse specifically, not to the
+    /// monitor as a whole — this meter integrates its own ballistics from that
+    /// pulse and doesn't read the peaks at all.
+    @ObservedObject private var rms: StereoMonitor.RMSClock
     var mode: Mode = .stereo
     var calibration: VUCalibration = .standardDigital()
     /// Stack dials vertically instead of side-by-side. For narrow
@@ -45,6 +48,24 @@ struct AnalogVUMeter: View {
 
     @State private var box = BallisticsBox()
 
+    /// Written out because the memberwise init can't derive `rms` from
+    /// `monitor`. Call sites are unchanged — they still pass the monitor.
+    init(
+        monitor: StereoMonitor,
+        mode: Mode = .stereo,
+        calibration: VUCalibration = .standardDigital(),
+        vertical: Bool = false,
+        showReadout: Bool = false,
+        showCalibrationLabel: Bool = false
+    ) {
+        self._rms = ObservedObject(wrappedValue: monitor.rms)
+        self.mode = mode
+        self.calibration = calibration
+        self.vertical = vertical
+        self.showReadout = showReadout
+        self.showCalibrationLabel = showCalibrationLabel
+    }
+
     /// Per-channel ballistic state + last-tick timestamp. Stored in a
     /// reference type so the view body can integrate inline without
     /// tripping SwiftUI's "Modifying state during view update"
@@ -56,8 +77,8 @@ struct AnalogVUMeter: View {
     }
 
     var body: some View {
-        // No TimelineView — `monitor` republishes leftRMS/rightRMS on
-        // every 60 Hz tick, which drives our re-render. We compute a
+        // No TimelineView — the monitor's `RMSClock` republishes leftRMS/
+        // rightRMS on every 60 Hz tick, which drives our re-render. We compute a
         // real wall-clock dt from CACurrentMediaTime so the integrator
         // is robust to dropped frames / display refresh variation.
         let _ = updateBallistics()
@@ -87,13 +108,13 @@ struct AnalogVUMeter: View {
         let ref = calibration.referenceDBFS
         switch mode {
         case .mono:
-            let l = Double(monitor.leftRMS)
-            let r = Double(monitor.rightRMS)
+            let l = Double(rms.leftRMS)
+            let r = Double(rms.rightRMS)
             let summed = sqrt(l * l + r * r)
             box.left.update(rms: summed, referenceDBFS: ref, dt: dt)
         case .stereo:
-            box.left.update(rms: Double(monitor.leftRMS), referenceDBFS: ref, dt: dt)
-            box.right.update(rms: Double(monitor.rightRMS), referenceDBFS: ref, dt: dt)
+            box.left.update(rms: Double(rms.leftRMS), referenceDBFS: ref, dt: dt)
+            box.right.update(rms: Double(rms.rightRMS), referenceDBFS: ref, dt: dt)
         }
     }
 

@@ -182,6 +182,9 @@ struct ParametricCanvasView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
+                // Live layer 1 — the analyzer fills. Split from the curve
+                // layer below so the static chrome can keep its original
+                // z-position between them (see `CanvasChromeLayer`).
                 Canvas { context, size in
                     // Pre-EQ first so the post-EQ silhouette sits ON TOP
                     // of it — reads as "what's coming in" behind "what's
@@ -189,7 +192,15 @@ struct ParametricCanvasView: View {
                     if showInputSpectrum { drawPreSpectrum(context, size: size) }
                     if showOutputSpectrum { drawSpectrum(context, size: size) }
                     if showSafetyOverlay { drawSafetyOverlay(context, size: size) }
-                    drawGrid(context, size: size)
+                }
+                .allowsHitTesting(false)
+                // Static chrome — the grid: above the analyzer fills, below
+                // the transfer curves. Same place it drew before.
+                CanvasChromeLayer(part: .grid, minHz: minHz, maxHz: maxHz, gainRangeDB: gainRangeDB)
+                    .equatable()
+                    .allowsHitTesting(false)
+                // Live layer 2 — transfer curves, overlays, markers, handles.
+                Canvas { context, size in
                     // Transfer curves. Consistent encoding: hue = ear
                     // (earColor active / shadowColor other), style = type
                     // (dotted EQ, dashed Correction, solid-thick Result).
@@ -228,8 +239,6 @@ struct ParametricCanvasView: View {
                     // visible — either the EQ-only trace or the Result line —
                     // so dragging works even when only Result is shown.
                     if !readOnly && (showEQCurve || showResultCurve) { drawNodes(context, size: size) }
-                    drawFrequencyLabels(context, size: size)
-                    drawDBLabels(context, size: size)
                 }
                 .contentShape(Rectangle())
                 .modifier(InteractionModifier(active: !readOnly, gesture: dragGesture(in: geo.size)))
@@ -239,6 +248,12 @@ struct ParametricCanvasView: View {
                     case .ended: hoverLocation = nil
                     }
                 }
+                // Static chrome — the axis labels, drawn last so they stay
+                // legible over every curve, exactly as they did when this was
+                // one canvas.
+                CanvasChromeLayer(part: .labels, minHz: minHz, maxHz: maxHz, gainRangeDB: gainRangeDB)
+                    .equatable()
+                    .allowsHitTesting(false)
                 // Curve legend (native text so it scales with Dynamic Type).
                 // Top-leading, click-through.
                 curveLegend
@@ -321,30 +336,6 @@ struct ParametricCanvasView: View {
             arr[i] = BiquadResponse.compositeMagnitudeDB(at: hz, bands: bands)
         }
         return arr
-    }
-
-    // MARK: - Drawing
-
-    private func drawGrid(_ context: GraphicsContext, size: CGSize) {
-        let gridColor = GraphicsContext.Shading.color(.white.opacity(a11yOpacity(0.10, reduceFactor: 2.0)))
-        let zeroColor = GraphicsContext.Shading.color(.white.opacity(a11yOpacity(0.30, reduceFactor: 2.0)))
-
-        for hz in gridFrequencies {
-            let x = xForFreq(hz, width: size.width)
-            var path = Path()
-            path.move(to: CGPoint(x: x, y: 0))
-            path.addLine(to: CGPoint(x: x, y: size.height))
-            context.stroke(path, with: gridColor, lineWidth: 0.5)
-        }
-
-        for db in stride(from: minDB, through: maxDB, by: 6) {
-            let y = yForDB(db, height: size.height)
-            var path = Path()
-            path.move(to: CGPoint(x: 0, y: y))
-            path.addLine(to: CGPoint(x: size.width, y: y))
-            let shading: GraphicsContext.Shading = (db == 0) ? zeroColor : gridColor
-            context.stroke(path, with: shading, lineWidth: db == 0 ? 1 : 0.5)
-        }
     }
 
     // MARK: - Accessibility helpers
@@ -1038,53 +1029,6 @@ struct ParametricCanvasView: View {
         return baseline - CGFloat(normalized) * (baseline - top)
     }
 
-    private func drawFrequencyLabels(_ context: GraphicsContext, size: CGSize) {
-        // `.caption` (scalable) rather than `.caption2` (smaller) so users
-        // who bump Dynamic Type get readable axis labels. The monospaced
-        // variant keeps the digits from jittering across redraws.
-        // Safe-area: edge labels (those whose natural position is near a
-        // canvas edge) are anchored to their respective EDGES rather than
-        // their centres. That guarantees they sit inside the canvas frame
-        // regardless of label width, Dynamic Type size, or the rounded
-        // corner radius — which the previous center-clamp couldn't.
-        let edgeInset: CGFloat = 18
-        let edgeProximity: CGFloat = 36  // raw-x within this from an edge → use edge anchor
-        for hz in labeledFrequencies {
-            let rawX = xForFreq(hz, width: size.width)
-            let label = formatHz(hz)
-            let text = Text(label)
-                .font(.caption.monospaced())
-                .foregroundColor(.white.opacity(a11yOpacity(0.55, reduceFactor: 1.7)))
-            let y = size.height - 14
-            if rawX < edgeProximity {
-                context.draw(text, at: CGPoint(x: edgeInset, y: y), anchor: .leading)
-            } else if rawX > size.width - edgeProximity {
-                context.draw(text, at: CGPoint(x: size.width - edgeInset, y: y), anchor: .trailing)
-            } else {
-                context.draw(text, at: CGPoint(x: rawX, y: y), anchor: .center)
-            }
-        }
-    }
-
-    private func drawDBLabels(_ context: GraphicsContext, size: CGSize) {
-        // Safe-area: clamp each label's y so the topmost (+18) and bottom-
-        // most (−18) stay inside the canvas frame instead of getting half-
-        // cropped by the rounded-rect clip. 12pt vertical inset matches the
-        // bottom frequency-label inset. Stride-by-6 plays cleanly with the
-        // ±18 dB EQ range — labels read −18 / −12 / −6 / 0 / +6 / +12 / +18.
-        let topSafe: CGFloat = 12
-        let bottomSafe: CGFloat = 12
-        for db in stride(from: minDB, through: maxDB, by: 6) {
-            let rawY = yForDB(db, height: size.height)
-            let y = max(topSafe, min(size.height - bottomSafe, rawY))
-            let label = db > 0 ? "+\(Int(db))" : "\(Int(db))"
-            let text = Text(label)
-                .font(.caption.monospaced())
-                .foregroundColor(.white.opacity(a11yOpacity(0.55, reduceFactor: 1.7)))
-            context.draw(text, at: CGPoint(x: 16, y: y), anchor: .center)
-        }
-    }
-
     // MARK: - Gesture
 
     private func dragGesture(in size: CGSize) -> some Gesture {
@@ -1153,8 +1097,157 @@ struct ParametricCanvasView: View {
             y: yForDB(band.gaindB, height: size.height)
         )
     }
+}
 
-    // MARK: - Tick generation
+/// Conditionally attaches a gesture so readOnly mode is a passive surface.
+private struct InteractionModifier<G: Gesture>: ViewModifier {
+    let active: Bool
+    let gesture: G
+    func body(content: Content) -> some View {
+        if active {
+            content.gesture(gesture)
+        } else {
+            content
+        }
+    }
+}
+
+// MARK: - Static chrome
+
+/// The parts of the canvas that never move: the log-frequency grid and the
+/// two axis-label runs.
+///
+/// These used to draw inside the same `Canvas` closure as the spectrum, which
+/// meant every analyzer frame re-resolved seven `Text` values through the full
+/// attributed-string + CoreText typesetting path — `Text.resolve…` →
+/// `NSCoreTypesetter` → `CTLineCreateWithAttributedString` — to redraw labels
+/// that hadn't changed. A Release-build sampler run put `drawFrequencyLabels`
+/// + `drawDBLabels` at ~11× the cost of the spectrum curve they annotate, with
+/// the main thread pinned near 45% and the window unable to finish a display
+/// cycle (it committed half-drawn frames instead).
+///
+/// Splitting them into their own `View` with only stable stored properties is
+/// what fixes it: SwiftUI skips the body when the host re-renders at analyzer
+/// rate, so the `Canvas` keeps its cached display list and the labels are
+/// typeset once per resize rather than once per frame. `.equatable()` at the
+/// call site makes that skip explicit rather than relying on SwiftUI's
+/// structural comparison of a view that stores a closure.
+///
+/// Same scoping idiom as the live wrapper below and the dynamics/adaptive
+/// observers — keep each re-render confined to the subtree that actually
+/// changed.
+struct CanvasChromeLayer: View, Equatable {
+    /// Which run to draw. Two instances sandwich the curve layer so each
+    /// keeps the z-position it had in the single-canvas version: grid above
+    /// the analyzer fills, labels above everything.
+    enum Part { case grid, labels }
+
+    let part: Part
+    let minHz: Double
+    let maxHz: Double
+    let gainRangeDB: ClosedRange<Double>
+
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    /// Hand-written because `@Environment` isn't `Equatable`, so Swift can't
+    /// synthesise it. Comparing the stored inputs is the whole contract:
+    /// an environment change invalidates the view through its own dependency
+    /// tracking, not through this.
+    static func == (lhs: CanvasChromeLayer, rhs: CanvasChromeLayer) -> Bool {
+        lhs.part == rhs.part
+            && lhs.minHz == rhs.minHz
+            && lhs.maxHz == rhs.maxHz
+            && lhs.gainRangeDB == rhs.gainRangeDB
+    }
+
+    private var freqAxis: LogFreqAxis { LogFreqAxis(minHz: minHz, maxHz: maxHz) }
+    private var minDB: Double { gainRangeDB.lowerBound }
+    private var maxDB: Double { gainRangeDB.upperBound }
+
+    var body: some View {
+        Canvas { context, size in
+            switch part {
+            case .grid:
+                drawGrid(context, size: size)
+            case .labels:
+                drawFrequencyLabels(context, size: size)
+                drawDBLabels(context, size: size)
+            }
+        }
+    }
+
+    // MARK: Drawing
+
+    private func drawGrid(_ context: GraphicsContext, size: CGSize) {
+        let gridColor = GraphicsContext.Shading.color(.white.opacity(a11yOpacity(0.10, reduceFactor: 2.0)))
+        let zeroColor = GraphicsContext.Shading.color(.white.opacity(a11yOpacity(0.30, reduceFactor: 2.0)))
+
+        for hz in gridFrequencies {
+            let x = xForFreq(hz, width: size.width)
+            var path = Path()
+            path.move(to: CGPoint(x: x, y: 0))
+            path.addLine(to: CGPoint(x: x, y: size.height))
+            context.stroke(path, with: gridColor, lineWidth: 0.5)
+        }
+
+        for db in stride(from: minDB, through: maxDB, by: 6) {
+            let y = yForDB(db, height: size.height)
+            var path = Path()
+            path.move(to: CGPoint(x: 0, y: y))
+            path.addLine(to: CGPoint(x: size.width, y: y))
+            let shading: GraphicsContext.Shading = (db == 0) ? zeroColor : gridColor
+            context.stroke(path, with: shading, lineWidth: db == 0 ? 1 : 0.5)
+        }
+    }
+
+    private func drawFrequencyLabels(_ context: GraphicsContext, size: CGSize) {
+        // `.caption` (scalable) rather than `.caption2` (smaller) so users
+        // who bump Dynamic Type get readable axis labels. The monospaced
+        // variant keeps the digits from jittering across redraws.
+        // Safe-area: edge labels (those whose natural position is near a
+        // canvas edge) are anchored to their respective EDGES rather than
+        // their centres. That guarantees they sit inside the canvas frame
+        // regardless of label width, Dynamic Type size, or the rounded
+        // corner radius — which the previous center-clamp couldn't.
+        let edgeInset: CGFloat = 18
+        let edgeProximity: CGFloat = 36  // raw-x within this from an edge → use edge anchor
+        for hz in labeledFrequencies {
+            let rawX = xForFreq(hz, width: size.width)
+            let label = formatHz(hz)
+            let text = Text(label)
+                .font(.caption.monospaced())
+                .foregroundColor(.white.opacity(a11yOpacity(0.55, reduceFactor: 1.7)))
+            let y = size.height - 14
+            if rawX < edgeProximity {
+                context.draw(text, at: CGPoint(x: edgeInset, y: y), anchor: .leading)
+            } else if rawX > size.width - edgeProximity {
+                context.draw(text, at: CGPoint(x: size.width - edgeInset, y: y), anchor: .trailing)
+            } else {
+                context.draw(text, at: CGPoint(x: rawX, y: y), anchor: .center)
+            }
+        }
+    }
+
+    private func drawDBLabels(_ context: GraphicsContext, size: CGSize) {
+        // Safe-area: clamp each label's y so the topmost (+18) and bottom-
+        // most (−18) stay inside the canvas frame instead of getting half-
+        // cropped by the rounded-rect clip. 12pt vertical inset matches the
+        // bottom frequency-label inset. Stride-by-6 plays cleanly with the
+        // ±18 dB EQ range — labels read −18 / −12 / −6 / 0 / +6 / +12 / +18.
+        let topSafe: CGFloat = 12
+        let bottomSafe: CGFloat = 12
+        for db in stride(from: minDB, through: maxDB, by: 6) {
+            let rawY = yForDB(db, height: size.height)
+            let y = max(topSafe, min(size.height - bottomSafe, rawY))
+            let label = db > 0 ? "+\(Int(db))" : "\(Int(db))"
+            let text = Text(label)
+                .font(.caption.monospaced())
+                .foregroundColor(.white.opacity(a11yOpacity(0.55, reduceFactor: 1.7)))
+            context.draw(text, at: CGPoint(x: 16, y: y), anchor: .center)
+        }
+    }
+
+    // MARK: Ticks
 
     private var gridFrequencies: [Double] {
         [20, 30, 50, 70, 100, 200, 300, 500, 700, 1000, 2000, 3000, 5000, 7000, 10000, 15000, 20000]
@@ -1173,18 +1266,24 @@ struct ParametricCanvasView: View {
         }
         return "\(Int(hz))"
     }
-}
 
-/// Conditionally attaches a gesture so readOnly mode is a passive surface.
-private struct InteractionModifier<G: Gesture>: ViewModifier {
-    let active: Bool
-    let gesture: G
-    func body(content: Content) -> some View {
-        if active {
-            content.gesture(gesture)
-        } else {
-            content
-        }
+    // MARK: Coordinate maps
+
+    private func xForFreq(_ hz: Double, width: CGFloat) -> CGFloat {
+        freqAxis.x(forHz: hz, width: width)
+    }
+
+    private func yForDB(_ db: Double, height: CGFloat) -> CGFloat {
+        height * CGFloat((maxDB - db) / (maxDB - minDB))
+    }
+
+    // MARK: Accessibility
+
+    /// Scale `alpha` by `factor` when `accessibilityReduceTransparency` is
+    /// on so translucent fills become legible against the dark background.
+    /// 1.0 hard-caps so we don't pass invalid alpha to Color.
+    private func a11yOpacity(_ alpha: Double, reduceFactor: Double = 2.5) -> Double {
+        reduceTransparency ? min(1.0, alpha * reduceFactor) : alpha
     }
 }
 

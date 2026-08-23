@@ -17,14 +17,29 @@ final class StereoMonitor: ObservableObject {
     @Published private(set) var leftPeak: Float = 0
     @Published private(set) var rightPeak: Float = 0
 
-    /// Raw per-tick RMS, linear (0…1). Republished every display tick
-    /// even when the value is unchanged so downstream consumers driving
-    /// their own ballistics (e.g. `AnalogVUMeter`) get a steady 60 Hz
-    /// pulse rather than stalling on silent stretches. Distinct from
-    /// `leftPeak` / `rightPeak`, which are already envelope-decayed and
-    /// would double-smooth a proper VU integrator.
-    @Published private(set) var leftRMS: Float = 0
-    @Published private(set) var rightRMS: Float = 0
+    /// Raw per-tick RMS, linear (0…1), on its **own** observable object.
+    ///
+    /// These republish every display tick even when the value is unchanged, so
+    /// consumers driving their own ballistics (`AnalogVUMeter`) get a steady
+    /// 60 Hz pulse rather than stalling on silent stretches. Distinct from
+    /// `leftPeak` / `rightPeak`, which are already envelope-decayed and would
+    /// double-smooth a proper VU integrator.
+    ///
+    /// They live on a nested object rather than on `StereoMonitor` because
+    /// `ObservableObject` invalidation is object-wide, not per-property: while
+    /// these sat here, that deliberate 60 Hz pulse woke **every** observer —
+    /// including `DigitalLRMeter` and `PopoverLevelStrip`, which read only the
+    /// peaks and had nothing to redraw. Silence still cost a full meter
+    /// re-render 120 times a second. Now only the VU meter subscribes to the
+    /// pulse, and gating the peaks (see `tick`) actually lets the digital
+    /// meters go idle.
+    let rms = RMSClock()
+
+    /// The 60 Hz pulse, isolated so subscribing to it is opt-in.
+    final class RMSClock: ObservableObject {
+        @Published fileprivate(set) var leftRMS: Float = 0
+        @Published fileprivate(set) var rightRMS: Float = 0
+    }
 
     private let displayTimeStep: Float = 1.0 / 60.0
     private var displayTimer: Timer?
@@ -196,7 +211,7 @@ final class StereoMonitor: ObservableObject {
 
     func reset() {
         leftPeak = 0; rightPeak = 0
-        leftRMS = 0; rightRMS = 0
+        rms.leftRMS = 0; rms.rightRMS = 0
         stagingLock.withLock { staging in
             staging.leftPeakLinear = 0
             staging.rightPeakLinear = 0
@@ -244,17 +259,56 @@ final class StereoMonitor: ObservableObject {
         // silence still drains away within a couple of frames.
         let kHoldDecay: Float = 0.85
         if lPeak > 0 {
-            leftRMS = lPeak
+            rms.leftRMS = lPeak
         } else {
-            leftRMS = leftRMS * kHoldDecay
+            rms.leftRMS = rms.leftRMS * kHoldDecay
         }
         if rPeak > 0 {
-            rightRMS = rPeak
+            rms.rightRMS = rPeak
         } else {
-            rightRMS = rightRMS * kHoldDecay
+            rms.rightRMS = rms.rightRMS * kHoldDecay
         }
         // Attack-fast / release-slow envelope on the peak.
-        leftPeak = max(lPeak, leftPeak * 0.85)
-        rightPeak = max(rPeak, rightPeak * 0.85)
+        //
+        // Written only when the value actually moved. `@Published` performs no
+        // equality check — every assignment emits `objectWillChange` — so the
+        // previous unconditional pair kept publishing right through silence,
+        // where the decay multiply only ever produced another value nobody
+        // could tell apart, re-rendering `DigitalLRMeter` and
+        // `PopoverLevelStrip` 120 times a second for no visible change.
+        //
+        // The `leftRMS` / `rightRMS` writes above stay unconditional on
+        // purpose: `AnalogVUMeter` documents its dependence on that steady
+        // 60 Hz pulse to drive its own ballistics, and gating it would stall
+        // the needle on silent stretches. Only the peaks — which are already
+        // envelope-decayed here — can be gated.
+        let nextLeft = Self.nextPeak(current: leftPeak, incoming: lPeak)
+        if Self.visiblyDiffers(leftPeak, nextLeft) { leftPeak = nextLeft }
+        let nextRight = Self.nextPeak(current: rightPeak, incoming: rPeak)
+        if Self.visiblyDiffers(rightPeak, nextRight) { rightPeak = nextRight }
+    }
+
+    // MARK: - Peak envelope
+
+    /// Per-tick release factor for the peak envelope.
+    private static let peakDecay: Float = 0.85
+
+    /// Below this the meters already read their −60 dBFS floor, so the decay
+    /// tail is snapped to zero instead of approaching it forever. Without the
+    /// snap a silent input never reaches a fixed point and the gate below
+    /// never latches.
+    private static let peakFloor: Float = 1e-5
+
+    /// Smallest movement worth republishing. 0.2 % linear is ~0.017 dB, which
+    /// is well under one pixel on a 180 pt bar spanning 60 dB.
+    private static let peakRelativeEpsilon: Float = 0.002
+
+    private static func nextPeak(current: Float, incoming: Float) -> Float {
+        let next = max(incoming, current * peakDecay)
+        return next < peakFloor ? 0 : next
+    }
+
+    private static func visiblyDiffers(_ old: Float, _ new: Float) -> Bool {
+        abs(new - old) > max(1e-6, abs(old) * peakRelativeEpsilon)
     }
 }

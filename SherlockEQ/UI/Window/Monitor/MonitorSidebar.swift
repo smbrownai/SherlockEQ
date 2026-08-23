@@ -308,23 +308,20 @@ struct DigitalLRMeter: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            scaleColumn
-            channelColumn(label: "L", peak: monitor.leftPeak)
-            channelColumn(label: "R", peak: monitor.rightPeak)
+            // Static: the dBFS reference scale never moves, so it is its own
+            // view and gets skipped on every meter tick. See `MeterScaleColumn`.
+            MeterScaleColumn()
+                .equatable()
+            // A11y strings passed as literals rather than interpolated per
+            // render — see `a11yValue` for why this matters at 60 Hz.
+            channelColumn(label: "L", a11yLabel: "L channel peak level", peak: monitor.leftPeak)
+            channelColumn(label: "R", a11yLabel: "R channel peak level", peak: monitor.rightPeak)
         }
         .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
-    private func channelColumn(label: String, peak: Float) -> some View {
-        let peakDB = peak > 1e-5 ? 20 * log10(Double(peak)) : -60.0
-        let zone: String = {
-            let yellowBoundary = 70 - calibrationOffsetDBA
-            let redBoundary = 85 - calibrationOffsetDBA
-            if peakDB >= redBoundary { return "very loud" }
-            if peakDB >= yellowBoundary { return "loud" }
-            return "moderate"
-        }()
+    private func channelColumn(label: String, a11yLabel: String, peak: Float) -> some View {
         VStack(spacing: 5) {
             Text(label)
                 .font(.caption2.monospaced().weight(.bold))
@@ -333,47 +330,44 @@ struct DigitalLRMeter: View {
                 .frame(width: 18)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(label) channel peak level")
-        .accessibilityValue(String(format: "%.0f dBFS, %@", peakDB, zone))
+        .accessibilityLabel(a11yLabel)
+        .accessibilityValue(Self.a11yValue(peak: peak, calibrationOffsetDBA: calibrationOffsetDBA))
     }
 
-    /// dBFS scale alongside the L/R bars. Calibration-independent —
-    /// these reference points sit at the same dBFS positions regardless
-    /// of the user's calibration slider, so the visual position of each
-    /// tick label corresponds directly to the bar's fill height for that
-    /// dBFS level. The zone-boundary colours (yellow / red) shift with
-    /// calibration; the dBFS reference scale doesn't.
-    private var scaleColumn: some View {
-        VStack(spacing: 5) {
-            Text("dB")
-                .font(.caption2.monospaced().weight(.bold))
-                .foregroundStyle(.secondary)
-            GeometryReader { geo in
-                ForEach(Self.scaleTicks, id: \.self) { db in
-                    let rawY = Self.y(forDB: db, height: geo.size.height)
-                    // Clamp so the label centres stay inside the column
-                    // rather than half-cropping at the very top / bottom.
-                    let y = max(7, min(geo.size.height - 7, rawY))
-                    Text("\(Int(db))")
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .position(x: geo.size.width / 2, y: y)
-                }
-            }
+    /// Peak readout for assistive technologies, built WITHOUT `String(format:)`.
+    ///
+    /// This line and the label above it were the two hottest app frames in a
+    /// Release-build sampler run — `MonitorSidebar.swift:336` and `:337`. The
+    /// meter re-renders on every 60 Hz `StereoMonitor` tick, so each channel
+    /// was paying CVarArg boxing plus NSString format parsing 120 times a
+    /// second between them. Interpolating an already-rounded `Int` produces
+    /// the same string far more cheaply.
+    ///
+    /// The value is still built unconditionally rather than gated on
+    /// `accessibilityVoiceOverEnabled`: VoiceOver is not the only client
+    /// (Accessibility Inspector, Switch Control and friends read it too), and
+    /// a meter that reports nothing to those is a worse bug than a warm CPU.
+    private static func a11yValue(peak: Float, calibrationOffsetDBA: Double) -> String {
+        let peakDB = peak > 1e-5 ? 20 * log10(Double(peak)) : -60.0
+        let zone: String
+        if peakDB >= 85 - calibrationOffsetDBA {
+            zone = "very loud"
+        } else if peakDB >= 70 - calibrationOffsetDBA {
+            zone = "loud"
+        } else {
+            zone = "moderate"
         }
-        .frame(width: 22)
+        return "\(Int(peakDB.rounded())) dBFS, \(zone)"
     }
-
-    /// Reference dBFS values shown on the scale column. Picked to give a
-    /// rough sense of fill height without crowding — finer detail isn't
-    /// useful when the user's actual interest is "am I near the safety
-    /// ceiling," which the colour zones already convey.
-    private static let scaleTicks: [Double] = [0, -12, -30, -60]
 
     /// Map a dBFS value to a y-coordinate within a bar of the given
     /// height. 0 dB sits at the top (y = 0), -60 dB at the bottom
     /// (y = height). Bigger dB → smaller y.
-    private static func y(forDB dB: Double, height: CGFloat) -> CGFloat {
+    ///
+    /// `fileprivate` rather than `private` so the extracted
+    /// `MeterScaleColumn` shares this mapping instead of restating it —
+    /// the tick labels must land on the same scale as the bar fill.
+    fileprivate static func y(forDB dB: Double, height: CGFloat) -> CGFloat {
         let clamped = max(-60.0, min(0.0, dB))
         return height * (1.0 - CGFloat((clamped + 60) / 60))
     }
@@ -448,4 +442,46 @@ struct DigitalLRMeter: View {
     private static let greenColor  = Color.green
     private static let yellowColor = Color.yellow
     private static let redColor    = Color.red
+}
+
+/// The dBFS reference scale alongside the L/R bars. Calibration-independent —
+/// these reference points sit at the same dBFS positions regardless of the
+/// user's calibration slider, so the visual position of each tick label
+/// corresponds directly to the bar's fill height for that dBFS level. The
+/// zone-boundary colours (yellow / red) shift with calibration; this scale
+/// doesn't.
+///
+/// It is a separate view precisely *because* nothing about it changes. It used
+/// to be a computed property on `DigitalLRMeter`, which meant its
+/// `GeometryReader` and four monospaced-digit `Text` labels were rebuilt on
+/// every 60 Hz `StereoMonitor` tick along with the bars. Holding no stored
+/// state, it compares equal to itself, so SwiftUI skips it and the ticks are
+/// laid out once — same idiom as `CanvasChromeLayer` on the EQ canvas.
+struct MeterScaleColumn: View, Equatable {
+    var body: some View {
+        VStack(spacing: 5) {
+            Text("dB")
+                .font(.caption2.monospaced().weight(.bold))
+                .foregroundStyle(.secondary)
+            GeometryReader { geo in
+                ForEach(Self.scaleTicks, id: \.self) { db in
+                    let rawY = DigitalLRMeter.y(forDB: db, height: geo.size.height)
+                    // Clamp so the label centres stay inside the column
+                    // rather than half-cropping at the very top / bottom.
+                    let y = max(7, min(geo.size.height - 7, rawY))
+                    Text("\(Int(db))")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .position(x: geo.size.width / 2, y: y)
+                }
+            }
+        }
+        .frame(width: 22)
+    }
+
+    /// Reference dBFS values shown on the scale column. Picked to give a
+    /// rough sense of fill height without crowding — finer detail isn't
+    /// useful when the user's actual interest is "am I near the safety
+    /// ceiling," which the colour zones already convey.
+    private static let scaleTicks: [Double] = [0, -12, -30, -60]
 }
