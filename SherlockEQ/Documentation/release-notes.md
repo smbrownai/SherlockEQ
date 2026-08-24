@@ -20,6 +20,18 @@ related:
 The version this documentation corresponds to is shown at the bottom of the
 help sidebar. Use **SherlockEQ → Check for Updates…** to get the latest build.
 
+## 1.0.3
+
+A fix for a display problem that could leave the main window looking half-drawn after turning on headphone correction, plus some drawing work tidied up behind the scenes. How you use the app doesn't change, and no settings move.
+
+**Fixed**
+
+- **Turning on headphone correction no longer leaves the window looking half-drawn.** When a headphone correction was running on an output device it wasn't set up for, the main window could come up badly broken: an empty sidebar, no level meters, and the equalizer's response graph, layer chips and notes all missing — just a stripe of text tucked under the toolbar and a large blank area below. Scrolling didn't bring any of it back. Nothing was actually wrong with your settings or your audio: the window was being laid out far taller than it could show, so most of it sat off-screen above and below the visible area. The mismatch warning that appears in that situation is now measured correctly, and everything stays where it belongs.
+
+**Under the hood**
+
+- **The equalizer graph and the level meters repeat less work.** The frequency and decibel labels around the response graph, and the scale beside the L/R meters, were being rebuilt from scratch on every single frame even though they never change — they're now drawn once and reused. The meters also stop sending updates once the signal has gone quiet and settled, instead of ticking away at sixty times a second with nothing to show. You're unlikely to see a difference in everyday use; this stops work that never needed repeating rather than making anything visibly faster.
+
 ## 1.0.2
 
 A maintenance release: one robustness fix for importing files, and two security-hardening changes under the hood. How you use the app doesn't change, and no settings move.
